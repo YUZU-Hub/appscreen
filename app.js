@@ -2434,16 +2434,44 @@ let mobileSheetIsDragging = false;
 
 // Initialize mobile functionality
 function initMobile() {
-    if (!document.getElementById('mobile-bottom-sheet')) return;
+    console.log('initMobile called');
+    if (!document.getElementById('mobile-bottom-sheet')) {
+        console.log('mobile-bottom-sheet not found');
+        return;
+    }
 
-    setupMobileBottomSheet();
-    setupMobileTabs();
-    setupMobileFAB();
-    setupMobileHeader();
-    setupMobileControlSync();
+    try {
+        setupMobileBottomSheet();
+        console.log('setupMobileBottomSheet done');
+    } catch (e) { console.error('setupMobileBottomSheet error:', e); }
 
-    // Initial sync of mobile UI with state
-    syncMobileUIWithState();
+    try {
+        setupMobileTabs();
+        console.log('setupMobileTabs done');
+    } catch (e) { console.error('setupMobileTabs error:', e); }
+
+    try {
+        setupMobileFAB();
+        console.log('setupMobileFAB done');
+    } catch (e) { console.error('setupMobileFAB error:', e); }
+
+    try {
+        setupMobileHeader();
+        console.log('setupMobileHeader done');
+    } catch (e) { console.error('setupMobileHeader error:', e); }
+
+    try {
+        setupMobileControlSync();
+        console.log('setupMobileControlSync done');
+    } catch (e) { console.error('setupMobileControlSync error:', e); }
+
+    try {
+        // Initial sync of mobile UI with state
+        syncMobileUIWithState();
+        console.log('syncMobileUIWithState done');
+    } catch (e) { console.error('syncMobileUIWithState error:', e); }
+
+    console.log('initMobile complete');
 }
 
 // Bottom sheet drag handling
@@ -3238,8 +3266,21 @@ updateProjectSelector = function() {
     updateMobileProjectSelector();
 };
 
-// Initialize mobile on DOM ready
-document.addEventListener('DOMContentLoaded', initMobile);
+// Initialize mobile - call directly since script loads after DOM
+let mobileInitialized = false;
+function safeInitMobile() {
+    if (mobileInitialized) return;
+    mobileInitialized = true;
+    initMobile();
+}
+
+// Try to init immediately if DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', safeInitMobile);
+} else {
+    // DOM is already ready, init immediately
+    safeInitMobile();
+}
 
 // Also init on load (backup)
-window.addEventListener('load', initMobile);
+window.addEventListener('load', safeInitMobile);
