@@ -445,10 +445,50 @@ let isDragging3D = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
 
+// Helper to update rotation and sync UI
+function update3DRotation(deltaX, deltaY) {
+    if (typeof state === 'undefined' || !state.use3D) return;
+
+    // Update rotation based on movement
+    state.rotation3D.y = Math.max(-45, Math.min(45, state.rotation3D.y + deltaX * 0.5));
+    state.rotation3D.x = Math.max(-45, Math.min(45, state.rotation3D.x + deltaY * 0.5));
+
+    // Update desktop sliders
+    const rotYSlider = document.getElementById('rotation-3d-y');
+    const rotYValue = document.getElementById('rotation-3d-y-value');
+    const rotXSlider = document.getElementById('rotation-3d-x');
+    const rotXValue = document.getElementById('rotation-3d-x-value');
+
+    if (rotYSlider) rotYSlider.value = state.rotation3D.y;
+    if (rotYValue) rotYValue.textContent = Math.round(state.rotation3D.y) + '°';
+    if (rotXSlider) rotXSlider.value = state.rotation3D.x;
+    if (rotXValue) rotXValue.textContent = Math.round(state.rotation3D.x) + '°';
+
+    // Update mobile sliders
+    const mobileRotYSlider = document.getElementById('mobile-rotation-3d-y');
+    const mobileRotYValue = document.getElementById('mobile-rotation-3d-y-value');
+    const mobileRotXSlider = document.getElementById('mobile-rotation-3d-x');
+    const mobileRotXValue = document.getElementById('mobile-rotation-3d-x-value');
+
+    if (mobileRotYSlider) mobileRotYSlider.value = state.rotation3D.y;
+    if (mobileRotYValue) mobileRotYValue.textContent = Math.round(state.rotation3D.y) + '°';
+    if (mobileRotXSlider) mobileRotXSlider.value = state.rotation3D.x;
+    if (mobileRotXValue) mobileRotXValue.textContent = Math.round(state.rotation3D.x) + '°';
+
+    // Apply rotation
+    setThreeJSRotation(state.rotation3D.x, state.rotation3D.y, state.rotation3D.z);
+
+    // Update canvas
+    if (typeof updateCanvas === 'function') {
+        updateCanvas();
+    }
+}
+
 function setup3DCanvasInteraction() {
     const canvas = document.getElementById('preview-canvas');
     if (!canvas) return;
 
+    // Mouse events for desktop
     canvas.addEventListener('mousedown', (e) => {
         if (typeof state !== 'undefined' && state.use3D) {
             isDragging3D = true;
@@ -464,23 +504,7 @@ function setup3DCanvasInteraction() {
         const deltaX = e.clientX - lastMouseX;
         const deltaY = e.clientY - lastMouseY;
 
-        // Update rotation based on mouse movement
-        state.rotation3D.y = Math.max(-45, Math.min(45, state.rotation3D.y + deltaX * 0.5));
-        state.rotation3D.x = Math.max(-45, Math.min(45, state.rotation3D.x + deltaY * 0.5));
-
-        // Update sliders
-        document.getElementById('rotation-3d-y').value = state.rotation3D.y;
-        document.getElementById('rotation-3d-y-value').textContent = Math.round(state.rotation3D.y) + '°';
-        document.getElementById('rotation-3d-x').value = state.rotation3D.x;
-        document.getElementById('rotation-3d-x-value').textContent = Math.round(state.rotation3D.x) + '°';
-
-        // Apply rotation
-        setThreeJSRotation(state.rotation3D.x, state.rotation3D.y, state.rotation3D.z);
-
-        // Update canvas
-        if (typeof updateCanvas === 'function') {
-            updateCanvas();
-        }
+        update3DRotation(deltaX, deltaY);
 
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
@@ -506,6 +530,41 @@ function setup3DCanvasInteraction() {
             canvas.style.cursor = 'grab';
         }
     });
+
+    // Touch events for mobile
+    canvas.addEventListener('touchstart', (e) => {
+        if (typeof state !== 'undefined' && state.use3D && e.touches.length === 1) {
+            isDragging3D = true;
+            lastMouseX = e.touches[0].clientX;
+            lastMouseY = e.touches[0].clientY;
+            // Don't prevent default here - let the touch be recognized
+        }
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (!isDragging3D || typeof state === 'undefined' || !state.use3D) return;
+        if (e.touches.length !== 1) return;
+
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - lastMouseX;
+        const deltaY = touch.clientY - lastMouseY;
+
+        // Only process if there's significant movement (prevents jitter)
+        if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+            e.preventDefault(); // Prevent scrolling when rotating
+            update3DRotation(deltaX, deltaY);
+            lastMouseX = touch.clientX;
+            lastMouseY = touch.clientY;
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => {
+        isDragging3D = false;
+    }, { passive: true });
+
+    canvas.addEventListener('touchcancel', () => {
+        isDragging3D = false;
+    }, { passive: true });
 }
 
 // Initialize interaction when DOM is ready
