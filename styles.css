@@ -237,6 +237,37 @@ body {
     background: rgba(10, 132, 255, 0.05);
 }
 
+/* Drag handle */
+.drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    color: var(--text-secondary);
+    opacity: 0.4;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.drag-handle:hover {
+    opacity: 0.8;
+}
+
+.screenshot-item:active .drag-handle {
+    cursor: grabbing;
+}
+
+/* Drag and drop states */
+.screenshot-item.dragging {
+    opacity: 0.5;
+    background: var(--bg-primary);
+}
+
+.screenshot-item.drag-over {
+    border-color: var(--accent);
+    background: rgba(10, 132, 255, 0.15);
+}
+
 /* Set as Default button */
 .set-default-btn {
     width: 100%;

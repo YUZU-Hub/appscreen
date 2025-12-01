@@ -45,7 +45,6 @@ const state = {
             },
             frame: {
                 enabled: false,
-                style: 'iphone-15-pro',
                 color: '#1d1d1f',
                 width: 12,
                 opacity: 100
@@ -1112,7 +1111,6 @@ function resetStateToDefaults() {
             },
             frame: {
                 enabled: false,
-                style: 'iphone-15-pro',
                 color: '#1d1d1f',
                 width: 12,
                 opacity: 100
@@ -1283,10 +1281,9 @@ function syncUIWithState() {
     document.getElementById('shadow-y').value = ss.shadow.y;
     document.getElementById('shadow-y-value').textContent = ss.shadow.y + 'px';
 
-    // Frame
+    // Frame/Border
     document.getElementById('frame-toggle').classList.toggle('active', ss.frame.enabled);
     document.getElementById('frame-options').style.display = ss.frame.enabled ? 'block' : 'none';
-    document.getElementById('frame-style').value = ss.frame.style;
     document.getElementById('frame-color').value = ss.frame.color;
     document.getElementById('frame-color-hex').value = ss.frame.color;
     document.getElementById('frame-width').value = ss.frame.width;
@@ -1859,11 +1856,6 @@ function setupEventListeners() {
         const frameEnabled = this.classList.contains('active');
         setScreenshotSetting('frame.enabled', frameEnabled);
         document.getElementById('frame-options').style.display = frameEnabled ? 'block' : 'none';
-        updateCanvas();
-    });
-
-    document.getElementById('frame-style').addEventListener('change', (e) => {
-        setScreenshotSetting('frame.style', e.target.value);
         updateCanvas();
     });
 
@@ -2776,6 +2768,8 @@ function handleFiles(files) {
     });
 }
 
+let draggedScreenshotIndex = null;
+
 function updateScreenshotList() {
     screenshotList.innerHTML = '';
     noScreenshot.style.display = state.screenshots.length === 0 ? 'block' : 'none';
@@ -2800,6 +2794,12 @@ function updateScreenshotList() {
             (isTransferTarget ? ' transfer-target' : '') +
             (isTransferMode && !isTransferTarget ? ' transfer-source-option' : '');
 
+        // Enable drag and drop (disabled in transfer mode)
+        if (!isTransferMode) {
+            item.draggable = true;
+            item.dataset.index = index;
+        }
+
         // Show different UI in transfer mode
         const buttonsHtml = isTransferMode ? '' : `
             <button class="screenshot-transfer" data-index="${index}" title="Transfer style from another screenshot">
@@ -2815,6 +2815,13 @@ function updateScreenshotList() {
         `;
 
         item.innerHTML = `
+            <div class="drag-handle">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/>
+                    <circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/>
+                    <circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>
+                </svg>
+            </div>
             <img class="screenshot-thumb" src="${screenshot.image.src}" alt="${screenshot.name}">
             <div class="screenshot-info">
                 <div class="screenshot-name">${screenshot.name}</div>
@@ -2823,8 +2830,60 @@ function updateScreenshotList() {
             ${buttonsHtml}
         `;
 
+        // Drag and drop handlers
+        item.addEventListener('dragstart', (e) => {
+            draggedScreenshotIndex = index;
+            item.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            draggedScreenshotIndex = null;
+            // Remove all drag-over states
+            document.querySelectorAll('.screenshot-item.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (draggedScreenshotIndex !== null && draggedScreenshotIndex !== index) {
+                item.classList.add('drag-over');
+            }
+        });
+
+        item.addEventListener('dragleave', () => {
+            item.classList.remove('drag-over');
+        });
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            item.classList.remove('drag-over');
+
+            if (draggedScreenshotIndex !== null && draggedScreenshotIndex !== index) {
+                // Reorder screenshots
+                const draggedItem = state.screenshots[draggedScreenshotIndex];
+                state.screenshots.splice(draggedScreenshotIndex, 1);
+                state.screenshots.splice(index, 0, draggedItem);
+
+                // Update selected index to follow the selected item
+                if (state.selectedIndex === draggedScreenshotIndex) {
+                    state.selectedIndex = index;
+                } else if (draggedScreenshotIndex < state.selectedIndex && index >= state.selectedIndex) {
+                    state.selectedIndex--;
+                } else if (draggedScreenshotIndex > state.selectedIndex && index <= state.selectedIndex) {
+                    state.selectedIndex++;
+                }
+
+                updateScreenshotList();
+                updateCanvas();
+            }
+        });
+
         item.addEventListener('click', (e) => {
-            if (e.target.closest('.screenshot-delete') || e.target.closest('.screenshot-transfer')) {
+            if (e.target.closest('.screenshot-delete') || e.target.closest('.screenshot-transfer') || e.target.closest('.drag-handle')) {
                 return;
             }
 
@@ -3346,36 +3405,6 @@ function drawDeviceFrameToContext(context, x, y, width, height, settings) {
     context.beginPath();
     context.roundRect(x - frameWidth/2, y - frameWidth/2, width + frameWidth, height + frameWidth, radius);
     context.stroke();
-
-    // Draw notch or dynamic island for iPhones
-    if (settings.frame.style !== 'simple' && settings.frame.style && settings.frame.style.includes('iphone')) {
-        if (settings.frame.style.includes('pro') || settings.frame.style === 'iphone-15') {
-            // Dynamic Island
-            const islandWidth = width * 0.25;
-            const islandHeight = height * 0.025;
-            const islandX = x + (width - islandWidth) / 2;
-            const islandY = y + frameWidth + height * 0.01;
-            const islandRadius = islandHeight / 2;
-
-            context.fillStyle = frameColor;
-            context.beginPath();
-            context.roundRect(islandX, islandY, islandWidth, islandHeight, islandRadius);
-            context.fill();
-        } else {
-            // Notch
-            const notchWidth = width * 0.35;
-            const notchHeight = height * 0.035;
-            const notchX = x + (width - notchWidth) / 2;
-            const notchY = y + frameWidth;
-            const notchRadius = notchHeight / 3;
-
-            context.fillStyle = frameColor;
-            context.beginPath();
-            context.roundRect(notchX, notchY, notchWidth, notchHeight, [0, 0, notchRadius, notchRadius]);
-            context.fill();
-        }
-    }
-
     context.globalAlpha = 1;
 }
 
@@ -3653,33 +3682,6 @@ function drawDeviceFrame(x, y, width, height) {
     ctx.beginPath();
     roundRect(ctx, x - frameWidth/2, y - frameWidth/2, width + frameWidth, height + frameWidth, radius);
     ctx.stroke();
-
-    // Draw notch or dynamic island for iPhones (not for simple style)
-    if (settings.frame.style !== 'simple' && settings.frame.style.includes('iphone')) {
-        const notchWidth = width * 0.35;
-        const notchHeight = height * 0.035;
-        const notchX = x + (width - notchWidth) / 2;
-        const notchY = y + frameWidth;
-
-        if (settings.frame.style.includes('pro') || settings.frame.style === 'iphone-15') {
-            // Dynamic Island
-            const islandWidth = width * 0.25;
-            const islandHeight = height * 0.025;
-            const islandX = x + (width - islandWidth) / 2;
-            const islandY = y + height * 0.015;
-
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            roundRect(ctx, islandX, islandY, islandWidth, islandHeight, islandHeight / 2);
-            ctx.fill();
-        } else {
-            // Notch
-            ctx.fillStyle = frameColor;
-            ctx.beginPath();
-            roundRect(ctx, notchX, notchY - frameWidth, notchWidth, notchHeight, notchHeight / 3);
-            ctx.fill();
-        }
-    }
     ctx.globalAlpha = 1;
 }
 
