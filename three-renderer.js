@@ -16,6 +16,9 @@ let screenTexture = null;
 // Store original model scale
 let baseModelScale = 1;
 
+// Store base position offset to keep model centered after screen alignment
+let basePositionOffset = { x: 0, y: 0, z: 0 };
+
 // Initialize Three.js scene
 function initThreeJS() {
     if (isThreeJSInitialized) return;
@@ -220,10 +223,16 @@ function createScreenOverlay() {
     customScreenPlane = new THREE.Mesh(geometry, material);
 
     // Position at center of phone, slightly in front of glass
-    customScreenPlane.position.set(0.025, 0.745, 0.098); // slight Y offset to center in screen area
+    const screenOffset = { x: 0.025, y: 0.745, z: 0.098 };
+    customScreenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
 
     // Add directly to phoneModel so it rotates with it
     phoneModel.add(customScreenPlane);
+
+    // Store base position offset to compensate for screen alignment
+    // This keeps the overall model centered in view
+    // Use half the offset since the screen is not at the very edge of the phone
+    basePositionOffset.y = -screenOffset.y * baseModelScale * 0.81;
 
     console.log('Created screen overlay at:', customScreenPlane.position);
     console.log('Plane size:', planeWidth.toFixed(4), 'x', planeHeight.toFixed(4));
@@ -370,7 +379,11 @@ function renderThreeJSToCanvas(targetCanvas, width, height) {
             // Y: 0% = top, 50% = center, 100% = bottom
             const xOffset = ((ss.x - 50) / 50) * 2; // -2 to 2 range
             const yOffset = -((ss.y - 50) / 50) * 3; // -3 to 3 range (inverted for 3D)
-            phoneModel.position.set(xOffset, yOffset, 0);
+            phoneModel.position.set(
+                xOffset + basePositionOffset.x,
+                yOffset + basePositionOffset.y,
+                basePositionOffset.z
+            );
 
             // Rotation: apply 3D rotation from current screenshot settings
             const rotation3D = ss.rotation3D || { x: 0, y: 0, z: 0 };
@@ -458,7 +471,11 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
     phoneModel.scale.setScalar(baseModelScale * screenshotScale);
     const xOffset = ((ss.x - 50) / 50) * 2;
     const yOffset = -((ss.y - 50) / 50) * 3;
-    phoneModel.position.set(xOffset, yOffset, 0);
+    phoneModel.position.set(
+        xOffset + basePositionOffset.x,
+        yOffset + basePositionOffset.y,
+        basePositionOffset.z
+    );
 
     // Set transparent background for compositing
     threeScene.background = null;

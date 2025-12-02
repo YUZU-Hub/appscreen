@@ -34,6 +34,7 @@ const state = {
             perspective: 0,
             cornerRadius: 24,
             use3D: false,
+            device3D: 'iphone',
             rotation3D: { x: 0, y: 0, z: 0 },
             shadow: {
                 enabled: true,
@@ -739,7 +740,15 @@ const deviceDimensions = {
     'iphone-6.5': { width: 1284, height: 2778 },
     'iphone-5.5': { width: 1242, height: 2208 },
     'ipad-12.9': { width: 2048, height: 2732 },
-    'ipad-11': { width: 1668, height: 2388 }
+    'ipad-11': { width: 1668, height: 2388 },
+    'android-phone': { width: 1080, height: 1920 },
+    'android-phone-hd': { width: 1440, height: 2560 },
+    'android-tablet-7': { width: 1200, height: 1920 },
+    'android-tablet-10': { width: 1600, height: 2560 },
+    'web-og': { width: 1200, height: 630 },
+    'web-twitter': { width: 1200, height: 675 },
+    'web-hero': { width: 1920, height: 1080 },
+    'web-feature': { width: 1024, height: 500 }
 };
 
 // DOM elements
@@ -1387,9 +1396,13 @@ function syncUIWithState() {
 
     // 3D mode
     const use3D = ss.use3D || false;
+    const device3D = ss.device3D || 'iphone';
     const rotation3D = ss.rotation3D || { x: 0, y: 0, z: 0 };
     document.querySelectorAll('#device-type-selector button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === (use3D ? '3d' : '2d'));
+    });
+    document.querySelectorAll('#device-3d-selector button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.model === device3D);
     });
     document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
     document.getElementById('rotation-3d-x').value = rotation3D.x;
@@ -1404,9 +1417,12 @@ function syncUIWithState() {
     document.getElementById('position-presets-section').style.display = use3D ? 'none' : 'block';
     document.getElementById('3d-tip').style.display = use3D ? 'flex' : 'none';
 
-    // Show/hide 3D renderer
+    // Show/hide 3D renderer and switch model if needed
     if (typeof showThreeJS === 'function') {
         showThreeJS(use3D);
+    }
+    if (use3D && typeof switchPhoneModel === 'function') {
+        switchPhoneModel(device3D);
     }
 }
 
@@ -2242,6 +2258,23 @@ function setupEventListeners() {
 
             if (use3D && typeof updateScreenTexture === 'function') {
                 updateScreenTexture();
+            }
+
+            updateCanvas();
+        });
+    });
+
+    // 3D device model selector
+    document.querySelectorAll('#device-3d-selector button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#device-3d-selector button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const device3D = btn.dataset.model;
+            setScreenshotSetting('device3D', device3D);
+
+            if (typeof switchPhoneModel === 'function') {
+                switchPhoneModel(device3D);
             }
 
             updateCanvas();
