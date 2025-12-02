@@ -29,117 +29,129 @@
     <div class="app-container">
         <!-- Left Sidebar - Screenshots -->
         <div class="sidebar">
-            <div class="sidebar-header">
-                <h2>Project</h2>
-                <div class="sidebar-header-buttons">
-                    <button class="settings-btn" id="about-btn" title="About">
-                        <img src="img/info.svg" width="18" height="18" alt="About">
-                    </button>
-                    <button class="settings-btn" id="settings-btn" title="Settings">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                        </svg>
-                    </button>
+            <div class="sidebar-content">
+                <div class="sidebar-header">
+                    <h2>Project</h2>
+                    <div class="sidebar-header-buttons">
+                        <button class="settings-btn" id="about-btn" title="About">
+                            <img src="img/info.svg" width="18" height="18" alt="About">
+                        </button>
+                        <button class="settings-btn" id="settings-btn" title="Settings">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div class="project-controls">
-                <select id="project-selector">
-                    <option value="default">Default Project</option>
-                </select>
-                <div class="project-buttons">
-                    <button class="project-btn" id="new-project-btn" title="New Project">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 5v14M5 12h14"/>
-                        </svg>
-                    </button>
-                    <button class="project-btn" id="save-project-btn" title="Save Project">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-                            <polyline points="17,21 17,13 7,13 7,21"/>
-                            <polyline points="7,3 7,8 15,8"/>
-                        </svg>
-                    </button>
-                    <button class="project-btn" id="rename-project-btn" title="Rename Project">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                        </svg>
-                    </button>
-                    <button class="project-btn danger" id="delete-project-btn" title="Delete Project">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3,6 5,6 21,6"/>
-                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                    </button>
+                <div class="project-controls">
+                    <div class="project-dropdown" id="project-dropdown">
+                        <button class="project-trigger" id="project-trigger">
+                            <div class="project-trigger-info">
+                                <span class="project-trigger-name" id="project-trigger-name">Default Project</span>
+                                <span class="project-trigger-meta" id="project-trigger-meta">0 screenshots</span>
+                            </div>
+                            <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+                        <div class="project-menu" id="project-menu">
+                            <!-- Projects will be added here dynamically -->
+                        </div>
+                    </div>
+                    <div class="project-buttons">
+                        <button class="project-btn" id="new-project-btn" title="New Project">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                        </button>
+                        <button class="project-btn" id="rename-project-btn" title="Rename Project">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            </svg>
+                        </button>
+                        <button class="project-btn danger" id="delete-project-btn" title="Delete Project">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3,6 5,6 21,6"/>
+                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="divider"></div>
+                <div class="divider"></div>
 
-            <h2>Screenshots</h2>
-            
-            <div class="upload-section">
-                <div class="upload-zone" id="upload-zone">
-                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16"/>
-                    </svg>
-                    <p class="upload-text">Drop screenshots here or <span>browse</span></p>
-                </div>
+                <h2>Screenshots</h2>
+
                 <input type="file" id="file-input" multiple accept="image/*" hidden>
-            </div>
-
-            <div class="screenshot-list" id="screenshot-list">
-                <!-- Screenshots will be added here -->
-            </div>
-
-            <button class="set-default-btn" id="set-as-default-btn" title="Save current screenshot's settings as defaults for new screenshots">
-                Set as Default
-            </button>
-
-            <div class="divider"></div>
-
-            <h2>Output Size</h2>
-            <div class="device-selector" id="device-selector">
-                <div class="device-option selected" data-device="iphone-6.9">
-                    <div class="device-option-name">iPhone 6.9"</div>
-                    <div class="device-option-size">1320 × 2868</div>
-                </div>
-                <div class="device-option" data-device="iphone-6.7">
-                    <div class="device-option-name">iPhone 6.7"</div>
-                    <div class="device-option-size">1290 × 2796</div>
-                </div>
-                <div class="device-option" data-device="iphone-6.5">
-                    <div class="device-option-name">iPhone 6.5"</div>
-                    <div class="device-option-size">1284 × 2778</div>
-                </div>
-                <div class="device-option" data-device="iphone-5.5">
-                    <div class="device-option-name">iPhone 5.5"</div>
-                    <div class="device-option-size">1242 × 2208</div>
-                </div>
-                <div class="device-option" data-device="ipad-12.9">
-                    <div class="device-option-name">iPad 12.9"</div>
-                    <div class="device-option-size">2048 × 2732</div>
-                </div>
-                <div class="device-option" data-device="ipad-11">
-                    <div class="device-option-name">iPad 11"</div>
-                    <div class="device-option-size">1668 × 2388</div>
-                </div>
-                <div class="device-option" data-device="custom">
-                    <div class="device-option-name">Custom</div>
-                    <div class="device-option-size">Set size</div>
+                <div class="screenshot-list" id="screenshot-list">
+                    <!-- Screenshots will be added here dynamically, including upload zone -->
                 </div>
             </div>
 
-            <div id="custom-size-inputs" style="display: none; margin-top: 12px;">
-                <div class="control-row">
-                    <div class="control-group" style="flex: 1; margin-bottom: 0;">
-                        <label class="control-label">Width</label>
-                        <input type="number" id="custom-width" value="1290" min="100" max="4000">
+            <div class="sidebar-footer">
+                <div class="export-output-section">
+                    <div class="export-row">
+                        <div class="output-size-dropdown" id="output-size-dropdown">
+                            <button class="output-size-trigger" id="output-size-trigger">
+                                <div class="output-size-info">
+                                    <span class="output-size-name" id="output-size-name">iPhone 6.9"</span>
+                                    <span class="output-size-dims" id="output-size-dims">1320 × 2868</span>
+                                </div>
+                                <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </button>
+                            <div class="output-size-menu" id="output-size-menu">
+                                <div class="device-option selected" data-device="iphone-6.9">
+                                    <span class="device-option-name">iPhone 6.9"</span>
+                                    <span class="device-option-size">1320 × 2868</span>
+                                </div>
+                                <div class="device-option" data-device="iphone-6.7">
+                                    <span class="device-option-name">iPhone 6.7"</span>
+                                    <span class="device-option-size">1290 × 2796</span>
+                                </div>
+                                <div class="device-option" data-device="iphone-6.5">
+                                    <span class="device-option-name">iPhone 6.5"</span>
+                                    <span class="device-option-size">1284 × 2778</span>
+                                </div>
+                                <div class="device-option" data-device="iphone-5.5">
+                                    <span class="device-option-name">iPhone 5.5"</span>
+                                    <span class="device-option-size">1242 × 2208</span>
+                                </div>
+                                <div class="output-size-divider"></div>
+                                <div class="device-option" data-device="ipad-12.9">
+                                    <span class="device-option-name">iPad 12.9"</span>
+                                    <span class="device-option-size">2048 × 2732</span>
+                                </div>
+                                <div class="device-option" data-device="ipad-11">
+                                    <span class="device-option-name">iPad 11"</span>
+                                    <span class="device-option-size">1668 × 2388</span>
+                                </div>
+                                <div class="output-size-divider"></div>
+                                <div class="device-option" data-device="custom">
+                                    <span class="device-option-name">Custom Size</span>
+                                    <span class="device-option-size">Set dimensions</span>
+                                </div>
+                                <div id="custom-size-inputs" class="custom-size-inputs">
+                                    <input type="number" id="custom-width" value="1290" min="100" max="4000" placeholder="Width">
+                                    <span class="custom-size-x">×</span>
+                                    <input type="number" id="custom-height" value="2796" min="100" max="4000" placeholder="Height">
+                                </div>
+                            </div>
+                        </div>
+                        <button class="export-btn secondary" id="export-current" title="Export current screenshot">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                        </button>
                     </div>
-                    <div class="control-group" style="flex: 1; margin-bottom: 0;">
-                        <label class="control-label">Height</label>
-                        <input type="number" id="custom-height" value="2796" min="100" max="4000">
-                    </div>
+                    <button class="export-btn export-all-btn" id="export-all" title="Export all screenshots as ZIP">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                        Export All
+                    </button>
                 </div>
             </div>
         </div>
@@ -176,12 +188,35 @@
 
         <!-- Right Sidebar - Settings -->
         <div class="sidebar sidebar-right">
-            <div class="tabs">
-                <button class="tab active" data-tab="background">Background</button>
-                <button class="tab" data-tab="screenshot">Screenshot</button>
-                <button class="tab" data-tab="text">Text</button>
+            <div class="sidebar-header">
+                <div class="tabs">
+                    <button class="tab active" data-tab="background">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                        <span>Background</span>
+                    </button>
+                    <button class="tab" data-tab="screenshot">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="5" y="2" width="14" height="20" rx="2"/>
+                            <line x1="12" y1="18" x2="12" y2="18"/>
+                        </svg>
+                        <span>Device</span>
+                    </button>
+                    <button class="tab" data-tab="text">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 7V4h16v3"/>
+                            <path d="M9 20h6"/>
+                            <path d="M12 4v16"/>
+                        </svg>
+                        <span>Text</span>
+                    </button>
+                </div>
             </div>
 
+            <div class="sidebar-content">
             <!-- Background Tab -->
             <div class="tab-content active" id="tab-background">
                 <div class="control-group">
@@ -196,23 +231,49 @@
                 <!-- Gradient Options -->
                 <div id="gradient-options">
                     <div class="control-group">
-                        <label class="control-label">Preset Gradients</label>
-                        <div class="preset-grid" id="gradient-presets">
-                            <div class="preset-swatch selected" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)" data-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" data-gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" data-gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" data-gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%)" data-gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)" data-gradient="linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)" data-gradient="linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)"></div>
-                            <div class="preset-swatch" style="background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%)" data-gradient="linear-gradient(135deg, #2c3e50 0%, #3498db 100%)"></div>
+                        <div class="preset-dropdown" id="gradient-preset-dropdown">
+                            <button class="preset-dropdown-trigger" id="gradient-preset-trigger">
+                                <span>Gradient Presets</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </button>
+                            <div class="preset-dropdown-content" id="gradient-preset-content">
+                                <div class="preset-grid" id="gradient-presets">
+                                    <!-- Purples & Blues -->
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)" data-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" data-gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)" data-gradient="linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #09203f 0%, #537895 100%)" data-gradient="linear-gradient(135deg, #09203f 0%, #537895 100%)"></div>
+                                    <!-- Pinks & Reds -->
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)" data-gradient="linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)" data-gradient="linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" data-gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)" data-gradient="linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)"></div>
+                                    <!-- Greens & Teals -->
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" data-gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #96deda 0%, #50c9c3 100%)" data-gradient="linear-gradient(135deg, #96deda 0%, #50c9c3 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #13547a 0%, #80d0c7 100%)" data-gradient="linear-gradient(135deg, #13547a 0%, #80d0c7 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #B7F8DB 0%, #50A7C2 100%)" data-gradient="linear-gradient(135deg, #B7F8DB 0%, #50A7C2 100%)"></div>
+                                    <!-- Oranges & Yellows -->
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%)" data-gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)" data-gradient="linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)" data-gradient="linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #c79081 0%, #dfa579 100%)" data-gradient="linear-gradient(135deg, #c79081 0%, #dfa579 100%)"></div>
+                                    <!-- Darks & Neutrals -->
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #434343 0%, #000000 100%)" data-gradient="linear-gradient(135deg, #434343 0%, #000000 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #29323c 0%, #485563 100%)" data-gradient="linear-gradient(135deg, #29323c 0%, #485563 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #868f96 0%, #596164 100%)" data-gradient="linear-gradient(135deg, #868f96 0%, #596164 100%)"></div>
+                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)" data-gradient="linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="control-group">
                         <label class="control-label">Gradient Direction</label>
-                        <input type="range" id="gradient-angle" min="0" max="360" value="135">
-                        <div class="control-row" style="margin-top: 4px;">
+                        <div class="control-row">
+                            <input type="range" id="gradient-angle" min="0" max="360" value="135">
                             <span class="range-value" id="gradient-angle-value">135°</span>
                         </div>
                     </div>
@@ -290,8 +351,13 @@
                 <div class="divider"></div>
 
                 <div class="control-group">
-                    <div class="toggle-row">
-                        <span class="toggle-label">Add Noise</span>
+                    <div class="toggle-row collapsible collapsed" data-target="noise-options">
+                        <span class="toggle-label">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            Noise
+                        </span>
                         <div class="toggle" id="noise-toggle"></div>
                     </div>
                 </div>
@@ -308,11 +374,11 @@
 
             <!-- Screenshot Tab -->
             <div class="tab-content" id="tab-screenshot">
-                <h3>3D Device</h3>
                 <div class="control-group">
-                    <div class="toggle-row">
-                        <span class="toggle-label">Use 3D Device Model</span>
-                        <div class="toggle" id="use-3d-toggle"></div>
+                    <label class="control-label">Device Type</label>
+                    <div class="btn-group" id="device-type-selector">
+                        <button class="active" data-type="2d">2D</button>
+                        <button data-type="3d">3D</button>
                     </div>
                 </div>
 
@@ -338,63 +404,69 @@
                             <span class="range-value" id="rotation-3d-z-value">0°</span>
                         </div>
                     </div>
-                    <p class="hint-text">Tip: Drag to rotate, Alt+drag to move position.</p>
                 </div>
 
                 <div id="position-presets-section">
-                <div class="divider"></div>
-
                 <div class="control-group">
-                    <label class="control-label">Position Preset</label>
-                    <div class="preset-positions" id="position-presets">
-                        <button class="position-preset active" data-preset="centered" title="Centered">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="8" y="12" width="24" height="36" rx="2"/>
+                    <div class="preset-dropdown" id="position-preset-dropdown">
+                        <button class="preset-dropdown-trigger" id="position-preset-trigger">
+                            <span>Position Presets</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
                             </svg>
-                            <span>Centered</span>
                         </button>
-                        <button class="position-preset" data-preset="bleed-bottom" title="Bleed Bottom">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="8" y="20" width="24" height="45" rx="2"/>
-                            </svg>
-                            <span>Bleed Bottom</span>
-                        </button>
-                        <button class="position-preset" data-preset="bleed-top" title="Bleed Top">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="8" y="-5" width="24" height="45" rx="2"/>
-                            </svg>
-                            <span>Bleed Top</span>
-                        </button>
-                        <button class="position-preset" data-preset="float-center" title="Float Center">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="10" y="15" width="20" height="30" rx="2"/>
-                            </svg>
-                            <span>Float Center</span>
-                        </button>
-                        <button class="position-preset" data-preset="tilt-left" title="Tilt Left">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="8" y="12" width="24" height="36" rx="2" transform="rotate(-8 20 30)"/>
-                            </svg>
-                            <span>Tilt Left</span>
-                        </button>
-                        <button class="position-preset" data-preset="tilt-right" title="Tilt Right">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="8" y="12" width="24" height="36" rx="2" transform="rotate(8 20 30)"/>
-                            </svg>
-                            <span>Tilt Right</span>
-                        </button>
-                        <button class="position-preset" data-preset="perspective" title="Perspective">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 15 L28 12 L30 48 L10 45 Z"/>
-                            </svg>
-                            <span>Perspective</span>
-                        </button>
-                        <button class="position-preset" data-preset="float-bottom" title="Float Bottom">
-                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="10" y="25" width="20" height="30" rx="2"/>
-                            </svg>
-                            <span>Float Bottom</span>
-                        </button>
+                        <div class="preset-dropdown-content" id="position-preset-content">
+                            <div class="preset-positions" id="position-presets">
+                                <button class="position-preset active" data-preset="centered" title="Centered">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="8" y="12" width="24" height="36" rx="2"/>
+                                    </svg>
+                                    <span>Centered</span>
+                                </button>
+                                <button class="position-preset" data-preset="bleed-bottom" title="Bleed Bottom">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="8" y="20" width="24" height="45" rx="2"/>
+                                    </svg>
+                                    <span>Bleed Bottom</span>
+                                </button>
+                                <button class="position-preset" data-preset="bleed-top" title="Bleed Top">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="8" y="-5" width="24" height="45" rx="2"/>
+                                    </svg>
+                                    <span>Bleed Top</span>
+                                </button>
+                                <button class="position-preset" data-preset="float-center" title="Float Center">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="10" y="15" width="20" height="30" rx="2"/>
+                                    </svg>
+                                    <span>Float Center</span>
+                                </button>
+                                <button class="position-preset" data-preset="tilt-left" title="Tilt Left">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="8" y="12" width="24" height="36" rx="2" transform="rotate(-8 20 30)"/>
+                                    </svg>
+                                    <span>Tilt Left</span>
+                                </button>
+                                <button class="position-preset" data-preset="tilt-right" title="Tilt Right">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="8" y="12" width="24" height="36" rx="2" transform="rotate(8 20 30)"/>
+                                    </svg>
+                                    <span>Tilt Right</span>
+                                </button>
+                                <button class="position-preset" data-preset="perspective" title="Perspective">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 15 L28 12 L30 48 L10 45 Z"/>
+                                    </svg>
+                                    <span>Perspective</span>
+                                </button>
+                                <button class="position-preset" data-preset="float-bottom" title="Float Bottom">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="10" y="25" width="20" height="30" rx="2"/>
+                                    </svg>
+                                    <span>Float Bottom</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 </div><!-- end position-presets-section -->
@@ -446,10 +518,14 @@
 
                     <div class="divider"></div>
 
-                    <h3>Shadow</h3>
                 <div class="control-group">
-                    <div class="toggle-row">
-                        <span class="toggle-label">Enable Shadow</span>
+                    <div class="toggle-row collapsible" data-target="shadow-options">
+                        <span class="toggle-label">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            Shadow
+                        </span>
                         <div class="toggle active" id="shadow-toggle"></div>
                     </div>
                 </div>
@@ -494,10 +570,14 @@
 
                 <div class="divider"></div>
 
-                <h3>Border</h3>
                 <div class="control-group">
-                    <div class="toggle-row">
-                        <span class="toggle-label">Show Border</span>
+                    <div class="toggle-row collapsible collapsed" data-target="frame-options">
+                        <span class="toggle-label">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            Border
+                        </span>
                         <div class="toggle" id="frame-toggle"></div>
                     </div>
                 </div>
@@ -526,13 +606,33 @@
                     </div>
                 </div>
                 </div><!-- end 2d-only-settings -->
+
+                <div id="3d-tip" class="tip-box" style="display: none;">
+                    <img src="img/info.svg" width="16" height="16" alt="Info">
+                    <div class="tip-content">
+                        <strong>Interactive Controls</strong>
+                        <span>Drag on preview to rotate • Alt+drag to move</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Text Tab -->
             <div class="tab-content" id="tab-text">
                 <div class="control-group">
+                    <div class="toggle-row collapsible" data-target="headline-options">
+                        <span class="toggle-label">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            Headline
+                        </span>
+                        <div class="toggle active" id="headline-toggle"></div>
+                    </div>
+                </div>
+
+                <div id="headline-options">
+                <div class="control-group">
                     <div class="label-with-action">
-                        <label class="control-label">Headline</label>
                         <div class="language-selector" id="headline-languages">
                             <button class="language-flag active" data-lang="en" title="English (US)">🇺🇸</button>
                         </div>
@@ -636,12 +736,25 @@
                         <span class="range-value" id="line-height-value">110%</span>
                     </div>
                 </div>
+                </div><!-- end headline-options -->
 
                 <div class="divider"></div>
 
                 <div class="control-group">
+                    <div class="toggle-row collapsible collapsed" data-target="subheadline-options">
+                        <span class="toggle-label">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            Subheadline
+                        </span>
+                        <div class="toggle" id="subheadline-toggle"></div>
+                    </div>
+                </div>
+
+                <div id="subheadline-options" style="display: none;">
+                <div class="control-group">
                     <div class="label-with-action">
-                        <label class="control-label">Subheadline</label>
                         <div class="language-selector" id="subheadline-languages">
                             <button class="language-flag active" data-lang="en" title="English (US)">🇺🇸</button>
                         </div>
@@ -729,12 +842,10 @@
                         <span class="range-value" id="subheadline-opacity-value">70%</span>
                     </div>
                 </div>
+                </div><!-- end subheadline-options -->
             </div>
 
-            <div class="export-section">
-                <button class="export-btn" id="export-current">Export Current</button>
-                <button class="export-btn secondary" id="export-all">Export All Screenshots</button>
-            </div>
+            </div><!-- end sidebar-content -->
         </div>
     </div>
 

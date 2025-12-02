@@ -51,6 +51,7 @@ const state = {
             }
         },
         text: {
+            headlineEnabled: true,
             headlines: { en: '' },
             headlineLanguages: ['en'],
             currentHeadlineLang: 'en',
@@ -64,6 +65,7 @@ const state = {
             position: 'top',
             offsetY: 12,
             lineHeight: 110,
+            subheadlineEnabled: false,
             subheadlines: { en: '' },
             subheadlineLanguages: ['en'],
             currentSubheadlineLang: 'en',
@@ -98,6 +100,12 @@ function getScreenshotSettings() {
 function getText() {
     const screenshot = getCurrentScreenshot();
     return screenshot ? screenshot.text : state.defaults.text;
+}
+
+// Format number to at most 1 decimal place
+function formatValue(num) {
+    const rounded = Math.round(num * 10) / 10;
+    return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
 }
 
 function setBackground(key, value) {
@@ -751,7 +759,6 @@ const sidePreviewFarLeft = document.getElementById('side-preview-far-left');
 const sidePreviewFarRight = document.getElementById('side-preview-far-right');
 const previewStrip = document.querySelector('.preview-strip');
 const canvasWrapper = document.getElementById('canvas-wrapper');
-const uploadZone = document.getElementById('upload-zone');
 
 let isSliding = false;
 const fileInput = document.getElementById('file-input');
@@ -766,7 +773,7 @@ const PROJECTS_STORE = 'projects';
 const META_STORE = 'meta';
 
 let currentProjectId = 'default';
-let projects = [{ id: 'default', name: 'Default Project' }];
+let projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
 
 function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -860,17 +867,39 @@ function saveProjectsMeta() {
 
 // Update project selector dropdown
 function updateProjectSelector() {
-    const selector = document.getElementById('project-selector');
-    selector.innerHTML = '';
-    
+    const menu = document.getElementById('project-menu');
+    menu.innerHTML = '';
+
+    // Find current project
+    const currentProject = projects.find(p => p.id === currentProjectId) || projects[0];
+
+    // Update trigger display - always use actual state for current project
+    document.getElementById('project-trigger-name').textContent = currentProject.name;
+    const count = state.screenshots.length;
+    document.getElementById('project-trigger-meta').textContent = `${count} screenshot${count !== 1 ? 's' : ''}`;
+
+    // Build menu options
     projects.forEach(project => {
-        const option = document.createElement('option');
-        option.value = project.id;
-        option.textContent = project.name;
-        if (project.id === currentProjectId) {
-            option.selected = true;
-        }
-        selector.appendChild(option);
+        const option = document.createElement('div');
+        option.className = 'project-option' + (project.id === currentProjectId ? ' selected' : '');
+        option.dataset.projectId = project.id;
+
+        const screenshotCount = project.id === currentProjectId ? state.screenshots.length : (project.screenshotCount || 0);
+
+        option.innerHTML = `
+            <span class="project-option-name">${project.name}</span>
+            <span class="project-option-meta">${screenshotCount} screenshot${screenshotCount !== 1 ? 's' : ''}</span>
+        `;
+
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (project.id !== currentProjectId) {
+                switchProject(project.id);
+            }
+            document.getElementById('project-dropdown').classList.remove('open');
+        });
+
+        menu.appendChild(option);
     });
 }
 
@@ -903,7 +932,7 @@ function initSync() {
 // Save state to IndexedDB for current project
 function saveState() {
     if (!db) return;
-    
+
     // Convert screenshots to base64 for storage, including per-screenshot settings
     const screenshotsToSave = state.screenshots.map(s => ({
         src: s.image.src,
@@ -924,7 +953,14 @@ function saveState() {
         customHeight: state.customHeight,
         defaults: state.defaults
     };
-    
+
+    // Update screenshot count in project metadata
+    const project = projects.find(p => p.id === currentProjectId);
+    if (project) {
+        project.screenshotCount = state.screenshots.length;
+        saveProjectsMeta();
+    }
+
     try {
         const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
         const store = transaction.objectStore(PROJECTS_STORE);
@@ -1160,13 +1196,14 @@ async function switchProject(projectId) {
     syncUIWithState();
     updateScreenshotList();
     updateGradientStopsUI();
+    updateProjectSelector();
     updateCanvas();
 }
 
 // Create a new project
 async function createProject(name) {
     const id = 'project_' + Date.now();
-    projects.push({ id, name });
+    projects.push({ id, name, screenshotCount: 0 });
     saveProjectsMeta();
     await switchProject(id);
     updateProjectSelector();
@@ -1210,11 +1247,25 @@ async function deleteProject() {
 
 // Sync UI controls with current state
 function syncUIWithState() {
-    // Device selector
-    document.querySelectorAll('.device-option').forEach(opt => {
+    // Device selector dropdown
+    document.querySelectorAll('.output-size-menu .device-option').forEach(opt => {
         opt.classList.toggle('selected', opt.dataset.device === state.outputDevice);
     });
-    document.getElementById('custom-size-inputs').style.display = state.outputDevice === 'custom' ? 'block' : 'none';
+
+    // Update dropdown trigger text
+    const selectedOption = document.querySelector(`.output-size-menu .device-option[data-device="${state.outputDevice}"]`);
+    if (selectedOption) {
+        document.getElementById('output-size-name').textContent = selectedOption.querySelector('.device-option-name').textContent;
+        if (state.outputDevice === 'custom') {
+            document.getElementById('output-size-dims').textContent = `${state.customWidth} × ${state.customHeight}`;
+        } else {
+            document.getElementById('output-size-dims').textContent = selectedOption.querySelector('.device-option-size').textContent;
+        }
+    }
+
+    // Show/hide custom inputs
+    const customInputs = document.getElementById('custom-size-inputs');
+    customInputs.classList.toggle('visible', state.outputDevice === 'custom');
     document.getElementById('custom-width').value = state.customWidth;
     document.getElementById('custom-height').value = state.customHeight;
 
@@ -1233,7 +1284,7 @@ function syncUIWithState() {
 
     // Gradient
     document.getElementById('gradient-angle').value = bg.gradient.angle;
-    document.getElementById('gradient-angle-value').textContent = bg.gradient.angle + '°';
+    document.getElementById('gradient-angle-value').textContent = formatValue(bg.gradient.angle) + '°';
     updateGradientStopsUI();
 
     // Solid color
@@ -1243,53 +1294,50 @@ function syncUIWithState() {
     // Image background
     document.getElementById('bg-image-fit').value = bg.imageFit;
     document.getElementById('bg-blur').value = bg.imageBlur;
-    document.getElementById('bg-blur-value').textContent = bg.imageBlur + 'px';
+    document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
     document.getElementById('bg-overlay-color').value = bg.overlayColor;
     document.getElementById('bg-overlay-hex').value = bg.overlayColor;
     document.getElementById('bg-overlay-opacity').value = bg.overlayOpacity;
-    document.getElementById('bg-overlay-opacity-value').textContent = bg.overlayOpacity + '%';
+    document.getElementById('bg-overlay-opacity-value').textContent = formatValue(bg.overlayOpacity) + '%';
 
     // Noise
     document.getElementById('noise-toggle').classList.toggle('active', bg.noise);
-    document.getElementById('noise-options').style.display = bg.noise ? 'block' : 'none';
     document.getElementById('noise-intensity').value = bg.noiseIntensity;
-    document.getElementById('noise-intensity-value').textContent = bg.noiseIntensity + '%';
+    document.getElementById('noise-intensity-value').textContent = formatValue(bg.noiseIntensity) + '%';
 
     // Screenshot settings
     document.getElementById('screenshot-scale').value = ss.scale;
-    document.getElementById('screenshot-scale-value').textContent = ss.scale + '%';
+    document.getElementById('screenshot-scale-value').textContent = formatValue(ss.scale) + '%';
     document.getElementById('screenshot-y').value = ss.y;
-    document.getElementById('screenshot-y-value').textContent = ss.y + '%';
+    document.getElementById('screenshot-y-value').textContent = formatValue(ss.y) + '%';
     document.getElementById('screenshot-x').value = ss.x;
-    document.getElementById('screenshot-x-value').textContent = ss.x + '%';
+    document.getElementById('screenshot-x-value').textContent = formatValue(ss.x) + '%';
     document.getElementById('corner-radius').value = ss.cornerRadius;
-    document.getElementById('corner-radius-value').textContent = ss.cornerRadius + 'px';
+    document.getElementById('corner-radius-value').textContent = formatValue(ss.cornerRadius) + 'px';
     document.getElementById('screenshot-rotation').value = ss.rotation;
-    document.getElementById('screenshot-rotation-value').textContent = ss.rotation + '°';
+    document.getElementById('screenshot-rotation-value').textContent = formatValue(ss.rotation) + '°';
 
     // Shadow
     document.getElementById('shadow-toggle').classList.toggle('active', ss.shadow.enabled);
-    document.getElementById('shadow-options').style.display = ss.shadow.enabled ? 'block' : 'none';
     document.getElementById('shadow-color').value = ss.shadow.color;
     document.getElementById('shadow-color-hex').value = ss.shadow.color;
     document.getElementById('shadow-blur').value = ss.shadow.blur;
-    document.getElementById('shadow-blur-value').textContent = ss.shadow.blur + 'px';
+    document.getElementById('shadow-blur-value').textContent = formatValue(ss.shadow.blur) + 'px';
     document.getElementById('shadow-opacity').value = ss.shadow.opacity;
-    document.getElementById('shadow-opacity-value').textContent = ss.shadow.opacity + '%';
+    document.getElementById('shadow-opacity-value').textContent = formatValue(ss.shadow.opacity) + '%';
     document.getElementById('shadow-x').value = ss.shadow.x;
-    document.getElementById('shadow-x-value').textContent = ss.shadow.x + 'px';
+    document.getElementById('shadow-x-value').textContent = formatValue(ss.shadow.x) + 'px';
     document.getElementById('shadow-y').value = ss.shadow.y;
-    document.getElementById('shadow-y-value').textContent = ss.shadow.y + 'px';
+    document.getElementById('shadow-y-value').textContent = formatValue(ss.shadow.y) + 'px';
 
     // Frame/Border
     document.getElementById('frame-toggle').classList.toggle('active', ss.frame.enabled);
-    document.getElementById('frame-options').style.display = ss.frame.enabled ? 'block' : 'none';
     document.getElementById('frame-color').value = ss.frame.color;
     document.getElementById('frame-color-hex').value = ss.frame.color;
     document.getElementById('frame-width').value = ss.frame.width;
-    document.getElementById('frame-width-value').textContent = ss.frame.width + 'px';
+    document.getElementById('frame-width-value').textContent = formatValue(ss.frame.width) + 'px';
     document.getElementById('frame-opacity').value = ss.frame.opacity;
-    document.getElementById('frame-opacity-value').textContent = ss.frame.opacity + '%';
+    document.getElementById('frame-opacity-value').textContent = formatValue(ss.frame.opacity) + '%';
 
     // Text
     const currentHeadline = txt.headlines ? (txt.headlines[txt.currentHeadlineLang || 'en'] || '') : (txt.headline || '');
@@ -1309,16 +1357,16 @@ function syncUIWithState() {
         btn.classList.toggle('active', btn.dataset.position === txt.position);
     });
     document.getElementById('text-offset-y').value = txt.offsetY;
-    document.getElementById('text-offset-y-value').textContent = txt.offsetY + '%';
+    document.getElementById('text-offset-y-value').textContent = formatValue(txt.offsetY) + '%';
     document.getElementById('line-height').value = txt.lineHeight;
-    document.getElementById('line-height-value').textContent = txt.lineHeight + '%';
+    document.getElementById('line-height-value').textContent = formatValue(txt.lineHeight) + '%';
     const currentSubheadline = txt.subheadlines ? (txt.subheadlines[txt.currentSubheadlineLang || 'en'] || '') : (txt.subheadline || '');
     document.getElementById('subheadline-text').value = currentSubheadline;
     document.getElementById('subheadline-font').value = txt.subheadlineFont || txt.headlineFont;
     document.getElementById('subheadline-size').value = txt.subheadlineSize;
     document.getElementById('subheadline-color').value = txt.subheadlineColor;
     document.getElementById('subheadline-opacity').value = txt.subheadlineOpacity;
-    document.getElementById('subheadline-opacity-value').textContent = txt.subheadlineOpacity + '%';
+    document.getElementById('subheadline-opacity-value').textContent = formatValue(txt.subheadlineOpacity) + '%';
     document.getElementById('subheadline-weight').value = txt.subheadlineWeight || '400';
     // Sync subheadline style buttons
     document.querySelectorAll('#subheadline-style button').forEach(btn => {
@@ -1327,6 +1375,12 @@ function syncUIWithState() {
         btn.classList.toggle('active', txt[key] || false);
     });
 
+    // Headline/Subheadline toggles
+    const headlineEnabled = txt.headlineEnabled !== false; // default true for backwards compatibility
+    const subheadlineEnabled = txt.subheadlineEnabled || false;
+    document.getElementById('headline-toggle').classList.toggle('active', headlineEnabled);
+    document.getElementById('subheadline-toggle').classList.toggle('active', subheadlineEnabled);
+
     // Language UIs
     updateHeadlineLanguageUI();
     updateSubheadlineLanguageUI();
@@ -1334,18 +1388,21 @@ function syncUIWithState() {
     // 3D mode
     const use3D = ss.use3D || false;
     const rotation3D = ss.rotation3D || { x: 0, y: 0, z: 0 };
-    document.getElementById('use-3d-toggle').classList.toggle('active', use3D);
+    document.querySelectorAll('#device-type-selector button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.type === (use3D ? '3d' : '2d'));
+    });
     document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
     document.getElementById('rotation-3d-x').value = rotation3D.x;
-    document.getElementById('rotation-3d-x-value').textContent = rotation3D.x + '°';
+    document.getElementById('rotation-3d-x-value').textContent = formatValue(rotation3D.x) + '°';
     document.getElementById('rotation-3d-y').value = rotation3D.y;
-    document.getElementById('rotation-3d-y-value').textContent = rotation3D.y + '°';
+    document.getElementById('rotation-3d-y-value').textContent = formatValue(rotation3D.y) + '°';
     document.getElementById('rotation-3d-z').value = rotation3D.z;
-    document.getElementById('rotation-3d-z-value').textContent = rotation3D.z + '°';
+    document.getElementById('rotation-3d-z-value').textContent = formatValue(rotation3D.z) + '°';
 
-    // Hide 2D-only settings in 3D mode
+    // Hide 2D-only settings in 3D mode, show 3D tip
     document.getElementById('2d-only-settings').style.display = use3D ? 'none' : 'block';
     document.getElementById('position-presets-section').style.display = use3D ? 'none' : 'block';
+    document.getElementById('3d-tip').style.display = use3D ? 'flex' : 'none';
 
     // Show/hide 3D renderer
     if (typeof showThreeJS === 'function') {
@@ -1354,42 +1411,79 @@ function syncUIWithState() {
 }
 
 function setupEventListeners() {
-    // File upload
-    uploadZone.addEventListener('click', () => fileInput.click());
-    uploadZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadZone.classList.add('dragover');
+    // Collapsible toggle rows
+    document.querySelectorAll('.toggle-row.collapsible').forEach(row => {
+        row.addEventListener('click', (e) => {
+            // Don't collapse when clicking the toggle switch itself
+            if (e.target.closest('.toggle')) return;
+
+            const targetId = row.dataset.target;
+            const target = document.getElementById(targetId);
+            if (target) {
+                row.classList.toggle('collapsed');
+                target.style.display = row.classList.contains('collapsed') ? 'none' : 'block';
+            }
+        });
     });
-    uploadZone.addEventListener('dragleave', () => {
-        uploadZone.classList.remove('dragover');
-    });
-    uploadZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadZone.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
+
+    // File upload (upload zone is now in screenshot list, created dynamically in updateScreenshotList)
     fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
-    // Set as Default button
-    document.getElementById('set-as-default-btn').addEventListener('click', () => {
-        if (state.screenshots.length === 0) return;
-        setCurrentScreenshotAsDefault();
-        // Show brief confirmation
-        const btn = document.getElementById('set-as-default-btn');
-        const originalText = btn.textContent;
-        btn.textContent = 'Saved!';
-        btn.style.borderColor = 'var(--accent)';
-        btn.style.color = 'var(--accent)';
-        setTimeout(() => {
-            btn.textContent = originalText;
-            btn.style.borderColor = '';
-            btn.style.color = '';
-        }, 1500);
+    // Make entire screenshot list a drop zone
+    screenshotList.addEventListener('dragover', (e) => {
+        // Only handle file drops, not internal screenshot reordering
+        if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            screenshotList.classList.add('drop-active');
+        }
+    });
+    screenshotList.addEventListener('dragleave', (e) => {
+        // Only remove class if leaving the list entirely
+        if (!screenshotList.contains(e.relatedTarget)) {
+            screenshotList.classList.remove('drop-active');
+        }
+    });
+    screenshotList.addEventListener('drop', (e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            screenshotList.classList.remove('drop-active');
+            handleFiles(e.dataTransfer.files);
+        }
     });
 
-    // Project controls
-    document.getElementById('project-selector').addEventListener('change', (e) => {
-        switchProject(e.target.value);
+    // Set as Default button (commented out)
+    // document.getElementById('set-as-default-btn').addEventListener('click', () => {
+    //     if (state.screenshots.length === 0) return;
+    //     setCurrentScreenshotAsDefault();
+    //     // Show brief confirmation
+    //     const btn = document.getElementById('set-as-default-btn');
+    //     const originalText = btn.textContent;
+    //     btn.textContent = 'Saved!';
+    //     btn.style.borderColor = 'var(--accent)';
+    //     btn.style.color = 'var(--accent)';
+    //     setTimeout(() => {
+    //         btn.textContent = originalText;
+    //         btn.style.borderColor = '';
+    //         btn.style.color = '';
+    //     }, 1500);
+    // });
+
+    // Project dropdown
+    const projectDropdown = document.getElementById('project-dropdown');
+    const projectTrigger = document.getElementById('project-trigger');
+
+    projectTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        projectDropdown.classList.toggle('open');
+        // Close output size dropdown if open
+        document.getElementById('output-size-dropdown').classList.remove('open');
+    });
+
+    // Close project dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!projectDropdown.contains(e.target)) {
+            projectDropdown.classList.remove('open');
+        }
     });
 
     document.getElementById('new-project-btn').addEventListener('click', () => {
@@ -1401,15 +1495,7 @@ function setupEventListeners() {
         document.getElementById('project-name-input').focus();
     });
 
-    document.getElementById('save-project-btn').addEventListener('click', () => {
-        saveState();
-        // Show brief confirmation
-        const btn = document.getElementById('save-project-btn');
-        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
-        setTimeout(() => {
-            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>';
-        }, 1000);
-    });
+    // Save button removed - state is auto-saved
 
     document.getElementById('rename-project-btn').addEventListener('click', () => {
         const project = projects.find(p => p.id === currentProjectId);
@@ -1605,18 +1691,43 @@ function setupEventListeners() {
         }
     });
 
-    // Device selector
-    document.querySelectorAll('.device-option').forEach(opt => {
-        opt.addEventListener('click', () => {
-            document.querySelectorAll('.device-option').forEach(o => o.classList.remove('selected'));
+    // Output size dropdown
+    const outputDropdown = document.getElementById('output-size-dropdown');
+    const outputTrigger = document.getElementById('output-size-trigger');
+
+    outputTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        outputDropdown.classList.toggle('open');
+        // Close project dropdown if open
+        document.getElementById('project-dropdown').classList.remove('open');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!outputDropdown.contains(e.target)) {
+            outputDropdown.classList.remove('open');
+        }
+    });
+
+    // Device option selection
+    document.querySelectorAll('.output-size-menu .device-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.output-size-menu .device-option').forEach(o => o.classList.remove('selected'));
             opt.classList.add('selected');
             state.outputDevice = opt.dataset.device;
-            
+
+            // Update trigger text
+            document.getElementById('output-size-name').textContent = opt.querySelector('.device-option-name').textContent;
+            document.getElementById('output-size-dims').textContent = opt.querySelector('.device-option-size').textContent;
+
+            // Show/hide custom inputs
             const customInputs = document.getElementById('custom-size-inputs');
             if (state.outputDevice === 'custom') {
-                customInputs.style.display = 'block';
+                customInputs.classList.add('visible');
             } else {
-                customInputs.style.display = 'none';
+                customInputs.classList.remove('visible');
+                outputDropdown.classList.remove('open');
             }
             updateCanvas();
         });
@@ -1625,10 +1736,12 @@ function setupEventListeners() {
     // Custom size inputs
     document.getElementById('custom-width').addEventListener('input', (e) => {
         state.customWidth = parseInt(e.target.value) || 1290;
+        document.getElementById('output-size-dims').textContent = `${state.customWidth} × ${state.customHeight}`;
         updateCanvas();
     });
     document.getElementById('custom-height').addEventListener('input', (e) => {
         state.customHeight = parseInt(e.target.value) || 2796;
+        document.getElementById('output-size-dims').textContent = `${state.customWidth} × ${state.customHeight}`;
         updateCanvas();
     });
 
@@ -1639,8 +1752,22 @@ function setupEventListeners() {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
             document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            // Save active tab to localStorage
+            localStorage.setItem('activeTab', tab.dataset.tab);
         });
     });
+
+    // Restore active tab from localStorage
+    const savedTab = localStorage.getItem('activeTab');
+    if (savedTab) {
+        const tabBtn = document.querySelector(`.tab[data-tab="${savedTab}"]`);
+        if (tabBtn) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tabBtn.classList.add('active');
+            document.getElementById('tab-' + savedTab).classList.add('active');
+        }
+    }
 
     // Background type selector
     document.querySelectorAll('#bg-type-selector button').forEach(btn => {
@@ -1655,6 +1782,43 @@ function setupEventListeners() {
             
             updateCanvas();
         });
+    });
+
+    // Gradient preset dropdown toggle
+    const presetDropdown = document.getElementById('gradient-preset-dropdown');
+    const presetTrigger = document.getElementById('gradient-preset-trigger');
+    presetTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        presetDropdown.classList.toggle('open');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!presetDropdown.contains(e.target)) {
+            presetDropdown.classList.remove('open');
+        }
+    });
+
+    // Position preset dropdown toggle
+    const positionPresetDropdown = document.getElementById('position-preset-dropdown');
+    const positionPresetTrigger = document.getElementById('position-preset-trigger');
+    positionPresetTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        positionPresetDropdown.classList.toggle('open');
+    });
+
+    // Close position preset dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!positionPresetDropdown.contains(e.target)) {
+            positionPresetDropdown.classList.remove('open');
+        }
+    });
+
+    // Close screenshot menus when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.screenshot-menu-wrapper')) {
+            document.querySelectorAll('.screenshot-menu.open').forEach(m => m.classList.remove('open'));
+        }
     });
 
     // Gradient presets
@@ -1672,7 +1836,7 @@ function setupEventListeners() {
                 const angle = parseInt(angleMatch[1]);
                 setBackground('gradient.angle', angle);
                 document.getElementById('gradient-angle').value = angle;
-                document.getElementById('gradient-angle-value').textContent = angle + '°';
+                document.getElementById('gradient-angle-value').textContent = formatValue(angle) + '°';
             }
 
             const stops = [];
@@ -1691,7 +1855,9 @@ function setupEventListeners() {
     // Gradient angle
     document.getElementById('gradient-angle').addEventListener('input', (e) => {
         setBackground('gradient.angle', parseInt(e.target.value));
-        document.getElementById('gradient-angle-value').textContent = e.target.value + '°';
+        document.getElementById('gradient-angle-value').textContent = formatValue(e.target.value) + '°';
+        // Deselect preset when manually changing angle
+        document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
         updateCanvas();
     });
 
@@ -1703,6 +1869,8 @@ function setupEventListeners() {
             color: lastStop.color,
             position: Math.min(lastStop.position + 20, 100)
         });
+        // Deselect preset when adding a stop
+        document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
         updateGradientStopsUI();
         updateCanvas();
     });
@@ -1749,7 +1917,7 @@ function setupEventListeners() {
 
     document.getElementById('bg-blur').addEventListener('input', (e) => {
         setBackground('imageBlur', parseInt(e.target.value));
-        document.getElementById('bg-blur-value').textContent = e.target.value + 'px';
+        document.getElementById('bg-blur-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
@@ -1761,7 +1929,7 @@ function setupEventListeners() {
 
     document.getElementById('bg-overlay-opacity').addEventListener('input', (e) => {
         setBackground('overlayOpacity', parseInt(e.target.value));
-        document.getElementById('bg-overlay-opacity-value').textContent = e.target.value + '%';
+        document.getElementById('bg-overlay-opacity-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
@@ -1770,44 +1938,51 @@ function setupEventListeners() {
         this.classList.toggle('active');
         const noiseEnabled = this.classList.contains('active');
         setBackground('noise', noiseEnabled);
-        document.getElementById('noise-options').style.display = noiseEnabled ? 'block' : 'none';
+        const row = this.closest('.toggle-row');
+        if (noiseEnabled) {
+            if (row) row.classList.remove('collapsed');
+            document.getElementById('noise-options').style.display = 'block';
+        } else {
+            if (row) row.classList.add('collapsed');
+            document.getElementById('noise-options').style.display = 'none';
+        }
         updateCanvas();
     });
 
     document.getElementById('noise-intensity').addEventListener('input', (e) => {
         setBackground('noiseIntensity', parseInt(e.target.value));
-        document.getElementById('noise-intensity-value').textContent = e.target.value + '%';
+        document.getElementById('noise-intensity-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
     // Screenshot settings
     document.getElementById('screenshot-scale').addEventListener('input', (e) => {
         setScreenshotSetting('scale', parseInt(e.target.value));
-        document.getElementById('screenshot-scale-value').textContent = e.target.value + '%';
+        document.getElementById('screenshot-scale-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
     document.getElementById('screenshot-y').addEventListener('input', (e) => {
         setScreenshotSetting('y', parseInt(e.target.value));
-        document.getElementById('screenshot-y-value').textContent = e.target.value + '%';
+        document.getElementById('screenshot-y-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
     document.getElementById('screenshot-x').addEventListener('input', (e) => {
         setScreenshotSetting('x', parseInt(e.target.value));
-        document.getElementById('screenshot-x-value').textContent = e.target.value + '%';
+        document.getElementById('screenshot-x-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
     document.getElementById('corner-radius').addEventListener('input', (e) => {
         setScreenshotSetting('cornerRadius', parseInt(e.target.value));
-        document.getElementById('corner-radius-value').textContent = e.target.value + 'px';
+        document.getElementById('corner-radius-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
     document.getElementById('screenshot-rotation').addEventListener('input', (e) => {
         setScreenshotSetting('rotation', parseInt(e.target.value));
-        document.getElementById('screenshot-rotation-value').textContent = e.target.value + '°';
+        document.getElementById('screenshot-rotation-value').textContent = formatValue(e.target.value) + '°';
         updateCanvas();
     });
 
@@ -1816,7 +1991,14 @@ function setupEventListeners() {
         this.classList.toggle('active');
         const shadowEnabled = this.classList.contains('active');
         setScreenshotSetting('shadow.enabled', shadowEnabled);
-        document.getElementById('shadow-options').style.display = shadowEnabled ? 'block' : 'none';
+        const row = this.closest('.toggle-row');
+        if (shadowEnabled) {
+            if (row) row.classList.remove('collapsed');
+            document.getElementById('shadow-options').style.display = 'block';
+        } else {
+            if (row) row.classList.add('collapsed');
+            document.getElementById('shadow-options').style.display = 'none';
+        }
         updateCanvas();
     });
 
@@ -1828,25 +2010,25 @@ function setupEventListeners() {
 
     document.getElementById('shadow-blur').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.blur', parseInt(e.target.value));
-        document.getElementById('shadow-blur-value').textContent = e.target.value + 'px';
+        document.getElementById('shadow-blur-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
     document.getElementById('shadow-opacity').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.opacity', parseInt(e.target.value));
-        document.getElementById('shadow-opacity-value').textContent = e.target.value + '%';
+        document.getElementById('shadow-opacity-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
     document.getElementById('shadow-x').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.x', parseInt(e.target.value));
-        document.getElementById('shadow-x-value').textContent = e.target.value + 'px';
+        document.getElementById('shadow-x-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
     document.getElementById('shadow-y').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.y', parseInt(e.target.value));
-        document.getElementById('shadow-y-value').textContent = e.target.value + 'px';
+        document.getElementById('shadow-y-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
@@ -1855,7 +2037,14 @@ function setupEventListeners() {
         this.classList.toggle('active');
         const frameEnabled = this.classList.contains('active');
         setScreenshotSetting('frame.enabled', frameEnabled);
-        document.getElementById('frame-options').style.display = frameEnabled ? 'block' : 'none';
+        const row = this.closest('.toggle-row');
+        if (frameEnabled) {
+            if (row) row.classList.remove('collapsed');
+            document.getElementById('frame-options').style.display = 'block';
+        } else {
+            if (row) row.classList.add('collapsed');
+            document.getElementById('frame-options').style.display = 'none';
+        }
         updateCanvas();
     });
 
@@ -1875,13 +2064,45 @@ function setupEventListeners() {
 
     document.getElementById('frame-width').addEventListener('input', (e) => {
         setScreenshotSetting('frame.width', parseInt(e.target.value));
-        document.getElementById('frame-width-value').textContent = e.target.value + 'px';
+        document.getElementById('frame-width-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
     document.getElementById('frame-opacity').addEventListener('input', (e) => {
         setScreenshotSetting('frame.opacity', parseInt(e.target.value));
-        document.getElementById('frame-opacity-value').textContent = e.target.value + '%';
+        document.getElementById('frame-opacity-value').textContent = formatValue(e.target.value) + '%';
+        updateCanvas();
+    });
+
+    // Headline toggle
+    document.getElementById('headline-toggle').addEventListener('click', function() {
+        this.classList.toggle('active');
+        const enabled = this.classList.contains('active');
+        setTextValue('headlineEnabled', enabled);
+        const row = this.closest('.toggle-row');
+        if (enabled) {
+            if (row) row.classList.remove('collapsed');
+            document.getElementById('headline-options').style.display = 'block';
+        } else {
+            if (row) row.classList.add('collapsed');
+            document.getElementById('headline-options').style.display = 'none';
+        }
+        updateCanvas();
+    });
+
+    // Subheadline toggle
+    document.getElementById('subheadline-toggle').addEventListener('click', function() {
+        this.classList.toggle('active');
+        const enabled = this.classList.contains('active');
+        setTextValue('subheadlineEnabled', enabled);
+        const row = this.closest('.toggle-row');
+        if (enabled) {
+            if (row) row.classList.remove('collapsed');
+            document.getElementById('subheadline-options').style.display = 'block';
+        } else {
+            if (row) row.classList.add('collapsed');
+            document.getElementById('subheadline-options').style.display = 'none';
+        }
         updateCanvas();
     });
 
@@ -1934,13 +2155,13 @@ function setupEventListeners() {
 
     document.getElementById('text-offset-y').addEventListener('input', (e) => {
         setTextValue('offsetY', parseInt(e.target.value));
-        document.getElementById('text-offset-y-value').textContent = e.target.value + '%';
+        document.getElementById('text-offset-y-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
     document.getElementById('line-height').addEventListener('input', (e) => {
         setTextValue('lineHeight', parseInt(e.target.value));
-        document.getElementById('line-height-value').textContent = e.target.value + '%';
+        document.getElementById('line-height-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
 
@@ -1964,7 +2185,7 @@ function setupEventListeners() {
     document.getElementById('subheadline-opacity').addEventListener('input', (e) => {
         const value = parseInt(e.target.value) || 70;
         setTextValue('subheadlineOpacity', value);
-        document.getElementById('subheadline-opacity-value').textContent = value + '%';
+        document.getElementById('subheadline-opacity-value').textContent = formatValue(value) + '%';
         updateCanvas();
     });
 
@@ -2000,26 +2221,31 @@ function setupEventListeners() {
         });
     });
 
-    // 3D mode toggle
-    document.getElementById('use-3d-toggle').addEventListener('click', function() {
-        this.classList.toggle('active');
-        const use3D = this.classList.contains('active');
-        setScreenshotSetting('use3D', use3D);
-        document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
+    // Device type selector (2D/3D)
+    document.querySelectorAll('#device-type-selector button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#device-type-selector button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
 
-        // Hide 2D-only settings in 3D mode
-        document.getElementById('2d-only-settings').style.display = use3D ? 'none' : 'block';
-        document.getElementById('position-presets-section').style.display = use3D ? 'none' : 'block';
+            const use3D = btn.dataset.type === '3d';
+            setScreenshotSetting('use3D', use3D);
+            document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
 
-        if (typeof showThreeJS === 'function') {
-            showThreeJS(use3D);
-        }
+            // Hide 2D-only settings in 3D mode, show 3D tip
+            document.getElementById('2d-only-settings').style.display = use3D ? 'none' : 'block';
+            document.getElementById('position-presets-section').style.display = use3D ? 'none' : 'block';
+            document.getElementById('3d-tip').style.display = use3D ? 'flex' : 'none';
 
-        if (use3D && typeof updateScreenTexture === 'function') {
-            updateScreenTexture();
-        }
+            if (typeof showThreeJS === 'function') {
+                showThreeJS(use3D);
+            }
 
-        updateCanvas();
+            if (use3D && typeof updateScreenTexture === 'function') {
+                updateScreenTexture();
+            }
+
+            updateCanvas();
+        });
     });
 
     // 3D rotation controls
@@ -2027,7 +2253,7 @@ function setupEventListeners() {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
         ss.rotation3D.x = parseInt(e.target.value);
-        document.getElementById('rotation-3d-x-value').textContent = e.target.value + '°';
+        document.getElementById('rotation-3d-x-value').textContent = formatValue(e.target.value) + '°';
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -2038,7 +2264,7 @@ function setupEventListeners() {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
         ss.rotation3D.y = parseInt(e.target.value);
-        document.getElementById('rotation-3d-y-value').textContent = e.target.value + '°';
+        document.getElementById('rotation-3d-y-value').textContent = formatValue(e.target.value) + '°';
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -2049,7 +2275,7 @@ function setupEventListeners() {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
         ss.rotation3D.z = parseInt(e.target.value);
-        document.getElementById('rotation-3d-z-value').textContent = e.target.value + '°';
+        document.getElementById('rotation-3d-z-value').textContent = formatValue(e.target.value) + '°';
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -2672,15 +2898,15 @@ function updateTextUI(text) {
         btn.classList.toggle('active', btn.dataset.position === text.position);
     });
     document.getElementById('text-offset-y').value = text.offsetY;
-    document.getElementById('text-offset-y-value').textContent = text.offsetY + '%';
+    document.getElementById('text-offset-y-value').textContent = formatValue(text.offsetY) + '%';
     document.getElementById('line-height').value = text.lineHeight;
-    document.getElementById('line-height-value').textContent = text.lineHeight + '%';
+    document.getElementById('line-height-value').textContent = formatValue(text.lineHeight) + '%';
     document.getElementById('subheadline-text').value = text.subheadline || '';
     document.getElementById('subheadline-font').value = text.subheadlineFont || text.headlineFont;
     document.getElementById('subheadline-size').value = text.subheadlineSize;
     document.getElementById('subheadline-color').value = text.subheadlineColor;
     document.getElementById('subheadline-opacity').value = text.subheadlineOpacity;
-    document.getElementById('subheadline-opacity-value').textContent = text.subheadlineOpacity + '%';
+    document.getElementById('subheadline-opacity-value').textContent = formatValue(text.subheadlineOpacity) + '%';
     document.getElementById('subheadline-weight').value = text.subheadlineWeight || '400';
     // Sync subheadline style buttons
     document.querySelectorAll('#subheadline-style button').forEach(btn => {
@@ -2713,13 +2939,13 @@ function applyPositionPreset(preset) {
 
     // Update UI controls
     document.getElementById('screenshot-scale').value = p.scale;
-    document.getElementById('screenshot-scale-value').textContent = p.scale + '%';
+    document.getElementById('screenshot-scale-value').textContent = formatValue(p.scale) + '%';
     document.getElementById('screenshot-x').value = p.x;
-    document.getElementById('screenshot-x-value').textContent = p.x + '%';
+    document.getElementById('screenshot-x-value').textContent = formatValue(p.x) + '%';
     document.getElementById('screenshot-y').value = p.y;
-    document.getElementById('screenshot-y-value').textContent = p.y + '%';
+    document.getElementById('screenshot-y-value').textContent = formatValue(p.y) + '%';
     document.getElementById('screenshot-rotation').value = p.rotation;
-    document.getElementById('screenshot-rotation-value').textContent = p.rotation + '°';
+    document.getElementById('screenshot-rotation-value').textContent = formatValue(p.rotation) + '°';
 
     updateCanvas();
 }
@@ -2802,16 +3028,30 @@ function updateScreenshotList() {
 
         // Show different UI in transfer mode
         const buttonsHtml = isTransferMode ? '' : `
-            <button class="screenshot-transfer" data-index="${index}" title="Transfer style from another screenshot">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 5v14M5 12l7-7 7 7"/>
-                </svg>
-            </button>
-            <button class="screenshot-delete" data-index="${index}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-            </button>
+            <div class="screenshot-menu-wrapper">
+                <button class="screenshot-menu-btn" data-index="${index}" title="More options">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="5" r="2"/>
+                        <circle cx="12" cy="12" r="2"/>
+                        <circle cx="12" cy="19" r="2"/>
+                    </svg>
+                </button>
+                <div class="screenshot-menu" data-index="${index}">
+                    <button class="screenshot-menu-item screenshot-transfer" data-index="${index}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        Copy style from...
+                    </button>
+                    <button class="screenshot-menu-item screenshot-delete danger" data-index="${index}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                        Remove
+                    </button>
+                </div>
+            </div>
         `;
 
         item.innerHTML = `
@@ -2841,8 +3081,8 @@ function updateScreenshotList() {
             item.classList.remove('dragging');
             draggedScreenshotIndex = null;
             // Remove all drag-over states
-            document.querySelectorAll('.screenshot-item.drag-over').forEach(el => {
-                el.classList.remove('drag-over');
+            document.querySelectorAll('.screenshot-item.drag-insert-after, .screenshot-item.drag-insert-before').forEach(el => {
+                el.classList.remove('drag-insert-after', 'drag-insert-before');
             });
         });
 
@@ -2850,30 +3090,70 @@ function updateScreenshotList() {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             if (draggedScreenshotIndex !== null && draggedScreenshotIndex !== index) {
-                item.classList.add('drag-over');
+                // Determine if cursor is in top or bottom half
+                const rect = item.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                const isAbove = e.clientY < midpoint;
+
+                // Clear all indicators first
+                document.querySelectorAll('.screenshot-item.drag-insert-after, .screenshot-item.drag-insert-before').forEach(el => {
+                    el.classList.remove('drag-insert-after', 'drag-insert-before');
+                });
+
+                // Show line on the item AFTER which the drop will occur
+                if (isAbove && index === 0) {
+                    // Dropping before the first item - show line above it
+                    item.classList.add('drag-insert-before');
+                } else if (isAbove && index > 0) {
+                    // Dropping before this item = after the previous item
+                    const items = screenshotList.querySelectorAll('.screenshot-item:not(.upload-item)');
+                    const prevItem = items[index - 1];
+                    if (prevItem && !prevItem.classList.contains('dragging')) {
+                        prevItem.classList.add('drag-insert-after');
+                    }
+                } else if (!isAbove) {
+                    // Dropping after this item
+                    item.classList.add('drag-insert-after');
+                }
             }
         });
 
         item.addEventListener('dragleave', () => {
-            item.classList.remove('drag-over');
+            // Don't remove here - let dragover on other items handle it
         });
 
         item.addEventListener('drop', (e) => {
             e.preventDefault();
-            item.classList.remove('drag-over');
+
+            // Determine drop position based on cursor
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const dropAbove = e.clientY < midpoint;
+
+            document.querySelectorAll('.screenshot-item.drag-insert-after, .screenshot-item.drag-insert-before').forEach(el => {
+                el.classList.remove('drag-insert-after', 'drag-insert-before');
+            });
 
             if (draggedScreenshotIndex !== null && draggedScreenshotIndex !== index) {
+                // Calculate target index based on drop position
+                let targetIndex = dropAbove ? index : index + 1;
+
+                // Adjust if dragging from before the target
+                if (draggedScreenshotIndex < targetIndex) {
+                    targetIndex--;
+                }
+
                 // Reorder screenshots
                 const draggedItem = state.screenshots[draggedScreenshotIndex];
                 state.screenshots.splice(draggedScreenshotIndex, 1);
-                state.screenshots.splice(index, 0, draggedItem);
+                state.screenshots.splice(targetIndex, 0, draggedItem);
 
                 // Update selected index to follow the selected item
                 if (state.selectedIndex === draggedScreenshotIndex) {
-                    state.selectedIndex = index;
-                } else if (draggedScreenshotIndex < state.selectedIndex && index >= state.selectedIndex) {
+                    state.selectedIndex = targetIndex;
+                } else if (draggedScreenshotIndex < state.selectedIndex && targetIndex >= state.selectedIndex) {
                     state.selectedIndex--;
-                } else if (draggedScreenshotIndex > state.selectedIndex && index <= state.selectedIndex) {
+                } else if (draggedScreenshotIndex > state.selectedIndex && targetIndex <= state.selectedIndex) {
                     state.selectedIndex++;
                 }
 
@@ -2883,7 +3163,7 @@ function updateScreenshotList() {
         });
 
         item.addEventListener('click', (e) => {
-            if (e.target.closest('.screenshot-delete') || e.target.closest('.screenshot-transfer') || e.target.closest('.drag-handle')) {
+            if (e.target.closest('.screenshot-menu-wrapper') || e.target.closest('.drag-handle')) {
                 return;
             }
 
@@ -2910,11 +3190,26 @@ function updateScreenshotList() {
             updateCanvas();
         });
 
+        // Menu button handler
+        const menuBtn = item.querySelector('.screenshot-menu-btn');
+        const menu = item.querySelector('.screenshot-menu');
+        if (menuBtn && menu) {
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Close all other menus first
+                document.querySelectorAll('.screenshot-menu.open').forEach(m => {
+                    if (m !== menu) m.classList.remove('open');
+                });
+                menu.classList.toggle('open');
+            });
+        }
+
         // Transfer button handler
         const transferBtn = item.querySelector('.screenshot-transfer');
         if (transferBtn) {
             transferBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                menu?.classList.remove('open');
                 state.transferTarget = index;
                 updateScreenshotList();
             });
@@ -2925,6 +3220,7 @@ function updateScreenshotList() {
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                menu?.classList.remove('open');
                 state.screenshots.splice(index, 1);
                 if (state.selectedIndex >= state.screenshots.length) {
                     state.selectedIndex = Math.max(0, state.screenshots.length - 1);
@@ -2938,6 +3234,41 @@ function updateScreenshotList() {
 
         screenshotList.appendChild(item);
     });
+
+    // Add upload zone as last item in the list (unless in transfer mode)
+    if (state.transferTarget === null) {
+        const uploadItem = document.createElement('div');
+        uploadItem.className = 'screenshot-item upload-item';
+        uploadItem.id = 'upload-zone';
+        uploadItem.innerHTML = `
+            <div class="upload-item-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+            </div>
+            <div class="screenshot-info">
+                <div class="screenshot-name">Add Screenshots</div>
+                <div class="screenshot-device">Drop or click to browse</div>
+            </div>
+        `;
+        uploadItem.addEventListener('click', () => fileInput.click());
+        uploadItem.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadItem.classList.add('dragover');
+        });
+        uploadItem.addEventListener('dragleave', () => {
+            uploadItem.classList.remove('dragover');
+        });
+        uploadItem.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadItem.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        screenshotList.appendChild(uploadItem);
+    }
+
+    // Update project selector to reflect current screenshot count
+    updateProjectSelector();
 }
 
 function cancelTransfer() {
@@ -3005,12 +3336,16 @@ function updateGradientStopsUI() {
         div.querySelector('input[type="color"]').addEventListener('input', (e) => {
             const currentBg = getBackground();
             currentBg.gradient.stops[index].color = e.target.value;
+            // Deselect preset when manually changing colors
+            document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
             updateCanvas();
         });
 
         div.querySelector('input[type="number"]').addEventListener('input', (e) => {
             const currentBg = getBackground();
             currentBg.gradient.stops[index].position = parseInt(e.target.value);
+            // Deselect preset when manually changing positions
+            document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
             updateCanvas();
         });
 
@@ -3019,6 +3354,8 @@ function updateGradientStopsUI() {
             deleteBtn.addEventListener('click', () => {
                 const currentBg = getBackground();
                 currentBg.gradient.stops.splice(index, 1);
+                // Deselect preset when deleting a stop
+                document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
                 updateGradientStopsUI();
                 updateCanvas();
             });
@@ -3409,8 +3746,12 @@ function drawDeviceFrameToContext(context, x, y, width, height, settings) {
 }
 
 function drawTextToContext(context, dims, txt) {
-    const headline = txt.headlines ? (txt.headlines[txt.currentHeadlineLang || 'en'] || '') : '';
-    const subheadline = txt.subheadlines ? (txt.subheadlines[txt.currentSubheadlineLang || 'en'] || '') : '';
+    // Check enabled states (default headline to true for backwards compatibility)
+    const headlineEnabled = txt.headlineEnabled !== false;
+    const subheadlineEnabled = txt.subheadlineEnabled || false;
+
+    const headline = headlineEnabled && txt.headlines ? (txt.headlines[txt.currentHeadlineLang || 'en'] || '') : '';
+    const subheadline = subheadlineEnabled && txt.subheadlines ? (txt.subheadlines[txt.currentSubheadlineLang || 'en'] || '') : '';
 
     if (!headline && !subheadline) return;
 
@@ -3689,9 +4030,13 @@ function drawText() {
     const dims = getCanvasDimensions();
     const text = getTextSettings();
 
-    // Get current language text
-    const headline = text.headlines ? (text.headlines[text.currentHeadlineLang || 'en'] || '') : (text.headline || '');
-    const subheadline = text.subheadlines ? (text.subheadlines[text.currentSubheadlineLang || 'en'] || '') : (text.subheadline || '');
+    // Check enabled states (default headline to true for backwards compatibility)
+    const headlineEnabled = text.headlineEnabled !== false;
+    const subheadlineEnabled = text.subheadlineEnabled || false;
+
+    // Get current language text (only if enabled)
+    const headline = headlineEnabled && text.headlines ? (text.headlines[text.currentHeadlineLang || 'en'] || '') : '';
+    const subheadline = subheadlineEnabled && text.subheadlines ? (text.subheadlines[text.currentSubheadlineLang || 'en'] || '') : '';
 
     if (!headline && !subheadline) return;
 
