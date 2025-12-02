@@ -1152,6 +1152,82 @@
         </div>
     </div>
 
+    <!-- Screenshot Translations Modal -->
+    <div class="modal-overlay" id="screenshot-translations-modal">
+        <div class="modal translations-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Screenshot Translations</h3>
+                <button class="modal-close" id="screenshot-translations-modal-close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <p class="modal-message">Upload localized versions of this screenshot for each language.</p>
+
+            <div class="translations-list" id="screenshot-translations-list">
+                <!-- Translation items will be populated by JS -->
+            </div>
+
+            <input type="file" id="translation-file-input" accept="image/*" style="display: none;">
+
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-confirm" id="screenshot-translations-modal-done" style="background: var(--accent);">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Language Choice Modal -->
+    <div class="modal-overlay" id="export-language-modal">
+        <div class="modal">
+            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Export Screenshots</h3>
+            <p class="modal-message">Choose which language versions to export.</p>
+
+            <div class="export-options">
+                <button class="export-option" id="export-current-only">
+                    <span class="export-option-title">Current Language Only</span>
+                    <span class="export-option-desc" id="export-current-lang">English</span>
+                </button>
+                <button class="export-option" id="export-all-languages">
+                    <span class="export-option-title">All Languages</span>
+                    <span class="export-option-desc">Separate folder per language</span>
+                </button>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="export-language-modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Progress Modal -->
+    <div class="modal-overlay" id="export-progress-modal">
+        <div class="modal export-progress-modal">
+            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+            </div>
+            <h2>Exporting Screenshots</h2>
+            <p id="export-progress-status">Preparing export...</p>
+            <div class="export-progress-bar">
+                <div class="export-progress-fill" id="export-progress-fill"></div>
+            </div>
+            <p class="export-progress-detail" id="export-progress-detail"></p>
+        </div>
+    </div>
+
+    <script src="language-utils.js"></script>
     <script src="three-renderer.js"></script>
     <script src="app.js"></script>
 </body>

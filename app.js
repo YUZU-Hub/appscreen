@@ -943,16 +943,33 @@ function initSync() {
 function saveState() {
     if (!db) return;
 
-    // Convert screenshots to base64 for storage, including per-screenshot settings
-    const screenshotsToSave = state.screenshots.map(s => ({
-        src: s.image.src,
-        name: s.name,
-        deviceType: s.deviceType,
-        background: s.background,
-        screenshot: s.screenshot,
-        text: s.text,
-        overrides: s.overrides
-    }));
+    // Convert screenshots to base64 for storage, including per-screenshot settings and localized images
+    const screenshotsToSave = state.screenshots.map(s => {
+        // Save localized images (without Image objects, just src/name)
+        const localizedImages = {};
+        if (s.localizedImages) {
+            Object.keys(s.localizedImages).forEach(lang => {
+                const langData = s.localizedImages[lang];
+                if (langData?.src) {
+                    localizedImages[lang] = {
+                        src: langData.src,
+                        name: langData.name
+                    };
+                }
+            });
+        }
+
+        return {
+            src: s.image?.src || '', // Legacy compatibility
+            name: s.name,
+            deviceType: s.deviceType,
+            localizedImages: localizedImages,
+            background: s.background,
+            screenshot: s.screenshot,
+            text: s.text,
+            overrides: s.overrides
+        };
+    });
 
     const stateToSave = {
         id: currentProjectId,
@@ -1033,35 +1050,107 @@ function loadState() {
 
                     if (parsed.screenshots && parsed.screenshots.length > 0) {
                         let loadedCount = 0;
-                        parsed.screenshots.forEach((s, index) => {
-                            const img = new Image();
-                            img.onload = () => {
-                                state.screenshots[index] = {
-                                    image: img,
-                                    name: s.name,
-                                    deviceType: s.deviceType,
-                                    // Load per-screenshot settings if they exist, otherwise use migrated/default settings
-                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
-                                    screenshot: s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot)),
-                                    text: s.text || JSON.parse(JSON.stringify(migratedText)),
-                                    overrides: s.overrides || {}
-                                };
-                                loadedCount++;
-                                if (loadedCount === parsed.screenshots.length) {
-                                    updateScreenshotList();
-                                    // Sync UI with loaded screenshot settings (including 3D mode)
-                                    syncUIWithState();
-                                    updateGradientStopsUI();
-                                    updateCanvas();
+                        const totalToLoad = parsed.screenshots.length;
 
-                                    // Offer to convert old project after loading
-                                    if (needsMigration && parsed.screenshots.length > 0) {
-                                        showMigrationPrompt();
+                        parsed.screenshots.forEach((s, index) => {
+                            // Check if we have new localized format or old single-image format
+                            const hasLocalizedImages = s.localizedImages && Object.keys(s.localizedImages).length > 0;
+
+                            if (hasLocalizedImages) {
+                                // New format: load all localized images
+                                const langKeys = Object.keys(s.localizedImages);
+                                let langLoadedCount = 0;
+                                const localizedImages = {};
+
+                                langKeys.forEach(lang => {
+                                    const langData = s.localizedImages[lang];
+                                    if (langData?.src) {
+                                        const langImg = new Image();
+                                        langImg.onload = () => {
+                                            localizedImages[lang] = {
+                                                image: langImg,
+                                                src: langData.src,
+                                                name: langData.name || s.name
+                                            };
+                                            langLoadedCount++;
+
+                                            if (langLoadedCount === langKeys.length) {
+                                                // All language versions loaded
+                                                const firstLang = langKeys[0];
+                                                state.screenshots[index] = {
+                                                    image: localizedImages[firstLang]?.image, // Legacy compat
+                                                    name: s.name,
+                                                    deviceType: s.deviceType,
+                                                    localizedImages: localizedImages,
+                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                                    screenshot: s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot)),
+                                                    text: s.text || JSON.parse(JSON.stringify(migratedText)),
+                                                    overrides: s.overrides || {}
+                                                };
+                                                loadedCount++;
+                                                checkAllLoaded();
+                                            }
+                                        };
+                                        langImg.src = langData.src;
+                                    } else {
+                                        langLoadedCount++;
+                                        if (langLoadedCount === langKeys.length) {
+                                            loadedCount++;
+                                            checkAllLoaded();
+                                        }
                                     }
-                                }
-                            };
-                            img.src = s.src;
+                                });
+                            } else {
+                                // Old format: migrate to localized images
+                                const img = new Image();
+                                img.onload = () => {
+                                    // Detect language from filename, default to 'en'
+                                    const detectedLang = typeof detectLanguageFromFilename === 'function'
+                                        ? detectLanguageFromFilename(s.name || '')
+                                        : 'en';
+
+                                    const localizedImages = {};
+                                    localizedImages[detectedLang] = {
+                                        image: img,
+                                        src: s.src,
+                                        name: s.name
+                                    };
+
+                                    state.screenshots[index] = {
+                                        image: img,
+                                        name: s.name,
+                                        deviceType: s.deviceType,
+                                        localizedImages: localizedImages,
+                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        screenshot: s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot)),
+                                        text: s.text || JSON.parse(JSON.stringify(migratedText)),
+                                        overrides: s.overrides || {}
+                                    };
+                                    loadedCount++;
+                                    checkAllLoaded();
+                                };
+                                img.src = s.src;
+                            }
                         });
+
+                        function checkAllLoaded() {
+                            if (loadedCount === totalToLoad) {
+                                updateScreenshotList();
+                                syncUIWithState();
+                                updateGradientStopsUI();
+                                updateCanvas();
+
+                                if (needsMigration && parsed.screenshots.length > 0) {
+                                    showMigrationPrompt();
+                                }
+                            }
+                        }
+                    } else {
+                        // No screenshots - still need to update UI
+                        updateScreenshotList();
+                        syncUIWithState();
+                        updateGradientStopsUI();
+                        updateCanvas();
                     }
 
                     state.selectedIndex = parsed.selectedIndex || 0;
@@ -1636,6 +1725,28 @@ function setupEventListeners() {
             addProjectLanguage(e.target.value);
             e.target.value = '';
         }
+    });
+
+    // Screenshot translations modal events
+    document.getElementById('screenshot-translations-modal-close').addEventListener('click', closeScreenshotTranslationsModal);
+    document.getElementById('screenshot-translations-modal-done').addEventListener('click', closeScreenshotTranslationsModal);
+    document.getElementById('screenshot-translations-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'screenshot-translations-modal') closeScreenshotTranslationsModal();
+    });
+    document.getElementById('translation-file-input').addEventListener('change', handleTranslationFileSelect);
+
+    // Export language modal events
+    document.getElementById('export-current-only').addEventListener('click', () => {
+        closeExportLanguageDialog('current');
+    });
+    document.getElementById('export-all-languages').addEventListener('click', () => {
+        closeExportLanguageDialog('all');
+    });
+    document.getElementById('export-language-modal-cancel').addEventListener('click', () => {
+        closeExportLanguageDialog(null);
+    });
+    document.getElementById('export-language-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'export-language-modal') closeExportLanguageDialog(null);
     });
 
     // Translate button events
@@ -3122,22 +3233,43 @@ function handleFiles(files) {
                         deviceType = 'iPad';
                     }
 
-                    // Each screenshot gets its own copy of all settings from defaults
-                    state.screenshots.push({
-                        image: img,
-                        name: file.name,
-                        deviceType: deviceType,
-                        background: JSON.parse(JSON.stringify(state.defaults.background)),
-                        screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
-                        text: JSON.parse(JSON.stringify(state.defaults.text)),
-                        // Legacy overrides for backwards compatibility
-                        overrides: {}
-                    });
+                    // Detect language from filename
+                    const detectedLang = detectLanguageFromFilename(file.name);
 
-                    updateScreenshotList();
-                    if (state.screenshots.length === 1) {
-                        state.selectedIndex = 0;
+                    // Check if this is a localized version of an existing screenshot
+                    const existingIndex = findScreenshotByBaseFilename(file.name);
+
+                    if (existingIndex !== -1) {
+                        // Add as localized version of existing screenshot
+                        addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                    } else {
+                        // Create new screenshot entry
+                        const localizedImages = {};
+                        localizedImages[detectedLang] = {
+                            image: img,
+                            src: e.target.result,
+                            name: file.name
+                        };
+
+                        // Each screenshot gets its own copy of all settings from defaults
+                        state.screenshots.push({
+                            image: img, // Keep for legacy compatibility
+                            name: file.name,
+                            deviceType: deviceType,
+                            localizedImages: localizedImages,
+                            background: JSON.parse(JSON.stringify(state.defaults.background)),
+                            screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
+                            text: JSON.parse(JSON.stringify(state.defaults.text)),
+                            // Legacy overrides for backwards compatibility
+                            overrides: {}
+                        });
+
+                        updateScreenshotList();
+                        if (state.screenshots.length === 1) {
+                            state.selectedIndex = 0;
+                        }
                     }
+
                     // Update 3D texture if in 3D mode
                     const ss = getScreenshotSettings();
                     if (ss.use3D && typeof updateScreenTexture === 'function') {
@@ -3195,6 +3327,12 @@ function updateScreenshotList() {
                     </svg>
                 </button>
                 <div class="screenshot-menu" data-index="${index}">
+                    <button class="screenshot-menu-item screenshot-translations" data-index="${index}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
+                        </svg>
+                        Manage Translations...
+                    </button>
                     <button class="screenshot-menu-item screenshot-transfer" data-index="${index}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="9" y="9" width="13" height="13" rx="2"/>
@@ -3212,6 +3350,20 @@ function updateScreenshotList() {
             </div>
         `;
 
+        // Get localized thumbnail image
+        const thumbImg = getScreenshotImage(screenshot);
+        const thumbSrc = thumbImg?.src || '';
+
+        // Build language flags indicator
+        const availableLangs = getAvailableLanguagesForScreenshot(screenshot);
+        const isComplete = isScreenshotComplete(screenshot);
+        let langFlagsHtml = '';
+        if (state.projectLanguages.length > 1) {
+            const flags = availableLangs.map(lang => languageFlags[lang] || '🏳️').join('');
+            const checkmark = isComplete ? '<span class="screenshot-complete">✓</span>' : '';
+            langFlagsHtml = `<span class="screenshot-lang-flags">${flags}${checkmark}</span>`;
+        }
+
         item.innerHTML = `
             <div class="drag-handle">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -3220,10 +3372,10 @@ function updateScreenshotList() {
                     <circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>
                 </svg>
             </div>
-            <img class="screenshot-thumb" src="${screenshot.image.src}" alt="${screenshot.name}">
+            <img class="screenshot-thumb" src="${thumbSrc}" alt="${screenshot.name}">
             <div class="screenshot-info">
                 <div class="screenshot-name">${screenshot.name}</div>
-                <div class="screenshot-device">${isTransferTarget ? 'Click source to copy style' : screenshot.deviceType}</div>
+                <div class="screenshot-device">${isTransferTarget ? 'Click source to copy style' : screenshot.deviceType}${langFlagsHtml}</div>
             </div>
             ${buttonsHtml}
         `;
@@ -3359,6 +3511,16 @@ function updateScreenshotList() {
                     if (m !== menu) m.classList.remove('open');
                 });
                 menu.classList.toggle('open');
+            });
+        }
+
+        // Manage Translations button handler
+        const translationsBtn = item.querySelector('.screenshot-translations');
+        if (translationsBtn) {
+            translationsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu?.classList.remove('open');
+                openScreenshotTranslationsModal(index);
             });
         }
 
@@ -3763,7 +3925,11 @@ function slideToScreenshot(newIndex, direction) {
 
 function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewScale) {
     const screenshot = state.screenshots[index];
-    if (!screenshot || !screenshot.image) return;
+    if (!screenshot) return;
+
+    // Get localized image for current language
+    const img = getScreenshotImage(screenshot);
+    if (!img) return;
 
     // Set canvas size (this also clears the canvas)
     targetCanvas.width = dims.width;
@@ -3791,8 +3957,8 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
         // Render 3D phone model for this specific screenshot
         renderThreeJSForScreenshot(targetCanvas, dims.width, dims.height, index);
     } else {
-        // Draw 2D screenshot
-        drawScreenshotToContext(targetCtx, dims, screenshot.image, settings);
+        // Draw 2D screenshot using localized image
+        drawScreenshotToContext(targetCtx, dims, img, settings);
     }
 
     // Draw text
@@ -4177,7 +4343,10 @@ function drawScreenshot() {
     const screenshot = state.screenshots[state.selectedIndex];
     if (!screenshot) return;
 
-    const img = screenshot.image;
+    // Use localized image based on current language
+    const img = getScreenshotImage(screenshot);
+    if (!img) return;
+
     const settings = getScreenshotSettings();
     const scale = settings.scale / 100;
 
@@ -4488,12 +4657,78 @@ async function exportAll() {
         return;
     }
 
+    // Check if we have multiple languages with images
+    const hasMultipleLanguages = state.projectLanguages.length > 1 &&
+        state.screenshots.some(s => {
+            const langs = getAvailableLanguagesForScreenshot(s);
+            return langs.length > 1;
+        });
+
+    if (hasMultipleLanguages) {
+        // Show language choice dialog
+        showExportLanguageDialog(async (choice) => {
+            if (choice === 'current') {
+                await exportAllForLanguage(state.currentLanguage);
+            } else if (choice === 'all') {
+                await exportAllLanguages();
+            }
+        });
+    } else {
+        // Only one language, export directly
+        await exportAllForLanguage(state.currentLanguage);
+    }
+}
+
+// Show export progress modal
+function showExportProgress(status, detail, percent) {
+    const modal = document.getElementById('export-progress-modal');
+    const statusEl = document.getElementById('export-progress-status');
+    const detailEl = document.getElementById('export-progress-detail');
+    const fillEl = document.getElementById('export-progress-fill');
+
+    if (modal) modal.classList.add('visible');
+    if (statusEl) statusEl.textContent = status;
+    if (detailEl) detailEl.textContent = detail || '';
+    if (fillEl) fillEl.style.width = `${percent}%`;
+}
+
+// Hide export progress modal
+function hideExportProgress() {
+    const modal = document.getElementById('export-progress-modal');
+    if (modal) modal.classList.remove('visible');
+}
+
+// Export all screenshots for a specific language
+async function exportAllForLanguage(lang) {
     const originalIndex = state.selectedIndex;
+    const originalLang = state.currentLanguage;
     const zip = new JSZip();
+    const total = state.screenshots.length;
+
+    // Show progress
+    const langName = languageNames[lang] || lang.toUpperCase();
+    showExportProgress('Exporting...', `Preparing ${langName} screenshots`, 0);
+
+    // Save original text languages for each screenshot
+    const originalTextLangs = state.screenshots.map(s => ({
+        headline: s.text.currentHeadlineLang,
+        subheadline: s.text.currentSubheadlineLang
+    }));
+
+    // Temporarily switch to the target language (images and text)
+    state.currentLanguage = lang;
+    state.screenshots.forEach(s => {
+        s.text.currentHeadlineLang = lang;
+        s.text.currentSubheadlineLang = lang;
+    });
 
     for (let i = 0; i < state.screenshots.length; i++) {
         state.selectedIndex = i;
         updateCanvas();
+
+        // Update progress
+        const percent = Math.round(((i + 1) / total) * 90); // Reserve 10% for ZIP generation
+        showExportProgress('Exporting...', `Screenshot ${i + 1} of ${total}`, percent);
 
         await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -4504,13 +4739,99 @@ async function exportAll() {
         zip.file(`screenshot-${i + 1}.png`, base64Data, { base64: true });
     }
 
+    // Restore original settings
     state.selectedIndex = originalIndex;
+    state.currentLanguage = originalLang;
+    state.screenshots.forEach((s, i) => {
+        s.text.currentHeadlineLang = originalTextLangs[i].headline;
+        s.text.currentSubheadlineLang = originalTextLangs[i].subheadline;
+    });
     updateCanvas();
 
-    // Generate and download the ZIP file
+    // Generate ZIP
+    showExportProgress('Generating ZIP...', '', 95);
     const content = await zip.generateAsync({ type: 'blob' });
+
+    showExportProgress('Complete!', '', 100);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    hideExportProgress();
+
     const link = document.createElement('a');
-    link.download = 'screenshots.zip';
+    link.download = `screenshots-${lang}.zip`;
+    link.href = URL.createObjectURL(content);
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+// Export all screenshots for all languages (separate folders)
+async function exportAllLanguages() {
+    const originalIndex = state.selectedIndex;
+    const originalLang = state.currentLanguage;
+    const zip = new JSZip();
+
+    const totalLangs = state.projectLanguages.length;
+    const totalScreenshots = state.screenshots.length;
+    const totalItems = totalLangs * totalScreenshots;
+    let completedItems = 0;
+
+    // Show progress
+    showExportProgress('Exporting...', 'Preparing all languages', 0);
+
+    // Save original text languages for each screenshot
+    const originalTextLangs = state.screenshots.map(s => ({
+        headline: s.text.currentHeadlineLang,
+        subheadline: s.text.currentSubheadlineLang
+    }));
+
+    for (let langIdx = 0; langIdx < state.projectLanguages.length; langIdx++) {
+        const lang = state.projectLanguages[langIdx];
+        const langName = languageNames[lang] || lang.toUpperCase();
+
+        // Temporarily switch to this language (images and text)
+        state.currentLanguage = lang;
+        state.screenshots.forEach(s => {
+            s.text.currentHeadlineLang = lang;
+            s.text.currentSubheadlineLang = lang;
+        });
+
+        for (let i = 0; i < state.screenshots.length; i++) {
+            state.selectedIndex = i;
+            updateCanvas();
+
+            completedItems++;
+            const percent = Math.round((completedItems / totalItems) * 90); // Reserve 10% for ZIP
+            showExportProgress('Exporting...', `${langName}: Screenshot ${i + 1} of ${totalScreenshots}`, percent);
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Get canvas data as base64, strip the data URL prefix
+            const dataUrl = canvas.toDataURL('image/png');
+            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+
+            // Use language code as folder name
+            zip.file(`${lang}/screenshot-${i + 1}.png`, base64Data, { base64: true });
+        }
+    }
+
+    // Restore original settings
+    state.selectedIndex = originalIndex;
+    state.currentLanguage = originalLang;
+    state.screenshots.forEach((s, i) => {
+        s.text.currentHeadlineLang = originalTextLangs[i].headline;
+        s.text.currentSubheadlineLang = originalTextLangs[i].subheadline;
+    });
+    updateCanvas();
+
+    // Generate ZIP
+    showExportProgress('Generating ZIP...', '', 95);
+    const content = await zip.generateAsync({ type: 'blob' });
+
+    showExportProgress('Complete!', '', 100);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    hideExportProgress();
+
+    const link = document.createElement('a');
+    link.download = 'screenshots-all-languages.zip';
     link.href = URL.createObjectURL(content);
     link.click();
     URL.revokeObjectURL(link.href);

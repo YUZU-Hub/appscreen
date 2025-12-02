@@ -2491,3 +2491,199 @@ input[type="range"]::-webkit-slider-thumb {
 .add-language-section {
     margin-bottom: 16px;
 }
+
+/* Screenshot language flags indicator */
+.screenshot-lang-flags {
+    margin-left: 6px;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.screenshot-complete {
+    color: #30d158;
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+/* Screenshot Translations Modal */
+.translations-modal {
+    width: 450px;
+    max-width: 90vw;
+}
+
+.translations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 16px 0;
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.translation-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.translation-item.has-image {
+    border-color: rgba(48, 209, 88, 0.3);
+    background: rgba(48, 209, 88, 0.05);
+}
+
+.translation-thumb {
+    width: 40px;
+    height: 86px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.translation-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.translation-thumb.empty {
+    border: 2px dashed var(--border-color);
+    color: var(--text-secondary);
+}
+
+.translation-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.translation-info .flag {
+    font-size: 18px;
+}
+
+.translation-info .name {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.translation-upload {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.translation-upload:hover {
+    background: #0a84ff;
+}
+
+.translation-remove {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.translation-remove:hover {
+    background: rgba(255, 69, 58, 0.15);
+    color: #ff453a;
+}
+
+/* Export Language Modal */
+.export-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.export-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    width: 100%;
+}
+
+.export-option:hover {
+    border-color: var(--accent);
+    background: rgba(10, 132, 255, 0.08);
+}
+
+.export-option-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.export-option-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Export Progress Modal */
+.export-progress-modal {
+    text-align: center;
+}
+
+.export-progress-modal h2 {
+    margin-bottom: 8px;
+}
+
+.export-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 20px 0 12px;
+}
+
+.export-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.2s ease-out;
+}
+
+#export-progress-status {
+    color: var(--text-primary);
+    font-size: 14px;
+    margin: 0;
+}
+
+#export-progress-detail {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0;
+}

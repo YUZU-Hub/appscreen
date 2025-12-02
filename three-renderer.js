@@ -549,7 +549,11 @@ function updateScreenTexture() {
     if (typeof state === 'undefined' || !state.screenshots.length) return;
 
     const screenshot = state.screenshots[state.selectedIndex];
-    if (!screenshot || !screenshot.image) return;
+    // Use getScreenshotImage() for localized image support
+    const screenshotImage = typeof getScreenshotImage === 'function'
+        ? getScreenshotImage(screenshot)
+        : screenshot?.image;
+    if (!screenshot || !screenshotImage) return;
 
     // Create texture from screenshot
     if (screenTexture) {
@@ -558,8 +562,8 @@ function updateScreenTexture() {
 
     // Create rounded corner version of the image using device-specific corner radius
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-    const cornerRadius = Math.round(screenshot.image.width * config.cornerRadiusFactor);
-    const roundedImage = createRoundedScreenImage(screenshot.image, cornerRadius);
+    const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
+    const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
 
     screenTexture = new THREE.Texture(roundedImage);
     screenTexture.needsUpdate = true;
@@ -762,10 +766,14 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
     }
 
     // Temporarily update screen texture for this screenshot
+    // Use getScreenshotImage() for localized image support
+    const screenshotImage = typeof getScreenshotImage === 'function'
+        ? getScreenshotImage(screenshot)
+        : screenshot?.image;
     const oldMaterial = screenPlaneToUse ? screenPlaneToUse.material : null;
-    if (screenshot.image && screenPlaneToUse) {
-        const cornerRadius = Math.round(screenshot.image.width * config.cornerRadiusFactor);
-        const roundedImage = createRoundedScreenImage(screenshot.image, cornerRadius);
+    if (screenshotImage && screenPlaneToUse) {
+        const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
+        const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
         const newTexture = new THREE.Texture(roundedImage);
         newTexture.needsUpdate = true;
         newTexture.encoding = THREE.sRGBEncoding;
