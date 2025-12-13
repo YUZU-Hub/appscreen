@@ -83,6 +83,28 @@ Then open `http://localhost:8000` in your browser.
 
 If you have the "Live Server" extension installed in VS Code, right-click `index.html` and select "Open with Live Server".
 
+### Option 4: Docker
+
+Run the pre-built Docker image from GitHub Container Registry:
+
+```bash
+# Using Docker directly
+docker run -d -p 8080:80 ghcr.io/yuzu-hub/appscreen:latest
+
+# Using Docker Compose
+docker compose up -d
+```
+
+Then open `http://localhost:8080` in your browser.
+
+#### Building locally
+
+If you want to build the image yourself:
+
+```bash
+docker compose -f docker-compose.build.yml up -d
+```
+
 ## Usage
 
 1. **Upload Screenshots**: Drag and drop your app screenshots or click to browse
@@ -114,6 +136,7 @@ Your API key is stored locally in your browser and only sent to the respective A
 - JSZip for batch export
 - Google Fonts API for font picker
 - Claude/OpenAI/Google APIs for translations
+- Docker + nginx for containerized deployment
 
 ## Apps Using This Project
 
