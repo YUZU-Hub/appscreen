@@ -120,7 +120,12 @@ html.electron-app #settings-btn {
 }
 
 .style-presets-top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
     width: 100%;
+    flex-wrap: nowrap; /* IMPORTANT */
 }
 
 .style-header-bottom {
@@ -3066,12 +3071,7 @@ input[type="range"]::-webkit-slider-thumb {
     font-size: 12px;
     color: var(--text-secondary);
 }
-.style-presets-container {
-    display: flex;
-    flex-direction: row;
-    gap: 12px;
-    margin: 16px;
-}
+
 .style-button-themes {
     display: flex;
     flex-direction: row;
@@ -3080,30 +3080,9 @@ input[type="range"]::-webkit-slider-thumb {
     width: 100%;
 }
 
-.style-presets-top {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    flex-wrap: nowrap; /* IMPORTANT */
-}
-
 .style-presets-select {
     flex: 1;
     min-width: 0; /* CRITICAL */
-}
-
-
-.style-presets-divider {
-    height: 1px;
-    background: var(--border-color);
-    margin: 4px 0;
-    opacity: 0.5;
-}
-
-.style-presets-select {
-    flex: 1;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
@@ -3119,7 +3098,14 @@ input[type="range"]::-webkit-slider-thumb {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 12px center;
-} */
+}
+
+.style-presets-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+    opacity: 0.5;
+}
 
 .style-presets-select:hover {
     border-color: var(--text-secondary);

@@ -3850,9 +3850,9 @@ function applyPositionPreset(preset) {
     updateCanvas();
 }
 
-function handleFiles(files) {
+function handleFiles(files, isMassUpload = false) {
     // Process files sequentially to handle duplicates one at a time
-    processFilesSequentially(Array.from(files).filter(f => f.type.startsWith('image/')));
+    processFilesSequentially(Array.from(files).filter(f => f.type.startsWith('image/')), isMassUpload);
 }
 
 // Handle files from Electron menu (receives array of {dataUrl, name})
@@ -5776,12 +5776,13 @@ if (uploadModeModal) {
 // Clear All Button
 const clearAllBtn = document.getElementById('clear-all-btn');
 if (clearAllBtn) {
-    clearAllBtn.addEventListener('click', () => {
+    clearAllBtn.addEventListener('click', async () => {
         if (state.screenshots.length === 0) return;
         
-        if (confirm('Are you sure you want to delete all screenshots? This cannot be undone.')) {
+        const confirmed = await showAppConfirm('Are you sure you want to delete all screenshots? This cannot be undone.', 'Delete All', 'Cancel');
+        if (confirmed) {
             state.screenshots = [];
-            state.selectedScreenshotIndex = -1;
+            state.selectedIndex = -1;
             updateScreenshotList();
             updateCanvas();
         }
