@@ -942,10 +942,18 @@ function updateStylePresetsDropdown() {
     const select = document.getElementById('style-presets-select');
     if (!select) return;
     
-    // Keep the default "Select a style..." option
+    // Keep the default "Saved Themes" option
     const defaultOption = select.options[0];
     select.innerHTML = '';
-    select.appendChild(defaultOption);
+    if (defaultOption) {
+        defaultOption.textContent = 'Saved Themes';
+        select.appendChild(defaultOption);
+    } else {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Saved Themes';
+        select.appendChild(opt);
+    }
     
     stylePresets.forEach((preset, index) => {
         const option = document.createElement('option');
