@@ -37,18 +37,62 @@ const llmProviders = {
             { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro ($$$)' }
         ],
         defaultModel: 'gemini-2.5-flash'
+    },
+    ollama: {
+        name: 'Ollama (Local)',
+        keyPrefix: null, // No API key required
+        storageKey: null, // No API key storage
+        modelStorageKey: 'ollamaModel',
+        urlStorageKey: 'ollamaUrl',
+        defaultUrl: 'http://localhost:11434',
+        models: [], // User specifies their own model
+        defaultModel: 'llama3.2',
+        isLocal: true
     }
 };
 
 /**
  * Get the selected model for a provider
- * @param {string} provider - Provider key (anthropic, openai, google)
+ * @param {string} provider - Provider key (anthropic, openai, google, ollama)
  * @returns {string} - Model ID
  */
 function getSelectedModel(provider) {
     const config = llmProviders[provider];
     if (!config) return null;
     return localStorage.getItem(config.modelStorageKey) || config.defaultModel;
+}
+
+/**
+ * Get the Ollama base URL
+ * @returns {string} - Ollama URL
+ */
+function getOllamaUrl() {
+    return localStorage.getItem('ollamaUrl') || llmProviders.ollama.defaultUrl;
+}
+
+/**
+ * Fetch available models from Ollama
+ * @param {string} baseUrl - Ollama server URL (optional, uses saved URL if not provided)
+ * @returns {Promise<Array>} - Array of model objects with name and size
+ */
+async function fetchOllamaModels(baseUrl = null) {
+    const url = baseUrl || getOllamaUrl();
+    try {
+        const response = await fetch(`${url}/api/tags`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch models: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.models || [];
+    } catch (error) {
+        console.error('Error fetching Ollama models:', error);
+        return [];
+    }
 }
 
 /**
