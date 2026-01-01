@@ -69,6 +69,65 @@ function detectLanguageFromFilename(filename) {
     // Normalize filename for matching
     const lower = filename.toLowerCase();
 
+    // Country code mapping (ISO2/Common -> Language Code)
+    const countryMap = {
+        'us': 'en',
+        'uk': 'en',
+        'gb': 'en',
+        'au': 'en',
+        'ca': 'en',
+        'nz': 'en',
+        'ie': 'en',
+        'br': 'pt-br',
+        'pt': 'pt',
+        'cn': 'zh',
+        'tw': 'zh-tw',
+        'jp': 'ja',
+        'kr': 'ko',
+        'in': 'hi',
+        'sa': 'ar',
+        'ae': 'ar',
+        'eg': 'ar',
+        'es': 'es',
+        'mx': 'es',
+        'fr': 'fr',
+        'de': 'de',
+        'it': 'it',
+        'ru': 'ru',
+        'id': 'id',
+        'tr': 'tr',
+        'th': 'th',
+        'vn': 'vi'
+    };
+
+    const countryCodes = Object.keys(countryMap);
+
+    // Check for folder names if path is provided (e.g., "US/screenshot.png")
+    if (lower.includes('/') || lower.includes('\\')) {
+        const parts = lower.split(/[/\\]/);
+        // Check directory parts (all except last)
+        for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            // Check country codes in folder name (exact match)
+            if (countryMap[part]) {
+                return countryMap[part];
+            }
+            // Check language codes in folder name (exact match)
+            if (supportedLangs.includes(part)) {
+                return part;
+            }
+        }
+    }
+
+    // Check for country codes in filename (user requested feature)
+    // Matches: _US., -US., _BR., -BR., etc.
+    for (const country of countryCodes) {
+        const pattern = new RegExp(`[_-]${country}\\.`, 'i');
+        if (pattern.test(lower)) {
+            return countryMap[country];
+        }
+    }
+
     // Check for longer codes first (pt-br, zh-tw, en-gb) to avoid false matches
     const sortedLangs = [...supportedLangs].sort((a, b) => b.length - a.length);
 

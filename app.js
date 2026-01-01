@@ -161,11 +161,14 @@ function setCurrentScreenshotAsDefault() {
 
 // Language flags mapping
 const languageFlags = {
-    'en': '🇺🇸', 'en-gb': '🇬🇧', 'de': '🇩🇪', 'fr': '🇫🇷', 'es': '🇪🇸',
-    'it': '🇮🇹', 'pt': '🇵🇹', 'pt-br': '🇧🇷', 'nl': '🇳🇱', 'ru': '🇷🇺',
-    'ja': '🇯🇵', 'ko': '🇰🇷', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'ar': '🇸🇦',
-    'hi': '🇮🇳', 'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'da': '🇩🇰',
-    'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩'
+    'en': '🇺🇸', 'en-gb': '🇬🇧', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'hi': '🇮🇳',
+    'es': '🇪🇸', 'ar': '🇸🇦', 'fr': '🇫🇷', 'bn': '🇧🇩', 'pt': '🇵🇹', 'pt-br': '🇧🇷',
+    'ru': '🇷🇺', 'id': '🇮🇩', 'ur': '🇵🇰', 'de': '🇩🇪', 'ja': '🇯🇵', 'sw': '🇰🇪',
+    'mr': '🇮🇳', 'te': '🇮🇳', 'tr': '🇹🇷', 'ta': '🇮🇳', 'pa': '🇮🇳', 'ko': '🇰🇷',
+    'vi': '🇻🇳', 'it': '🇮🇹', 'th': '🇹🇭', 'gu': '🇮🇳', 'kn': '🇮🇳', 'fa': '🇮🇷',
+    'pl': '🇵🇱', 'jv': '🇮🇩', 'ro': '🇷🇴', 'nl': '🇳🇱', 'el': '🇬🇷', 'sv': '🇸🇪',
+    'no': '🇳🇴', 'fi': '🇫🇮', 'hu': '🇭🇺', 'cs': '🇨🇿', 'he': '🇮🇱', 'uk': '🇺🇦',
+    'bg': '🇧🇬', 'da': '🇩🇰'
 };
 
 // Google Fonts configuration
@@ -825,6 +828,7 @@ const META_STORE = 'meta';
 
 let currentProjectId = 'default';
 let projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
+let stylePresets = []; // Global style presets
 
 function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -883,6 +887,7 @@ async function loadProjectsMeta() {
             
             const projectsReq = store.get('projects');
             const currentReq = store.get('currentProject');
+            const presetsReq = store.get('stylePresets');
             
             transaction.oncomplete = () => {
                 if (projectsReq.result) {
@@ -891,7 +896,11 @@ async function loadProjectsMeta() {
                 if (currentReq.result) {
                     currentProjectId = currentReq.result.value;
                 }
+                if (presetsReq.result) {
+                    stylePresets = presetsReq.result.value || [];
+                }
                 updateProjectSelector();
+                updateStylePresetsDropdown();
                 resolve();
             };
             
@@ -914,6 +923,43 @@ function saveProjectsMeta() {
     } catch (e) {
         console.error('Error saving projects meta:', e);
     }
+}
+
+// Save global style presets
+function saveStylePresets() {
+    if (!db) return;
+    try {
+        const transaction = db.transaction([META_STORE], 'readwrite');
+        const store = transaction.objectStore(META_STORE);
+        store.put({ key: 'stylePresets', value: stylePresets });
+    } catch (e) {
+        console.error('Error saving style presets:', e);
+    }
+}
+
+// Update style presets dropdown
+function updateStylePresetsDropdown() {
+    const select = document.getElementById('style-presets-select');
+    if (!select) return;
+    
+    // Keep the default "Select a style..." option
+    const defaultOption = select.options[0];
+    select.innerHTML = '';
+    select.appendChild(defaultOption);
+    
+    stylePresets.forEach((preset, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = preset.name;
+        select.appendChild(option);
+    });
+    
+    console.log('[Style Presets] Updated dropdown with', stylePresets.length, 'presets');
+
+    // Reset selection and button state
+    select.value = "";
+    const deleteBtn = document.getElementById('delete-preset-btn');
+    if (deleteBtn) deleteBtn.disabled = true;
 }
 
 // Update project selector dropdown
@@ -1614,17 +1660,85 @@ function setupEventListeners() {
     //     if (state.screenshots.length === 0) return;
     //     setCurrentScreenshotAsDefault();
     //     // Show brief confirmation
-    //     const btn = document.getElementById('set-as-default-btn');
-    //     const originalText = btn.textContent;
-    //     btn.textContent = 'Saved!';
-    //     btn.style.borderColor = 'var(--accent)';
-    //     btn.style.color = 'var(--accent)';
-    //     setTimeout(() => {
-    //         btn.textContent = originalText;
-    //         btn.style.borderColor = '';
-    //         btn.style.color = '';
-    //     }, 1500);
+    //     // ...
     // });
+
+    // Style Presets Logic
+    const stylePresetsSelect = document.getElementById('style-presets-select');
+    
+    // Save Preset
+    document.getElementById('save-preset-btn').addEventListener('click', () => {
+        const name = prompt('Enter a name for this style preset:');
+        if (!name) return;
+        
+        const preset = {
+            name: name,
+            background: JSON.parse(JSON.stringify(getBackground())),
+            screenshot: JSON.parse(JSON.stringify(getScreenshotSettings())),
+            text: JSON.parse(JSON.stringify(getText()))
+        };
+        
+        stylePresets.push(preset);
+        saveStylePresets();
+        updateStylePresetsDropdown();
+        
+        // Select the new preset
+        stylePresetsSelect.value = stylePresets.length - 1;
+        document.getElementById('delete-preset-btn').disabled = false;
+    });
+    
+    // Delete Preset
+    document.getElementById('delete-preset-btn').addEventListener('click', () => {
+        const index = parseInt(stylePresetsSelect.value);
+        if (isNaN(index)) return;
+        
+        if (confirm(`Delete preset "${stylePresets[index].name}"?`)) {
+            stylePresets.splice(index, 1);
+            saveStylePresets();
+            updateStylePresetsDropdown();
+        }
+    });
+    
+    // Dropdown Change
+    stylePresetsSelect.addEventListener('change', () => {
+        document.getElementById('delete-preset-btn').disabled = stylePresetsSelect.value === "";
+    });
+
+    // Apply Preset
+    document.getElementById('apply-preset-btn').addEventListener('click', () => {
+        const index = parseInt(stylePresetsSelect.value);
+        if (isNaN(index)) {
+            alert('Please select a style preset first.');
+            return;
+        }
+        
+        const preset = stylePresets[index];
+        if (!preset) return;
+        
+        // Apply settings
+        const currentScreenshot = getCurrentScreenshot();
+        if (currentScreenshot) {
+            console.log('[Style Presets] Applying preset:', preset.name);
+            
+            // Deep copy to avoid reference issues
+            currentScreenshot.background = JSON.parse(JSON.stringify(preset.background));
+            currentScreenshot.screenshot = JSON.parse(JSON.stringify(preset.screenshot));
+            currentScreenshot.text = JSON.parse(JSON.stringify(preset.text));
+            
+            // Update UI
+            syncUIWithState();
+            updateCanvas();
+            saveState();
+            
+            // Visual feedback
+            const btn = document.getElementById('apply-preset-btn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Applied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 1000);
+        }
+    });
 
     // Project dropdown
     const projectDropdown = document.getElementById('project-dropdown');
@@ -3801,13 +3915,14 @@ async function processElectronImageFile(fileData) {
     });
 }
 
-async function processFilesSequentially(files) {
+async function processFilesSequentially(files, isMassUpload = false) {
     for (const file of files) {
-        await processImageFile(file);
+        await processImageFile(file, isMassUpload);
     }
 }
 
-async function processImageFile(file) {
+async function processImageFile(file, isMassUpload = false) {
+    console.log(`[Debug] Processing file: ${file.name}, path: ${file.webkitRelativePath || 'N/A'}, mass: ${isMassUpload}`);
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -3821,39 +3936,47 @@ async function processImageFile(file) {
                 }
 
                 // Detect language from filename
-                const detectedLang = detectLanguageFromFilename(file.name);
+                // Use webkitRelativePath if available to support folder-based detection
+                const detectedLang = detectLanguageFromFilename(file.webkitRelativePath || file.name);
+                console.log(`[Debug] Detected lang for ${file.name}: ${detectedLang}`);
 
-                // Check if this is a localized version of an existing screenshot
-                const existingIndex = findScreenshotByBaseFilename(file.name);
-
-                if (existingIndex !== -1) {
-                    // Found a screenshot with matching base filename
-                    const existingScreenshot = state.screenshots[existingIndex];
-                    const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.image;
-
-                    if (hasExistingLangImage) {
-                        // There's already an image for this language - show dialog
-                        const choice = await showDuplicateDialog({
-                            existingIndex: existingIndex,
-                            detectedLang: detectedLang,
-                            newImage: img,
-                            newSrc: e.target.result,
-                            newName: file.name
-                        });
-
-                        if (choice === 'replace') {
-                            addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
-                        } else if (choice === 'create') {
-                            createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
-                        }
-                        // 'ignore' does nothing
-                    } else {
-                        // No image for this language yet - just add it silently
-                        addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
-                    }
-                } else {
-                    // No duplicate - create new screenshot
+                // If mass upload, always create new screenshot to separate by languages (as requested)
+                // Otherwise check for duplicates/localization
+                if (isMassUpload) {
                     createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                } else {
+                    // Check if this is a localized version of an existing screenshot
+                    const existingIndex = findScreenshotByBaseFilename(file.name);
+
+                    if (existingIndex !== -1) {
+                        // Found a screenshot with matching base filename
+                        const existingScreenshot = state.screenshots[existingIndex];
+                        const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.image;
+
+                        if (hasExistingLangImage) {
+                            // There's already an image for this language - show dialog
+                            const choice = await showDuplicateDialog({
+                                existingIndex: existingIndex,
+                                detectedLang: detectedLang,
+                                newImage: img,
+                                newSrc: e.target.result,
+                                newName: file.name
+                            });
+
+                            if (choice === 'replace') {
+                                addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                            } else if (choice === 'create') {
+                                createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                            }
+                            // 'ignore' does nothing
+                        } else {
+                            // No image for this language yet - just add it silently
+                            addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                        }
+                    } else {
+                        // No duplicate - create new screenshot
+                        createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                    }
                 }
 
                 // Update 3D texture if in 3D mode
@@ -4227,7 +4350,9 @@ function updateScreenshotList() {
                 <div class="screenshot-device">Drop or click to browse</div>
             </div>
         `;
-        uploadItem.addEventListener('click', () => fileInput.click());
+        uploadItem.addEventListener('click', () => {
+            document.getElementById('upload-mode-modal').classList.add('visible');
+        });
         screenshotList.appendChild(uploadItem);
     }
 
@@ -5580,6 +5705,79 @@ async function exportAllLanguages() {
     link.href = URL.createObjectURL(content);
     link.click();
     URL.revokeObjectURL(link.href);
+}
+
+// Mass Upload Handling
+function handleMassUpload() {
+    console.log('[Debug] Starting Mass Upload...');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.webkitdirectory = true;
+    input.directory = true; // Non-standard fallback
+    input.multiple = true;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    input.addEventListener('change', (e) => {
+        console.log(`[Debug] Mass upload selected ${e.target.files ? e.target.files.length : 0} files`);
+        if (e.target.files && e.target.files.length > 0) {
+            handleFiles(e.target.files, true); // Pass true for isMassUpload
+        }
+        document.body.removeChild(input);
+    });
+
+    input.click();
+}
+
+// Upload Mode Modal Event Listeners
+const uploadModeModal = document.getElementById('upload-mode-modal');
+if (uploadModeModal) {
+    const cancelBtn = document.getElementById('upload-mode-cancel');
+    const regularBtn = document.getElementById('upload-mode-regular');
+    const massBtn = document.getElementById('upload-mode-mass');
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            uploadModeModal.classList.remove('visible');
+        });
+    }
+
+    if (regularBtn) {
+        regularBtn.addEventListener('click', () => {
+            uploadModeModal.classList.remove('visible');
+            const fileInput = document.getElementById('file-input');
+            if (fileInput) fileInput.click();
+        });
+    }
+
+    if (massBtn) {
+        massBtn.addEventListener('click', () => {
+            uploadModeModal.classList.remove('visible');
+            handleMassUpload();
+        });
+    }
+    
+    // Close modal when clicking outside
+    uploadModeModal.addEventListener('click', (e) => {
+        if (e.target === uploadModeModal) {
+            uploadModeModal.classList.remove('visible');
+        }
+    });
+}
+
+// Clear All Button
+const clearAllBtn = document.getElementById('clear-all-btn');
+if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', () => {
+        if (state.screenshots.length === 0) return;
+        
+        if (confirm('Are you sure you want to delete all screenshots? This cannot be undone.')) {
+            state.screenshots = [];
+            state.selectedScreenshotIndex = -1;
+            updateScreenshotList();
+            updateCanvas();
+        }
+    });
 }
 
 // Initialize the app

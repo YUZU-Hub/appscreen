@@ -80,6 +80,11 @@
                         <button class="settings-btn" id="about-btn" title="About">
                             <img src="img/info.svg" width="18" height="18" alt="About">
                         </button>
+                        <button class="settings-btn" id="clear-all-btn" title="Clear All">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
                         <button class="settings-btn" id="settings-btn" title="Settings">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="3"/>
@@ -267,6 +272,29 @@
         <!-- Right Sidebar - Settings -->
         <div class="sidebar sidebar-right">
             <div class="sidebar-header">
+                <!-- Style Presets -->
+                <div class="style-presets-container">
+                    <div class="style-presets-row">
+                        <select id="style-presets-select" class="style-presets-select">
+                            <option value="">Select a style...</option>
+                        </select>
+                        <button id="save-preset-btn" class="style-preset-btn" title="Save Current Style">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                        </button>
+                        <button id="delete-preset-btn" class="style-preset-btn danger" title="Delete Selected Style" disabled>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <button id="apply-preset-btn" class="style-preset-apply-btn">Apply Style</button>
+                </div>
+
                 <div class="tabs">
                     <button class="tab active" data-tab="background">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1371,6 +1399,48 @@
                 <div class="export-progress-fill" id="export-progress-fill"></div>
             </div>
             <p class="export-progress-detail" id="export-progress-detail"></p>
+        </div>
+    </div>
+
+    <!-- Upload Mode Modal -->
+    <div class="modal-overlay" id="upload-mode-modal">
+        <div class="modal">
+            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Upload Screenshots</h3>
+            <p class="modal-message">How would you like to upload your screenshots?</p>
+            
+            <div class="upload-mode-selection">
+                <div class="upload-info-box">
+                    <div class="info-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </div>
+                    <div class="info-content">
+                        <strong>Mass Upload</strong>
+                        <p>Upload multiple files or folders. Files with country codes (e.g. US, BR) are automatically mapped to languages.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-buttons vertical">
+                <button class="modal-btn modal-btn-primary" id="upload-mode-mass">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Mass Upload
+                </button>
+                <button class="modal-btn modal-btn-secondary" id="upload-mode-regular">Regular Upload</button>
+                <button class="modal-btn modal-btn-cancel" id="upload-mode-cancel">Cancel</button>
+            </div>
         </div>
     </div>
 
