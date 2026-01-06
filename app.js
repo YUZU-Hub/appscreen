@@ -5563,10 +5563,14 @@ function exportCurrent() {
     // Ensure canvas is up-to-date (especially important for 3D mode)
     updateCanvas();
 
-    const link = document.createElement('a');
-    link.download = `screenshot-${state.selectedIndex + 1}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    showExportFormatModal((format) => {
+        if (!format) return;
+
+        const link = document.createElement('a');
+        link.download = `screenshot-${state.selectedIndex + 1}.${format}`;
+        link.href = canvas.toDataURL(`image/${format}`);
+        link.click();
+    });
 }
 
 async function exportAll() {
@@ -5575,22 +5579,71 @@ async function exportAll() {
         return;
     }
 
+    const startExport = (langChoice) => {
+        showExportFormatModal(async (format) => {
+            if (!format) return;
+
+            if (langChoice === 'current') {
+                await exportAllForLanguage(state.currentLanguage, format);
+            } else if (langChoice === 'all') {
+                await exportAllLanguages(format);
+            }
+        });
+    };
+
     // Check if project has multiple languages configured
     const hasMultipleLanguages = state.projectLanguages.length > 1;
 
     if (hasMultipleLanguages) {
         // Show language choice dialog
-        showExportLanguageDialog(async (choice) => {
-            if (choice === 'current') {
-                await exportAllForLanguage(state.currentLanguage);
-            } else if (choice === 'all') {
-                await exportAllLanguages();
-            }
+        showExportLanguageDialog((choice) => {
+            if (choice) startExport(choice);
         });
     } else {
         // Only one language, export directly
-        await exportAllForLanguage(state.currentLanguage);
+        startExport('current');
     }
+}
+
+// Show export format dialog
+function showExportFormatModal(callback) {
+    const modal = document.getElementById('export-format-modal');
+    if (!modal) {
+        callback('png');
+        return;
+    }
+
+    window._exportFormatCallback = callback;
+    modal.classList.add('visible');
+}
+
+// Close export format dialog
+function closeExportFormatModal(format) {
+    const modal = document.getElementById('export-format-modal');
+    if (modal) modal.classList.remove('visible');
+    
+    if (window._exportFormatCallback) {
+        window._exportFormatCallback(format);
+        window._exportFormatCallback = null;
+    }
+}
+
+// Initialize export format listeners
+function initExportFormatListeners() {
+    const pngBtn = document.getElementById('export-format-png');
+    const webpBtn = document.getElementById('export-format-webp');
+    const cancelBtn = document.getElementById('export-format-modal-cancel');
+
+    if (pngBtn) pngBtn.addEventListener('click', () => closeExportFormatModal('png'));
+    if (webpBtn) webpBtn.addEventListener('click', () => closeExportFormatModal('webp'));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => closeExportFormatModal(null));
+}
+
+// Call init immediately (assuming DOM is ready or close to it)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initExportFormatListeners);
+} else {
+    initExportFormatListeners();
 }
 
 // Show export progress modal
@@ -5613,7 +5666,7 @@ function hideExportProgress() {
 }
 
 // Export all screenshots for a specific language
-async function exportAllForLanguage(lang) {
+async function exportAllForLanguage(lang, format = 'png') {
     const originalIndex = state.selectedIndex;
     const originalLang = state.currentLanguage;
     const zip = new JSZip();
@@ -5647,10 +5700,10 @@ async function exportAllForLanguage(lang) {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Get canvas data as base64, strip the data URL prefix
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+        const dataUrl = canvas.toDataURL(`image/${format}`);
+        const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
 
-        zip.file(`screenshot-${i + 1}.png`, base64Data, { base64: true });
+        zip.file(`screenshot-${i + 1}.${format}`, base64Data, { base64: true });
     }
 
     // Restore original settings
@@ -5678,7 +5731,7 @@ async function exportAllForLanguage(lang) {
 }
 
 // Export all screenshots for all languages (separate folders)
-async function exportAllLanguages() {
+async function exportAllLanguages(format = 'png') {
     const originalIndex = state.selectedIndex;
     const originalLang = state.currentLanguage;
     const zip = new JSZip();
@@ -5719,11 +5772,11 @@ async function exportAllLanguages() {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Get canvas data as base64, strip the data URL prefix
-            const dataUrl = canvas.toDataURL('image/png');
-            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+            const dataUrl = canvas.toDataURL(`image/${format}`);
+            const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
 
             // Use language code as folder name
-            zip.file(`${lang}/screenshot-${i + 1}.png`, base64Data, { base64: true });
+            zip.file(`${lang}/screenshot-${i + 1}.${format}`, base64Data, { base64: true });
         }
     }
 

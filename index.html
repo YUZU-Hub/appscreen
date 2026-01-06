@@ -1327,6 +1327,36 @@
         </div>
     </div>
 
+    <!-- Export Format Modal -->
+    <div class="modal-overlay" id="export-format-modal">
+        <div class="modal">
+            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+                    <path d="M12 12v9"/>
+                    <path d="m8 17 4 4 4-4"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Select Format</h3>
+            <p class="modal-message">Choose the file format for your export.</p>
+
+            <div class="export-options">
+                <button class="export-option" id="export-format-png">
+                    <span class="export-option-title">PNG</span>
+                    <span class="export-option-desc">Lossless, best quality</span>
+                </button>
+                <button class="export-option" id="export-format-webp">
+                    <span class="export-option-title">WebP</span>
+                    <span class="export-option-desc">Efficient compression, transparent</span>
+                </button>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="export-format-modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Duplicate Screenshot Modal -->
     <div class="modal-overlay" id="duplicate-screenshot-modal">
         <div class="modal duplicate-screenshot-modal">
