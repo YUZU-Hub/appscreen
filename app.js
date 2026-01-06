@@ -1487,6 +1487,23 @@ function syncUIWithState() {
     document.getElementById('solid-options').style.display = bg.type === 'solid' ? 'block' : 'none';
     document.getElementById('image-options').style.display = bg.type === 'image' ? 'block' : 'none';
 
+    // Handle noise options visibility
+    const noiseToggleRow = document.querySelector('.toggle-row[data-target="noise-options"]');
+    const noiseOptions = document.getElementById('noise-options');
+    
+    if (bg.type === 'transparent') {
+        if (noiseToggleRow) noiseToggleRow.parentElement.style.display = 'none';
+        if (noiseOptions) noiseOptions.style.display = 'none';
+    } else {
+        if (noiseToggleRow) {
+            noiseToggleRow.parentElement.style.display = 'block';
+            // Restore visibility based on collapsed state
+            if (noiseOptions) {
+                 noiseOptions.style.display = noiseToggleRow.classList.contains('collapsed') ? 'none' : 'block';
+            }
+        }
+    }
+
     // Gradient
     document.getElementById('gradient-angle').value = bg.gradient.angle;
     document.getElementById('gradient-angle-value').textContent = formatValue(bg.gradient.angle) + '°';
@@ -2129,6 +2146,23 @@ function setupEventListeners() {
             document.getElementById('gradient-options').style.display = btn.dataset.type === 'gradient' ? 'block' : 'none';
             document.getElementById('solid-options').style.display = btn.dataset.type === 'solid' ? 'block' : 'none';
             document.getElementById('image-options').style.display = btn.dataset.type === 'image' ? 'block' : 'none';
+            
+            // Handle noise options visibility
+            const noiseToggleRow = document.querySelector('.toggle-row[data-target="noise-options"]');
+            const noiseOptions = document.getElementById('noise-options');
+            
+            if (btn.dataset.type === 'transparent') {
+                if (noiseToggleRow) noiseToggleRow.parentElement.style.display = 'none';
+                if (noiseOptions) noiseOptions.style.display = 'none';
+            } else {
+                if (noiseToggleRow) {
+                    noiseToggleRow.parentElement.style.display = 'block';
+                    // Restore visibility based on collapsed state
+                    if (noiseOptions) {
+                         noiseOptions.style.display = noiseToggleRow.classList.contains('collapsed') ? 'none' : 'block';
+                    }
+                }
+            }
             
             updateCanvas();
         });
@@ -4590,8 +4624,8 @@ function updateCanvas() {
     // Draw background
     drawBackground();
 
-    // Draw noise overlay on background if enabled
-    if (getBackground().noise) {
+    // Draw noise overlay on background if enabled (and not transparent)
+    if (getBackground().noise && getBackground().type !== 'transparent') {
         drawNoise();
     }
 
@@ -5168,6 +5202,8 @@ function drawBackground() {
 
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, dims.width, dims.height);
+    } else if (bg.type === 'transparent') {
+        // Do nothing - canvas is already cleared
     } else if (bg.type === 'solid') {
         ctx.fillStyle = bg.solid;
         ctx.fillRect(0, 0, dims.width, dims.height);
