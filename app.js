@@ -2,7 +2,6 @@
 const state = {
     screenshots: [],
     selectedIndex: 0,
-    transferTarget: null, // Index of screenshot waiting to receive style transfer
     outputDevice: 'iphone-6.9',
     currentLanguage: 'en', // Global current language for all text
     projectLanguages: ['en'], // Languages available in this project
@@ -942,16 +941,16 @@ function updateStylePresetsDropdown() {
     const select = document.getElementById('style-presets-select');
     if (!select) return;
     
-    // Keep the default "Saved Themes" option
+    // Keep the default "Saved Styles" option
     const defaultOption = select.options[0];
     select.innerHTML = '';
     if (defaultOption) {
-        defaultOption.textContent = 'Saved Themes';
+        defaultOption.textContent = 'Saved Styles';
         select.appendChild(defaultOption);
     } else {
         const opt = document.createElement('option');
         opt.value = '';
-        opt.textContent = 'Saved Themes';
+        opt.textContent = 'Saved Styles';
         select.appendChild(opt);
     }
     
@@ -1853,16 +1852,6 @@ function setupEventListeners() {
         document.getElementById('delete-project-modal').classList.remove('visible');
     });
 
-    // Apply style to all modal buttons
-    document.getElementById('apply-style-cancel').addEventListener('click', () => {
-        document.getElementById('apply-style-modal').classList.remove('visible');
-    });
-
-    document.getElementById('apply-style-confirm').addEventListener('click', () => {
-        applyStyleToAll();
-        document.getElementById('apply-style-modal').classList.remove('visible');
-    });
-
     // Close modals on overlay click
     document.getElementById('project-modal').addEventListener('click', (e) => {
         if (e.target.id === 'project-modal') {
@@ -1873,12 +1862,6 @@ function setupEventListeners() {
     document.getElementById('delete-project-modal').addEventListener('click', (e) => {
         if (e.target.id === 'delete-project-modal') {
             document.getElementById('delete-project-modal').classList.remove('visible');
-        }
-    });
-
-    document.getElementById('apply-style-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'apply-style-modal') {
-            document.getElementById('apply-style-modal').classList.remove('visible');
         }
     });
 
@@ -4085,34 +4068,16 @@ function updateScreenshotList() {
     screenshotList.innerHTML = '';
     noScreenshot.style.display = state.screenshots.length === 0 ? 'block' : 'none';
 
-    // Show transfer mode hint if active
-    if (state.transferTarget !== null && state.screenshots.length > 1) {
-        const hint = document.createElement('div');
-        hint.className = 'transfer-hint';
-        hint.innerHTML = `
-            <span>Select a screenshot to copy style from</span>
-            <button class="transfer-cancel" onclick="cancelTransfer()">Cancel</button>
-        `;
-        screenshotList.appendChild(hint);
-    }
-
     state.screenshots.forEach((screenshot, index) => {
         const item = document.createElement('div');
-        const isTransferTarget = state.transferTarget === index;
-        const isTransferMode = state.transferTarget !== null;
         item.className = 'screenshot-item' +
-            (index === state.selectedIndex ? ' selected' : '') +
-            (isTransferTarget ? ' transfer-target' : '') +
-            (isTransferMode && !isTransferTarget ? ' transfer-source-option' : '');
+            (index === state.selectedIndex ? ' selected' : '');
 
-        // Enable drag and drop (disabled in transfer mode)
-        if (!isTransferMode) {
-            item.draggable = true;
-            item.dataset.index = index;
-        }
+        // Enable drag and drop
+        item.draggable = true;
+        item.dataset.index = index;
 
-        // Show different UI in transfer mode
-        const buttonsHtml = isTransferMode ? '' : `
+        const buttonsHtml = `
             <div class="screenshot-menu-wrapper">
                 <button class="screenshot-menu-btn" data-index="${index}" title="More options">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -4135,21 +4100,6 @@ function updateScreenshotList() {
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
                         Replace Screenshot...
-                    </button>
-                    <button class="screenshot-menu-item screenshot-transfer" data-index="${index}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                        Copy style from...
-                    </button>
-                    <button class="screenshot-menu-item screenshot-apply-all" data-index="${index}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                            <path d="M14 14l2 2 4-4"/>
-                        </svg>
-                        Apply style to all...
                     </button>
                     <button class="screenshot-menu-item screenshot-delete danger" data-index="${index}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4186,7 +4136,7 @@ function updateScreenshotList() {
             <img class="screenshot-thumb" src="${thumbSrc}" alt="${screenshot.name}">
             <div class="screenshot-info">
                 <div class="screenshot-name">${screenshot.name}</div>
-                <div class="screenshot-device">${isTransferTarget ? 'Click source to copy style' : screenshot.deviceType}${langFlagsHtml}</div>
+                <div class="screenshot-device">${screenshot.deviceType}${langFlagsHtml}</div>
             </div>
             ${buttonsHtml}
         `;
@@ -4288,15 +4238,6 @@ function updateScreenshotList() {
                 return;
             }
 
-            // Handle transfer mode click
-            if (state.transferTarget !== null) {
-                if (index !== state.transferTarget) {
-                    // Transfer style from clicked screenshot to target
-                    transferStyle(index, state.transferTarget);
-                }
-                return;
-            }
-
             // Normal selection
             state.selectedIndex = index;
             updateScreenshotList();
@@ -4345,27 +4286,6 @@ function updateScreenshotList() {
             });
         }
 
-        // Transfer button handler
-        const transferBtn = item.querySelector('.screenshot-transfer');
-        if (transferBtn) {
-            transferBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                menu?.classList.remove('open');
-                state.transferTarget = index;
-                updateScreenshotList();
-            });
-        }
-
-        // Apply style to all button handler
-        const applyAllBtn = item.querySelector('.screenshot-apply-all');
-        if (applyAllBtn) {
-            applyAllBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                menu?.classList.remove('open');
-                showApplyStyleModal(index);
-            });
-        }
-
         // Delete button handler
         const deleteBtn = item.querySelector('.screenshot-delete');
         if (deleteBtn) {
@@ -4386,9 +4306,8 @@ function updateScreenshotList() {
         screenshotList.appendChild(item);
     });
 
-    // Add upload zone as last item in the list (unless in transfer mode)
-    if (state.transferTarget === null) {
-        const uploadItem = document.createElement('div');
+    // Add upload zone as last item in the list
+    const uploadItem = document.createElement('div');
         uploadItem.className = 'screenshot-item upload-item';
         uploadItem.id = 'upload-zone';
         uploadItem.innerHTML = `
@@ -4406,102 +4325,9 @@ function updateScreenshotList() {
             document.getElementById('upload-mode-modal').classList.add('visible');
         });
         screenshotList.appendChild(uploadItem);
-    }
-
+    
     // Update project selector to reflect current screenshot count
     updateProjectSelector();
-}
-
-function cancelTransfer() {
-    state.transferTarget = null;
-    updateScreenshotList();
-}
-
-function transferStyle(sourceIndex, targetIndex) {
-    const source = state.screenshots[sourceIndex];
-    const target = state.screenshots[targetIndex];
-
-    if (!source || !target) {
-        state.transferTarget = null;
-        updateScreenshotList();
-        return;
-    }
-
-    // Deep copy background settings
-    target.background = JSON.parse(JSON.stringify(source.background));
-    // Handle background image separately (not JSON serializable)
-    if (source.background.image) {
-        target.background.image = source.background.image;
-    }
-
-    // Deep copy screenshot settings
-    target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
-
-    // Copy text styling but preserve actual text content
-    const targetHeadlines = target.text.headlines;
-    const targetSubheadlines = target.text.subheadlines;
-    target.text = JSON.parse(JSON.stringify(source.text));
-    // Restore original text content
-    target.text.headlines = targetHeadlines;
-    target.text.subheadlines = targetSubheadlines;
-
-    // Reset transfer mode
-    state.transferTarget = null;
-
-    // Update UI
-    updateScreenshotList();
-    syncUIWithState();
-    updateGradientStopsUI();
-    updateCanvas();
-}
-
-// Track which screenshot to apply style from
-let applyStyleSourceIndex = null;
-
-function showApplyStyleModal(sourceIndex) {
-    applyStyleSourceIndex = sourceIndex;
-    document.getElementById('apply-style-modal').classList.add('visible');
-}
-
-function applyStyleToAll() {
-    if (applyStyleSourceIndex === null) return;
-
-    const source = state.screenshots[applyStyleSourceIndex];
-    if (!source) {
-        applyStyleSourceIndex = null;
-        return;
-    }
-
-    // Apply style to all other screenshots
-    state.screenshots.forEach((target, index) => {
-        if (index === applyStyleSourceIndex) return; // Skip source
-
-        // Deep copy background settings
-        target.background = JSON.parse(JSON.stringify(source.background));
-        // Handle background image separately (not JSON serializable)
-        if (source.background.image) {
-            target.background.image = source.background.image;
-        }
-
-        // Deep copy screenshot settings
-        target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
-
-        // Copy text styling but preserve actual text content
-        const targetHeadlines = target.text.headlines;
-        const targetSubheadlines = target.text.subheadlines;
-        target.text = JSON.parse(JSON.stringify(source.text));
-        // Restore original text content
-        target.text.headlines = targetHeadlines;
-        target.text.subheadlines = targetSubheadlines;
-    });
-
-    applyStyleSourceIndex = null;
-
-    // Update UI
-    updateScreenshotList();
-    syncUIWithState();
-    updateGradientStopsUI();
-    updateCanvas();
 }
 
 // Replace screenshot image via file picker

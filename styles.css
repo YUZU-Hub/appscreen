@@ -365,50 +365,6 @@ html.electron-app #settings-btn {
     opacity: 0.7;
 }
 
-/* Transfer mode styles */
-.transfer-hint {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background: rgba(10, 132, 255, 0.15);
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    font-size: 12px;
-    color: var(--accent);
-}
-
-.transfer-cancel {
-    padding: 4px 10px;
-    border: none;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 11px;
-    transition: background 0.2s;
-}
-
-.transfer-cancel:hover {
-    background: var(--bg-secondary);
-}
-
-.screenshot-item.transfer-target {
-    border-color: var(--accent);
-    background: rgba(10, 132, 255, 0.1);
-}
-
-.screenshot-item.transfer-source-option {
-    cursor: pointer;
-    border-color: transparent;
-}
-
-.screenshot-item.transfer-source-option:hover {
-    border-color: var(--accent);
-    background: rgba(10, 132, 255, 0.05);
-}
-
 /* Drag handle */
 .drag-handle {
     display: flex;
@@ -3072,7 +3028,7 @@ input[type="range"]::-webkit-slider-thumb {
     color: var(--text-secondary);
 }
 
-.style-button-themes {
+.style-button-presets {
     display: flex;
     flex-direction: row;
     gap: 8px;
