@@ -3740,6 +3740,12 @@ function openSettingsModal() {
         }
     });
 
+    // Load saved export format
+    const savedExportFormat = localStorage.getItem('preferredExportFormat') || 'ask';
+    document.querySelectorAll('input[name="export-format"]').forEach(radio => {
+        radio.checked = radio.value === savedExportFormat;
+    });
+
     document.getElementById('settings-modal').classList.add('visible');
 }
 
@@ -3753,6 +3759,10 @@ function saveSettings() {
     // Save selected provider
     const selectedProvider = document.querySelector('input[name="ai-provider"]:checked').value;
     localStorage.setItem('aiProvider', selectedProvider);
+
+    // Save preferred export format
+    const selectedExportFormat = document.querySelector('input[name="export-format"]:checked').value;
+    localStorage.setItem('preferredExportFormat', selectedExportFormat);
 
     // Save all API keys and models
     let allValid = true;
@@ -5563,14 +5573,21 @@ function exportCurrent() {
     // Ensure canvas is up-to-date (especially important for 3D mode)
     updateCanvas();
 
-    showExportFormatModal((format) => {
-        if (!format) return;
+    const preferredFormat = localStorage.getItem('preferredExportFormat') || 'ask';
 
+    const doExport = (format) => {
+        if (!format) return;
         const link = document.createElement('a');
         link.download = `screenshot-${state.selectedIndex + 1}.${format}`;
         link.href = canvas.toDataURL(`image/${format}`);
         link.click();
-    });
+    };
+
+    if (preferredFormat === 'ask') {
+        showExportFormatModal(doExport);
+    } else {
+        doExport(preferredFormat);
+    }
 }
 
 async function exportAll() {
@@ -5579,8 +5596,10 @@ async function exportAll() {
         return;
     }
 
+    const preferredFormat = localStorage.getItem('preferredExportFormat') || 'ask';
+
     const startExport = (langChoice) => {
-        showExportFormatModal(async (format) => {
+        const doFinalExport = async (format) => {
             if (!format) return;
 
             if (langChoice === 'current') {
@@ -5588,7 +5607,13 @@ async function exportAll() {
             } else if (langChoice === 'all') {
                 await exportAllLanguages(format);
             }
-        });
+        };
+
+        if (preferredFormat === 'ask') {
+            showExportFormatModal(doFinalExport);
+        } else {
+            doFinalExport(preferredFormat);
+        }
     };
 
     // Check if project has multiple languages configured

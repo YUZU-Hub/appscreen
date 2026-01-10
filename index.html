@@ -1214,6 +1214,32 @@
                 </a>
             </div>
 
+            <div class="settings-section">
+                <h4 class="settings-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Preferred Export Format
+                </h4>
+                <p class="settings-description">Choose your default format for downloading screenshots.</p>
+                <div class="settings-provider-selector">
+                    <label class="settings-provider-option">
+                        <input type="radio" name="export-format" value="png" checked>
+                        <span class="provider-label">PNG (Lossless)</span>
+                    </label>
+                    <label class="settings-provider-option">
+                        <input type="radio" name="export-format" value="webp">
+                        <span class="provider-label">WebP (Compressed)</span>
+                    </label>
+                    <label class="settings-provider-option">
+                        <input type="radio" name="export-format" value="ask">
+                        <span class="provider-label">Ask every time</span>
+                    </label>
+                </div>
+            </div>
+
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="settings-modal-cancel">Cancel</button>
                 <button class="modal-btn modal-btn-confirm" id="settings-modal-save">Save Settings</button>
