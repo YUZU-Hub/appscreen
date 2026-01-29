@@ -21,7 +21,8 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "serve": "python3 -m http.server 8000"
+    "serve": "python3 -m http.server 8000",
+    "serve:node": "npx serve ."
   },
   "devDependencies": {
     "electron": "^28.0.0",

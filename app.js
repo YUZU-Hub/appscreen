@@ -2,7 +2,6 @@
 const state = {
     screenshots: [],
     selectedIndex: 0,
-    transferTarget: null, // Index of screenshot waiting to receive style transfer
     outputDevice: 'iphone-6.9',
     currentLanguage: 'en', // Global current language for all text
     projectLanguages: ['en'], // Languages available in this project
@@ -161,11 +160,14 @@ function setCurrentScreenshotAsDefault() {
 
 // Language flags mapping
 const languageFlags = {
-    'en': '🇺🇸', 'en-gb': '🇬🇧', 'de': '🇩🇪', 'fr': '🇫🇷', 'es': '🇪🇸',
-    'it': '🇮🇹', 'pt': '🇵🇹', 'pt-br': '🇧🇷', 'nl': '🇳🇱', 'ru': '🇷🇺',
-    'ja': '🇯🇵', 'ko': '🇰🇷', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'ar': '🇸🇦',
-    'hi': '🇮🇳', 'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'da': '🇩🇰',
-    'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩'
+    'en': '🇺🇸', 'en-gb': '🇬🇧', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'hi': '🇮🇳',
+    'es': '🇪🇸', 'ar': '🇸🇦', 'fr': '🇫🇷', 'bn': '🇧🇩', 'pt': '🇵🇹', 'pt-br': '🇧🇷',
+    'ru': '🇷🇺', 'id': '🇮🇩', 'ur': '🇵🇰', 'de': '🇩🇪', 'ja': '🇯🇵', 'sw': '🇰🇪',
+    'mr': '🇮🇳', 'te': '🇮🇳', 'tr': '🇹🇷', 'ta': '🇮🇳', 'pa': '🇮🇳', 'ko': '🇰🇷',
+    'vi': '🇻🇳', 'it': '🇮🇹', 'th': '🇹🇭', 'gu': '🇮🇳', 'kn': '🇮🇳', 'fa': '🇮🇷',
+    'pl': '🇵🇱', 'jv': '🇮🇩', 'ro': '🇷🇴', 'nl': '🇳🇱', 'el': '🇬🇷', 'sv': '🇸🇪',
+    'no': '🇳🇴', 'fi': '🇫🇮', 'hu': '🇭🇺', 'cs': '🇨🇿', 'he': '🇮🇱', 'uk': '🇺🇦',
+    'bg': '🇧🇬', 'da': '🇩🇰'
 };
 
 // Google Fonts configuration
@@ -825,6 +827,7 @@ const META_STORE = 'meta';
 
 let currentProjectId = 'default';
 let projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
+let stylePresets = []; // Global style presets
 
 function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -883,6 +886,7 @@ async function loadProjectsMeta() {
             
             const projectsReq = store.get('projects');
             const currentReq = store.get('currentProject');
+            const presetsReq = store.get('stylePresets');
             
             transaction.oncomplete = () => {
                 if (projectsReq.result) {
@@ -891,7 +895,11 @@ async function loadProjectsMeta() {
                 if (currentReq.result) {
                     currentProjectId = currentReq.result.value;
                 }
+                if (presetsReq.result) {
+                    stylePresets = presetsReq.result.value || [];
+                }
                 updateProjectSelector();
+                updateStylePresetsDropdown();
                 resolve();
             };
             
@@ -914,6 +922,51 @@ function saveProjectsMeta() {
     } catch (e) {
         console.error('Error saving projects meta:', e);
     }
+}
+
+// Save global style presets
+function saveStylePresets() {
+    if (!db) return;
+    try {
+        const transaction = db.transaction([META_STORE], 'readwrite');
+        const store = transaction.objectStore(META_STORE);
+        store.put({ key: 'stylePresets', value: stylePresets });
+    } catch (e) {
+        console.error('Error saving style presets:', e);
+    }
+}
+
+// Update style presets dropdown
+function updateStylePresetsDropdown() {
+    const select = document.getElementById('style-presets-select');
+    if (!select) return;
+    
+    // Keep the default "Saved Styles" option
+    const defaultOption = select.options[0];
+    select.innerHTML = '';
+    if (defaultOption) {
+        defaultOption.textContent = 'Saved Styles';
+        select.appendChild(defaultOption);
+    } else {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Saved Styles';
+        select.appendChild(opt);
+    }
+    
+    stylePresets.forEach((preset, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = preset.name;
+        select.appendChild(option);
+    });
+    
+    console.log('[Style Presets] Updated dropdown with', stylePresets.length, 'presets');
+
+    // Reset selection and button state
+    select.value = "";
+    const deleteBtn = document.getElementById('delete-preset-btn');
+    if (deleteBtn) deleteBtn.disabled = true;
 }
 
 // Update project selector dropdown
@@ -1465,6 +1518,23 @@ function syncUIWithState() {
     document.getElementById('solid-options').style.display = bg.type === 'solid' ? 'block' : 'none';
     document.getElementById('image-options').style.display = bg.type === 'image' ? 'block' : 'none';
 
+    // Handle noise options visibility
+    const noiseToggleRow = document.querySelector('.toggle-row[data-target="noise-options"]');
+    const noiseOptions = document.getElementById('noise-options');
+    
+    if (bg.type === 'transparent') {
+        if (noiseToggleRow) noiseToggleRow.parentElement.style.display = 'none';
+        if (noiseOptions) noiseOptions.style.display = 'none';
+    } else {
+        if (noiseToggleRow) {
+            noiseToggleRow.parentElement.style.display = 'block';
+            // Restore visibility based on collapsed state
+            if (noiseOptions) {
+                 noiseOptions.style.display = noiseToggleRow.classList.contains('collapsed') ? 'none' : 'block';
+            }
+        }
+    }
+
     // Gradient
     document.getElementById('gradient-angle').value = bg.gradient.angle;
     document.getElementById('gradient-angle-value').textContent = formatValue(bg.gradient.angle) + '°';
@@ -1646,17 +1716,85 @@ function setupEventListeners() {
     //     if (state.screenshots.length === 0) return;
     //     setCurrentScreenshotAsDefault();
     //     // Show brief confirmation
-    //     const btn = document.getElementById('set-as-default-btn');
-    //     const originalText = btn.textContent;
-    //     btn.textContent = 'Saved!';
-    //     btn.style.borderColor = 'var(--accent)';
-    //     btn.style.color = 'var(--accent)';
-    //     setTimeout(() => {
-    //         btn.textContent = originalText;
-    //         btn.style.borderColor = '';
-    //         btn.style.color = '';
-    //     }, 1500);
+    //     // ...
     // });
+
+    // Style Presets Logic
+    const stylePresetsSelect = document.getElementById('style-presets-select');
+    
+    // Save Preset
+    document.getElementById('save-preset-btn').addEventListener('click', () => {
+        const name = prompt('Enter a name for this style preset:');
+        if (!name) return;
+        
+        const preset = {
+            name: name,
+            background: JSON.parse(JSON.stringify(getBackground())),
+            screenshot: JSON.parse(JSON.stringify(getScreenshotSettings())),
+            text: JSON.parse(JSON.stringify(getText()))
+        };
+        
+        stylePresets.push(preset);
+        saveStylePresets();
+        updateStylePresetsDropdown();
+        
+        // Select the new preset
+        stylePresetsSelect.value = stylePresets.length - 1;
+        document.getElementById('delete-preset-btn').disabled = false;
+    });
+    
+    // Delete Preset
+    document.getElementById('delete-preset-btn').addEventListener('click', () => {
+        const index = parseInt(stylePresetsSelect.value);
+        if (isNaN(index)) return;
+        
+        if (confirm(`Delete preset "${stylePresets[index].name}"?`)) {
+            stylePresets.splice(index, 1);
+            saveStylePresets();
+            updateStylePresetsDropdown();
+        }
+    });
+    
+    // Dropdown Change
+    stylePresetsSelect.addEventListener('change', () => {
+        document.getElementById('delete-preset-btn').disabled = stylePresetsSelect.value === "";
+    });
+
+    // Apply Preset
+    document.getElementById('apply-preset-btn').addEventListener('click', () => {
+        const index = parseInt(stylePresetsSelect.value);
+        if (isNaN(index)) {
+            alert('Please select a style preset first.');
+            return;
+        }
+        
+        const preset = stylePresets[index];
+        if (!preset) return;
+        
+        // Apply settings
+        const currentScreenshot = getCurrentScreenshot();
+        if (currentScreenshot) {
+            console.log('[Style Presets] Applying preset:', preset.name);
+            
+            // Deep copy to avoid reference issues
+            currentScreenshot.background = JSON.parse(JSON.stringify(preset.background));
+            currentScreenshot.screenshot = JSON.parse(JSON.stringify(preset.screenshot));
+            currentScreenshot.text = JSON.parse(JSON.stringify(preset.text));
+            
+            // Update UI
+            syncUIWithState();
+            updateCanvas();
+            saveState();
+            
+            // Visual feedback
+            const btn = document.getElementById('apply-preset-btn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Applied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 1000);
+        }
+    });
 
     // Project dropdown
     const projectDropdown = document.getElementById('project-dropdown');
@@ -1746,16 +1884,6 @@ function setupEventListeners() {
         document.getElementById('delete-project-modal').classList.remove('visible');
     });
 
-    // Apply style to all modal buttons
-    document.getElementById('apply-style-cancel').addEventListener('click', () => {
-        document.getElementById('apply-style-modal').classList.remove('visible');
-    });
-
-    document.getElementById('apply-style-confirm').addEventListener('click', () => {
-        applyStyleToAll();
-        document.getElementById('apply-style-modal').classList.remove('visible');
-    });
-
     // Close modals on overlay click
     document.getElementById('project-modal').addEventListener('click', (e) => {
         if (e.target.id === 'project-modal') {
@@ -1766,12 +1894,6 @@ function setupEventListeners() {
     document.getElementById('delete-project-modal').addEventListener('click', (e) => {
         if (e.target.id === 'delete-project-modal') {
             document.getElementById('delete-project-modal').classList.remove('visible');
-        }
-    });
-
-    document.getElementById('apply-style-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'apply-style-modal') {
-            document.getElementById('apply-style-modal').classList.remove('visible');
         }
     });
 
@@ -2039,6 +2161,23 @@ function setupEventListeners() {
             document.getElementById('gradient-options').style.display = btn.dataset.type === 'gradient' ? 'block' : 'none';
             document.getElementById('solid-options').style.display = btn.dataset.type === 'solid' ? 'block' : 'none';
             document.getElementById('image-options').style.display = btn.dataset.type === 'image' ? 'block' : 'none';
+            
+            // Handle noise options visibility
+            const noiseToggleRow = document.querySelector('.toggle-row[data-target="noise-options"]');
+            const noiseOptions = document.getElementById('noise-options');
+            
+            if (btn.dataset.type === 'transparent') {
+                if (noiseToggleRow) noiseToggleRow.parentElement.style.display = 'none';
+                if (noiseOptions) noiseOptions.style.display = 'none';
+            } else {
+                if (noiseToggleRow) {
+                    noiseToggleRow.parentElement.style.display = 'block';
+                    // Restore visibility based on collapsed state
+                    if (noiseOptions) {
+                         noiseOptions.style.display = noiseToggleRow.classList.contains('collapsed') ? 'none' : 'block';
+                    }
+                }
+            }
             
             updateCanvas();
         });
@@ -3621,6 +3760,12 @@ function openSettingsModal() {
         }
     });
 
+    // Load saved export format
+    const savedExportFormat = localStorage.getItem('preferredExportFormat') || 'ask';
+    document.querySelectorAll('input[name="export-format"]').forEach(radio => {
+        radio.checked = radio.value === savedExportFormat;
+    });
+
     document.getElementById('settings-modal').classList.add('visible');
 }
 
@@ -3634,6 +3779,10 @@ function saveSettings() {
     // Save selected provider
     const selectedProvider = document.querySelector('input[name="ai-provider"]:checked').value;
     localStorage.setItem('aiProvider', selectedProvider);
+
+    // Save preferred export format
+    const selectedExportFormat = document.querySelector('input[name="export-format"]:checked').value;
+    localStorage.setItem('preferredExportFormat', selectedExportFormat);
 
     // Save all API keys and models
     let allValid = true;
@@ -3765,9 +3914,9 @@ function applyPositionPreset(preset) {
     updateCanvas();
 }
 
-function handleFiles(files) {
+function handleFiles(files, isMassUpload = false) {
     // Process files sequentially to handle duplicates one at a time
-    processFilesSequentially(Array.from(files).filter(f => f.type.startsWith('image/')));
+    processFilesSequentially(Array.from(files).filter(f => f.type.startsWith('image/')), isMassUpload);
 }
 
 // Handle files from Electron menu (receives array of {dataUrl, name})
@@ -3838,13 +3987,14 @@ async function processElectronImageFile(fileData) {
     });
 }
 
-async function processFilesSequentially(files) {
+async function processFilesSequentially(files, isMassUpload = false) {
     for (const file of files) {
-        await processImageFile(file);
+        await processImageFile(file, isMassUpload);
     }
 }
 
-async function processImageFile(file) {
+async function processImageFile(file, isMassUpload = false) {
+    console.log(`[Debug] Processing file: ${file.name}, path: ${file.webkitRelativePath || 'N/A'}, mass: ${isMassUpload}`);
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -3858,39 +4008,47 @@ async function processImageFile(file) {
                 }
 
                 // Detect language from filename
-                const detectedLang = detectLanguageFromFilename(file.name);
+                // Use webkitRelativePath if available to support folder-based detection
+                const detectedLang = detectLanguageFromFilename(file.webkitRelativePath || file.name);
+                console.log(`[Debug] Detected lang for ${file.name}: ${detectedLang}`);
 
-                // Check if this is a localized version of an existing screenshot
-                const existingIndex = findScreenshotByBaseFilename(file.name);
-
-                if (existingIndex !== -1) {
-                    // Found a screenshot with matching base filename
-                    const existingScreenshot = state.screenshots[existingIndex];
-                    const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.image;
-
-                    if (hasExistingLangImage) {
-                        // There's already an image for this language - show dialog
-                        const choice = await showDuplicateDialog({
-                            existingIndex: existingIndex,
-                            detectedLang: detectedLang,
-                            newImage: img,
-                            newSrc: e.target.result,
-                            newName: file.name
-                        });
-
-                        if (choice === 'replace') {
-                            addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
-                        } else if (choice === 'create') {
-                            createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
-                        }
-                        // 'ignore' does nothing
-                    } else {
-                        // No image for this language yet - just add it silently
-                        addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
-                    }
-                } else {
-                    // No duplicate - create new screenshot
+                // If mass upload, always create new screenshot to separate by languages (as requested)
+                // Otherwise check for duplicates/localization
+                if (isMassUpload) {
                     createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                } else {
+                    // Check if this is a localized version of an existing screenshot
+                    const existingIndex = findScreenshotByBaseFilename(file.name);
+
+                    if (existingIndex !== -1) {
+                        // Found a screenshot with matching base filename
+                        const existingScreenshot = state.screenshots[existingIndex];
+                        const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.image;
+
+                        if (hasExistingLangImage) {
+                            // There's already an image for this language - show dialog
+                            const choice = await showDuplicateDialog({
+                                existingIndex: existingIndex,
+                                detectedLang: detectedLang,
+                                newImage: img,
+                                newSrc: e.target.result,
+                                newName: file.name
+                            });
+
+                            if (choice === 'replace') {
+                                addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                            } else if (choice === 'create') {
+                                createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                            }
+                            // 'ignore' does nothing
+                        } else {
+                            // No image for this language yet - just add it silently
+                            addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                        }
+                    } else {
+                        // No duplicate - create new screenshot
+                        createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                    }
                 }
 
                 // Update 3D texture if in 3D mode
@@ -3947,34 +4105,16 @@ function updateScreenshotList() {
     screenshotList.innerHTML = '';
     noScreenshot.style.display = state.screenshots.length === 0 ? 'block' : 'none';
 
-    // Show transfer mode hint if active
-    if (state.transferTarget !== null && state.screenshots.length > 1) {
-        const hint = document.createElement('div');
-        hint.className = 'transfer-hint';
-        hint.innerHTML = `
-            <span>Select a screenshot to copy style from</span>
-            <button class="transfer-cancel" onclick="cancelTransfer()">Cancel</button>
-        `;
-        screenshotList.appendChild(hint);
-    }
-
     state.screenshots.forEach((screenshot, index) => {
         const item = document.createElement('div');
-        const isTransferTarget = state.transferTarget === index;
-        const isTransferMode = state.transferTarget !== null;
         item.className = 'screenshot-item' +
-            (index === state.selectedIndex ? ' selected' : '') +
-            (isTransferTarget ? ' transfer-target' : '') +
-            (isTransferMode && !isTransferTarget ? ' transfer-source-option' : '');
+            (index === state.selectedIndex ? ' selected' : '');
 
-        // Enable drag and drop (disabled in transfer mode)
-        if (!isTransferMode) {
-            item.draggable = true;
-            item.dataset.index = index;
-        }
+        // Enable drag and drop
+        item.draggable = true;
+        item.dataset.index = index;
 
-        // Show different UI in transfer mode
-        const buttonsHtml = isTransferMode ? '' : `
+        const buttonsHtml = `
             <div class="screenshot-menu-wrapper">
                 <button class="screenshot-menu-btn" data-index="${index}" title="More options">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -3997,21 +4137,6 @@ function updateScreenshotList() {
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
                         Replace Screenshot...
-                    </button>
-                    <button class="screenshot-menu-item screenshot-transfer" data-index="${index}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                        Copy style from...
-                    </button>
-                    <button class="screenshot-menu-item screenshot-apply-all" data-index="${index}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                            <path d="M14 14l2 2 4-4"/>
-                        </svg>
-                        Apply style to all...
                     </button>
                     <button class="screenshot-menu-item screenshot-delete danger" data-index="${index}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4048,7 +4173,7 @@ function updateScreenshotList() {
             <img class="screenshot-thumb" src="${thumbSrc}" alt="${screenshot.name}">
             <div class="screenshot-info">
                 <div class="screenshot-name">${screenshot.name}</div>
-                <div class="screenshot-device">${isTransferTarget ? 'Click source to copy style' : screenshot.deviceType}${langFlagsHtml}</div>
+                <div class="screenshot-device">${screenshot.deviceType}${langFlagsHtml}</div>
             </div>
             ${buttonsHtml}
         `;
@@ -4150,15 +4275,6 @@ function updateScreenshotList() {
                 return;
             }
 
-            // Handle transfer mode click
-            if (state.transferTarget !== null) {
-                if (index !== state.transferTarget) {
-                    // Transfer style from clicked screenshot to target
-                    transferStyle(index, state.transferTarget);
-                }
-                return;
-            }
-
             // Normal selection
             state.selectedIndex = index;
             updateScreenshotList();
@@ -4207,27 +4323,6 @@ function updateScreenshotList() {
             });
         }
 
-        // Transfer button handler
-        const transferBtn = item.querySelector('.screenshot-transfer');
-        if (transferBtn) {
-            transferBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                menu?.classList.remove('open');
-                state.transferTarget = index;
-                updateScreenshotList();
-            });
-        }
-
-        // Apply style to all button handler
-        const applyAllBtn = item.querySelector('.screenshot-apply-all');
-        if (applyAllBtn) {
-            applyAllBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                menu?.classList.remove('open');
-                showApplyStyleModal(index);
-            });
-        }
-
         // Delete button handler
         const deleteBtn = item.querySelector('.screenshot-delete');
         if (deleteBtn) {
@@ -4248,9 +4343,8 @@ function updateScreenshotList() {
         screenshotList.appendChild(item);
     });
 
-    // Add upload zone as last item in the list (unless in transfer mode)
-    if (state.transferTarget === null) {
-        const uploadItem = document.createElement('div');
+    // Add upload zone as last item in the list
+    const uploadItem = document.createElement('div');
         uploadItem.className = 'screenshot-item upload-item';
         uploadItem.id = 'upload-zone';
         uploadItem.innerHTML = `
@@ -4264,104 +4358,13 @@ function updateScreenshotList() {
                 <div class="screenshot-device">Drop or click to browse</div>
             </div>
         `;
-        uploadItem.addEventListener('click', () => fileInput.click());
+        uploadItem.addEventListener('click', () => {
+            document.getElementById('upload-mode-modal').classList.add('visible');
+        });
         screenshotList.appendChild(uploadItem);
-    }
-
+    
     // Update project selector to reflect current screenshot count
     updateProjectSelector();
-}
-
-function cancelTransfer() {
-    state.transferTarget = null;
-    updateScreenshotList();
-}
-
-function transferStyle(sourceIndex, targetIndex) {
-    const source = state.screenshots[sourceIndex];
-    const target = state.screenshots[targetIndex];
-
-    if (!source || !target) {
-        state.transferTarget = null;
-        updateScreenshotList();
-        return;
-    }
-
-    // Deep copy background settings
-    target.background = JSON.parse(JSON.stringify(source.background));
-    // Handle background image separately (not JSON serializable)
-    if (source.background.image) {
-        target.background.image = source.background.image;
-    }
-
-    // Deep copy screenshot settings
-    target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
-
-    // Copy text styling but preserve actual text content
-    const targetHeadlines = target.text.headlines;
-    const targetSubheadlines = target.text.subheadlines;
-    target.text = JSON.parse(JSON.stringify(source.text));
-    // Restore original text content
-    target.text.headlines = targetHeadlines;
-    target.text.subheadlines = targetSubheadlines;
-
-    // Reset transfer mode
-    state.transferTarget = null;
-
-    // Update UI
-    updateScreenshotList();
-    syncUIWithState();
-    updateGradientStopsUI();
-    updateCanvas();
-}
-
-// Track which screenshot to apply style from
-let applyStyleSourceIndex = null;
-
-function showApplyStyleModal(sourceIndex) {
-    applyStyleSourceIndex = sourceIndex;
-    document.getElementById('apply-style-modal').classList.add('visible');
-}
-
-function applyStyleToAll() {
-    if (applyStyleSourceIndex === null) return;
-
-    const source = state.screenshots[applyStyleSourceIndex];
-    if (!source) {
-        applyStyleSourceIndex = null;
-        return;
-    }
-
-    // Apply style to all other screenshots
-    state.screenshots.forEach((target, index) => {
-        if (index === applyStyleSourceIndex) return; // Skip source
-
-        // Deep copy background settings
-        target.background = JSON.parse(JSON.stringify(source.background));
-        // Handle background image separately (not JSON serializable)
-        if (source.background.image) {
-            target.background.image = source.background.image;
-        }
-
-        // Deep copy screenshot settings
-        target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
-
-        // Copy text styling but preserve actual text content
-        const targetHeadlines = target.text.headlines;
-        const targetSubheadlines = target.text.subheadlines;
-        target.text = JSON.parse(JSON.stringify(source.text));
-        // Restore original text content
-        target.text.headlines = targetHeadlines;
-        target.text.subheadlines = targetSubheadlines;
-    });
-
-    applyStyleSourceIndex = null;
-
-    // Update UI
-    updateScreenshotList();
-    syncUIWithState();
-    updateGradientStopsUI();
-    updateCanvas();
 }
 
 // Replace screenshot image via file picker
@@ -4494,8 +4497,8 @@ function updateCanvas() {
     // Draw background
     drawBackground();
 
-    // Draw noise overlay on background if enabled
-    if (getBackground().noise) {
+    // Draw noise overlay on background if enabled (and not transparent)
+    if (getBackground().noise && getBackground().type !== 'transparent') {
         drawNoise();
     }
 
@@ -5072,6 +5075,8 @@ function drawBackground() {
 
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, dims.width, dims.height);
+    } else if (bg.type === 'transparent') {
+        // Do nothing - canvas is already cleared
     } else if (bg.type === 'solid') {
         ctx.fillStyle = bg.solid;
         ctx.fillRect(0, 0, dims.width, dims.height);
@@ -5441,10 +5446,21 @@ async function exportCurrent() {
     // Ensure canvas is up-to-date (especially important for 3D mode)
     updateCanvas();
 
-    const link = document.createElement('a');
-    link.download = `screenshot-${state.selectedIndex + 1}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    const preferredFormat = localStorage.getItem('preferredExportFormat') || 'ask';
+
+    const doExport = (format) => {
+        if (!format) return;
+        const link = document.createElement('a');
+        link.download = `screenshot-${state.selectedIndex + 1}.${format}`;
+        link.href = canvas.toDataURL(`image/${format}`);
+        link.click();
+    };
+
+    if (preferredFormat === 'ask') {
+        showExportFormatModal(doExport);
+    } else {
+        doExport(preferredFormat);
+    }
 }
 
 async function exportAll() {
@@ -5453,22 +5469,79 @@ async function exportAll() {
         return;
     }
 
+    const preferredFormat = localStorage.getItem('preferredExportFormat') || 'ask';
+
+    const startExport = (langChoice) => {
+        const doFinalExport = async (format) => {
+            if (!format) return;
+
+            if (langChoice === 'current') {
+                await exportAllForLanguage(state.currentLanguage, format);
+            } else if (langChoice === 'all') {
+                await exportAllLanguages(format);
+            }
+        };
+
+        if (preferredFormat === 'ask') {
+            showExportFormatModal(doFinalExport);
+        } else {
+            doFinalExport(preferredFormat);
+        }
+    };
+
     // Check if project has multiple languages configured
     const hasMultipleLanguages = state.projectLanguages.length > 1;
 
     if (hasMultipleLanguages) {
         // Show language choice dialog
-        showExportLanguageDialog(async (choice) => {
-            if (choice === 'current') {
-                await exportAllForLanguage(state.currentLanguage);
-            } else if (choice === 'all') {
-                await exportAllLanguages();
-            }
+        showExportLanguageDialog((choice) => {
+            if (choice) startExport(choice);
         });
     } else {
         // Only one language, export directly
-        await exportAllForLanguage(state.currentLanguage);
+        startExport('current');
     }
+}
+
+// Show export format dialog
+function showExportFormatModal(callback) {
+    const modal = document.getElementById('export-format-modal');
+    if (!modal) {
+        callback('png');
+        return;
+    }
+
+    window._exportFormatCallback = callback;
+    modal.classList.add('visible');
+}
+
+// Close export format dialog
+function closeExportFormatModal(format) {
+    const modal = document.getElementById('export-format-modal');
+    if (modal) modal.classList.remove('visible');
+    
+    if (window._exportFormatCallback) {
+        window._exportFormatCallback(format);
+        window._exportFormatCallback = null;
+    }
+}
+
+// Initialize export format listeners
+function initExportFormatListeners() {
+    const pngBtn = document.getElementById('export-format-png');
+    const webpBtn = document.getElementById('export-format-webp');
+    const cancelBtn = document.getElementById('export-format-modal-cancel');
+
+    if (pngBtn) pngBtn.addEventListener('click', () => closeExportFormatModal('png'));
+    if (webpBtn) webpBtn.addEventListener('click', () => closeExportFormatModal('webp'));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => closeExportFormatModal(null));
+}
+
+// Call init immediately (assuming DOM is ready or close to it)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initExportFormatListeners);
+} else {
+    initExportFormatListeners();
 }
 
 // Show export progress modal
@@ -5491,7 +5564,7 @@ function hideExportProgress() {
 }
 
 // Export all screenshots for a specific language
-async function exportAllForLanguage(lang) {
+async function exportAllForLanguage(lang, format = 'png') {
     const originalIndex = state.selectedIndex;
     const originalLang = state.currentLanguage;
     const zip = new JSZip();
@@ -5525,10 +5598,10 @@ async function exportAllForLanguage(lang) {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Get canvas data as base64, strip the data URL prefix
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+        const dataUrl = canvas.toDataURL(`image/${format}`);
+        const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
 
-        zip.file(`screenshot-${i + 1}.png`, base64Data, { base64: true });
+        zip.file(`screenshot-${i + 1}.${format}`, base64Data, { base64: true });
     }
 
     // Restore original settings
@@ -5556,7 +5629,7 @@ async function exportAllForLanguage(lang) {
 }
 
 // Export all screenshots for all languages (separate folders)
-async function exportAllLanguages() {
+async function exportAllLanguages(format = 'png') {
     const originalIndex = state.selectedIndex;
     const originalLang = state.currentLanguage;
     const zip = new JSZip();
@@ -5597,11 +5670,11 @@ async function exportAllLanguages() {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Get canvas data as base64, strip the data URL prefix
-            const dataUrl = canvas.toDataURL('image/png');
-            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+            const dataUrl = canvas.toDataURL(`image/${format}`);
+            const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
 
             // Use language code as folder name
-            zip.file(`${lang}/screenshot-${i + 1}.png`, base64Data, { base64: true });
+            zip.file(`${lang}/screenshot-${i + 1}.${format}`, base64Data, { base64: true });
         }
     }
 
@@ -5627,6 +5700,80 @@ async function exportAllLanguages() {
     link.href = URL.createObjectURL(content);
     link.click();
     URL.revokeObjectURL(link.href);
+}
+
+// Mass Upload Handling
+function handleMassUpload() {
+    console.log('[Debug] Starting Mass Upload...');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.webkitdirectory = true;
+    input.directory = true; // Non-standard fallback
+    input.multiple = true;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    input.addEventListener('change', (e) => {
+        console.log(`[Debug] Mass upload selected ${e.target.files ? e.target.files.length : 0} files`);
+        if (e.target.files && e.target.files.length > 0) {
+            handleFiles(e.target.files, true); // Pass true for isMassUpload
+        }
+        document.body.removeChild(input);
+    });
+
+    input.click();
+}
+
+// Upload Mode Modal Event Listeners
+const uploadModeModal = document.getElementById('upload-mode-modal');
+if (uploadModeModal) {
+    const cancelBtn = document.getElementById('upload-mode-cancel');
+    const regularBtn = document.getElementById('upload-mode-regular');
+    const massBtn = document.getElementById('upload-mode-mass');
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            uploadModeModal.classList.remove('visible');
+        });
+    }
+
+    if (regularBtn) {
+        regularBtn.addEventListener('click', () => {
+            uploadModeModal.classList.remove('visible');
+            const fileInput = document.getElementById('file-input');
+            if (fileInput) fileInput.click();
+        });
+    }
+
+    if (massBtn) {
+        massBtn.addEventListener('click', () => {
+            uploadModeModal.classList.remove('visible');
+            handleMassUpload();
+        });
+    }
+    
+    // Close modal when clicking outside
+    uploadModeModal.addEventListener('click', (e) => {
+        if (e.target === uploadModeModal) {
+            uploadModeModal.classList.remove('visible');
+        }
+    });
+}
+
+// Clear All Button
+const clearAllBtn = document.getElementById('clear-all-btn');
+if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', async () => {
+        if (state.screenshots.length === 0) return;
+        
+        const confirmed = await showAppConfirm('Are you sure you want to delete all screenshots? This cannot be undone.', 'Delete All', 'Cancel');
+        if (confirmed) {
+            state.screenshots = [];
+            state.selectedIndex = -1;
+            updateScreenshotList();
+            updateCanvas();
+        }
+    });
 }
 
 // Initialize the app

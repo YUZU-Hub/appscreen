@@ -80,6 +80,11 @@
                         <button class="settings-btn" id="about-btn" title="About">
                             <img src="img/info.svg" width="18" height="18" alt="About">
                         </button>
+                        <button class="settings-btn" id="clear-all-btn" title="Clear All">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
                         <button class="settings-btn" id="settings-btn" title="Settings">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="3"/>
@@ -267,30 +272,57 @@
         <!-- Right Sidebar - Settings -->
         <div class="sidebar sidebar-right">
             <div class="sidebar-header">
-                <div class="tabs">
-                    <button class="tab active" data-tab="background">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <path d="M21 15l-5-5L5 21"/>
-                        </svg>
-                        <span>Background</span>
-                    </button>
-                    <button class="tab" data-tab="screenshot">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="5" y="2" width="14" height="20" rx="2"/>
-                            <line x1="12" y1="18" x2="12" y2="18"/>
-                        </svg>
-                        <span>Device</span>
-                    </button>
-                    <button class="tab" data-tab="text">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 7V4h16v3"/>
-                            <path d="M9 20h6"/>
-                            <path d="M12 4v16"/>
-                        </svg>
-                        <span>Text</span>
-                    </button>
+                <!-- Style Presets -->
+                <div class="style-presets-container">
+                    <div class="style-presets-top">
+                        <div class="style-button-presets">
+                            <select id="style-presets-select" class="style-presets-select">
+                                <option value="">Select a style...</option>
+                            </select>
+                            <button id="save-preset-btn" class="style-preset-btn" title="Save Current Style">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                </svg>
+                            </button>
+                            <button id="delete-preset-btn" class="style-preset-btn danger" title="Delete Selected Style" disabled>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                            <button id="apply-preset-btn" class="style-preset-apply-btn">Apply Style</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="style-header-bottom">
+                    <div class="tabs">
+                        <button class="tab active" data-tab="background">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <path d="M21 15l-5-5L5 21"/>
+                            </svg>
+                            <span>Background</span>
+                        </button>
+                        <button class="tab" data-tab="screenshot">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                                <line x1="12" y1="18" x2="12" y2="18"/>
+                            </svg>
+                            <span>Device</span>
+                        </button>
+                        <button class="tab" data-tab="text">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 7V4h16v3"/>
+                                <path d="M9 20h6"/>
+                                <path d="M12 4v16"/>
+                            </svg>
+                            <span>Text</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -303,6 +335,7 @@
                         <button class="active" data-type="gradient">Gradient</button>
                         <button data-type="solid">Solid</button>
                         <button data-type="image">Image</button>
+                        <button data-type="transparent">Transparent</button>
                     </div>
                 </div>
 
@@ -955,24 +988,6 @@
         </div>
     </div>
 
-    <!-- Apply Style to All Confirmation Modal -->
-    <div class="modal-overlay" id="apply-style-modal">
-        <div class="modal">
-            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
-                    <rect x="9" y="9" width="13" height="13" rx="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-            </div>
-            <h3 class="modal-title">Apply Style to All?</h3>
-            <p class="modal-message">This will copy the background, device, and text settings from this screenshot to all other screenshots. This cannot be undone.</p>
-            <div class="modal-buttons">
-                <button class="modal-btn modal-btn-cancel" id="apply-style-cancel">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" id="apply-style-confirm" style="background: var(--accent);">Apply to All</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Magical Titles Confirmation Modal -->
     <div class="modal-overlay" id="magical-titles-modal">
         <div class="modal">
@@ -1181,6 +1196,32 @@
                 </a>
             </div>
 
+            <div class="settings-section">
+                <h4 class="settings-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Preferred Export Format
+                </h4>
+                <p class="settings-description">Choose your default format for downloading screenshots.</p>
+                <div class="settings-provider-selector">
+                    <label class="settings-provider-option">
+                        <input type="radio" name="export-format" value="png" checked>
+                        <span class="provider-label">PNG (Lossless)</span>
+                    </label>
+                    <label class="settings-provider-option">
+                        <input type="radio" name="export-format" value="webp">
+                        <span class="provider-label">WebP (Compressed)</span>
+                    </label>
+                    <label class="settings-provider-option">
+                        <input type="radio" name="export-format" value="ask">
+                        <span class="provider-label">Ask every time</span>
+                    </label>
+                </div>
+            </div>
+
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="settings-modal-cancel">Cancel</button>
                 <button class="modal-btn modal-btn-confirm" id="settings-modal-save">Save Settings</button>
@@ -1294,6 +1335,36 @@
         </div>
     </div>
 
+    <!-- Export Format Modal -->
+    <div class="modal-overlay" id="export-format-modal">
+        <div class="modal">
+            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+                    <path d="M12 12v9"/>
+                    <path d="m8 17 4 4 4-4"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Select Format</h3>
+            <p class="modal-message">Choose the file format for your export.</p>
+
+            <div class="export-options">
+                <button class="export-option" id="export-format-png">
+                    <span class="export-option-title">PNG</span>
+                    <span class="export-option-desc">Lossless, best quality</span>
+                </button>
+                <button class="export-option" id="export-format-webp">
+                    <span class="export-option-title">WebP</span>
+                    <span class="export-option-desc">Efficient compression, transparent</span>
+                </button>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="export-format-modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Duplicate Screenshot Modal -->
     <div class="modal-overlay" id="duplicate-screenshot-modal">
         <div class="modal duplicate-screenshot-modal">
@@ -1371,6 +1442,48 @@
                 <div class="export-progress-fill" id="export-progress-fill"></div>
             </div>
             <p class="export-progress-detail" id="export-progress-detail"></p>
+        </div>
+    </div>
+
+    <!-- Upload Mode Modal -->
+    <div class="modal-overlay" id="upload-mode-modal">
+        <div class="modal upload-mode-modal">
+            <div class="modal-icon modal-icon-info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Upload Screenshots</h3>
+            <p class="modal-message">How would you like to upload your screenshots?</p>
+            
+            <div class="upload-mode-selection">
+                <div class="upload-info-box">
+                    <div class="info-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </div>
+                    <div class="info-content">
+                        <strong>Mass Upload</strong>
+                        <p>Upload multiple files or folders at once. Files with country codes (e.g. US, BR) are automatically organized.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-buttons vertical">
+                <button class="modal-btn modal-btn-primary" id="upload-mode-mass">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Mass Upload
+                </button>
+                <button class="modal-btn modal-btn-secondary" id="upload-mode-regular">Regular Upload</button>
+                <button class="modal-btn modal-btn-cancel" id="upload-mode-cancel">Cancel</button>
+            </div>
         </div>
     </div>
 
