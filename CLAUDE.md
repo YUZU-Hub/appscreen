@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 App Store Screenshot Generator - a browser-based tool for creating App Store marketing screenshots. Built with vanilla JavaScript, HTML5 Canvas, Three.js, and CSS. No build process required.
 
+## Agent Instructions
+
+**Development Server:**
+- The agent should automatically start the local development server when needed using `python3 -m http.server 8000` (or `npx serve .` as fallback)
+- The agent should run the server in the background and inform the user which URL to open (e.g., `http://localhost:8000`)
+- The agent should NOT ask the user to start the server manually
+- The agent should monitor server logs to detect and report any errors or problems to the user
+
+**Git & Commits:**
+- The agent should handle all git operations automatically (add, commit, push)
+- Before creating a commit, the agent MUST show the proposed commit message to the user and wait for approval
+- Only after user approval should the agent proceed with the commit
+- The agent should follow standard git commit message conventions
+
 ## Development
 
 To run locally, serve via a web server (required for IndexedDB persistence):

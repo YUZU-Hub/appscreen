@@ -165,7 +165,8 @@ const languageFlags = {
     'it': '🇮🇹', 'pt': '🇵🇹', 'pt-br': '🇧🇷', 'nl': '🇳🇱', 'ru': '🇷🇺',
     'ja': '🇯🇵', 'ko': '🇰🇷', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'ar': '🇸🇦',
     'hi': '🇮🇳', 'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'da': '🇩🇰',
-    'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩'
+    'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩',
+    'uk': '🇺🇦'
 };
 
 // Google Fonts configuration
@@ -1751,6 +1752,98 @@ async function importProjectFromFile(file) {
     }
 }
 
+async function duplicateProject(sourceProjectId, customName) {
+    if (!db) return;
+
+    const transaction = db.transaction([PROJECTS_STORE], 'readonly');
+    const store = transaction.objectStore(PROJECTS_STORE);
+    const request = store.get(sourceProjectId);
+
+    return new Promise((resolve) => {
+        request.onsuccess = async () => {
+            const projectData = request.result;
+            if (!projectData) {
+                await showAppAlert('Could not read project data', 'error');
+                resolve();
+                return;
+            }
+
+            const newId = 'project_' + Date.now();
+            const sourceProject = projects.find(p => p.id === sourceProjectId);
+            const newName = customName || (sourceProject ? sourceProject.name : 'Project') + ' (Copy)';
+
+            const clonedData = JSON.parse(JSON.stringify(projectData));
+            clonedData.id = newId;
+
+            projects.push({ id: newId, name: newName, screenshotCount: clonedData.screenshots?.length || 0 });
+            saveProjectsMeta();
+
+            const writeTransaction = db.transaction([PROJECTS_STORE], 'readwrite');
+            const writeStore = writeTransaction.objectStore(PROJECTS_STORE);
+            writeStore.put(clonedData);
+
+            writeTransaction.oncomplete = async () => {
+                await switchProject(newId);
+                updateProjectSelector();
+                resolve();
+            };
+        };
+    });
+}
+
+function duplicateScreenshot(index) {
+    const original = state.screenshots[index];
+    if (!original) return;
+
+    const clone = JSON.parse(JSON.stringify({
+        name: original.name,
+        deviceType: original.deviceType,
+        background: original.background,
+        screenshot: original.screenshot,
+        text: original.text,
+        overrides: original.overrides
+    }));
+
+    const nameParts = clone.name.split('.');
+    if (nameParts.length > 1) {
+        const ext = nameParts.pop();
+        clone.name = nameParts.join('.') + ' (Copy).' + ext;
+    } else {
+        clone.name = clone.name + ' (Copy)';
+    }
+
+    clone.localizedImages = {};
+    if (original.localizedImages) {
+        Object.keys(original.localizedImages).forEach(lang => {
+            const langData = original.localizedImages[lang];
+            if (langData?.src) {
+                const img = new Image();
+                img.src = langData.src;
+                clone.localizedImages[lang] = {
+                    image: img,
+                    src: langData.src,
+                    name: langData.name
+                };
+            }
+        });
+    }
+
+    if (original.image?.src) {
+        const img = new Image();
+        img.src = original.image.src;
+        clone.image = img;
+    }
+
+    state.screenshots.splice(index + 1, 0, clone);
+    state.selectedIndex = index + 1;
+
+    updateScreenshotList();
+    syncUIWithState();
+    updateGradientStopsUI();
+    updateCanvas();
+}
+
+// Sync UI controls with current state
 function syncUIWithState() {
     // Update language button
     updateLanguageButton();
@@ -2006,11 +2099,37 @@ function setupEventListeners() {
         document.getElementById('project-name-input').value = '';
         document.getElementById('project-modal-confirm').textContent = 'Create';
         document.getElementById('project-modal').dataset.mode = 'new';
+
+        const duplicateGroup = document.getElementById('duplicate-from-group');
+        const duplicateSelect = document.getElementById('duplicate-from-select');
+        if (projects.length > 0) {
+            duplicateGroup.style.display = 'block';
+            duplicateSelect.innerHTML = '<option value="">None (empty project)</option>';
+            projects.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = p.name + (p.screenshotCount ? ` (${p.screenshotCount} screenshots)` : '');
+                duplicateSelect.appendChild(option);
+            });
+        } else {
+            duplicateGroup.style.display = 'none';
+        }
+
         document.getElementById('project-modal').classList.add('visible');
         document.getElementById('project-name-input').focus();
     });
 
-    // Save button removed - state is auto-saved
+    document.getElementById('duplicate-from-select').addEventListener('change', (e) => {
+        const selectedId = e.target.value;
+        if (selectedId) {
+            const selectedProject = projects.find(p => p.id === selectedId);
+            if (selectedProject) {
+                document.getElementById('project-name-input').value = selectedProject.name + ' (Copy)';
+            }
+        } else {
+            document.getElementById('project-name-input').value = '';
+        }
+    });
 
     document.getElementById('rename-project-btn').addEventListener('click', () => {
         const project = projects.find(p => p.id === currentProjectId);
@@ -2018,6 +2137,7 @@ function setupEventListeners() {
         document.getElementById('project-name-input').value = project ? project.name : '';
         document.getElementById('project-modal-confirm').textContent = 'Rename';
         document.getElementById('project-modal').dataset.mode = 'rename';
+        document.getElementById('duplicate-from-group').style.display = 'none';
         document.getElementById('project-modal').classList.add('visible');
         document.getElementById('project-name-input').focus();
     });
@@ -2055,7 +2175,12 @@ function setupEventListeners() {
 
         const mode = document.getElementById('project-modal').dataset.mode;
         if (mode === 'new') {
-            createProject(name);
+            const duplicateFromId = document.getElementById('duplicate-from-select').value;
+            if (duplicateFromId) {
+                await duplicateProject(duplicateFromId, name);
+            } else {
+                createProject(name);
+            }
         } else if (mode === 'rename') {
             renameProject(name);
         }
@@ -3192,7 +3317,7 @@ const languageNames = {
     'zh': 'Chinese (Simplified)', 'zh-tw': 'Chinese (Traditional)', 'ar': 'Arabic',
     'hi': 'Hindi', 'tr': 'Turkish', 'pl': 'Polish', 'sv': 'Swedish',
     'da': 'Danish', 'no': 'Norwegian', 'fi': 'Finnish', 'th': 'Thai',
-    'vi': 'Vietnamese', 'id': 'Indonesian'
+    'vi': 'Vietnamese', 'id': 'Indonesian', 'uk': 'Ukrainian'
 };
 
 function openTranslateModal(target) {

@@ -9,6 +9,8 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> 🍋 **Built by [YuzuHub](https://yuzuhub.com)** — We build smart AI products in Düsseldorf, Germany. Check out [yuzu.chat](https://yuzu.chat), [Eno](https://eno.yuzuhub.com), [VoltPlan](https://voltplan.app) and more.
+
 ## Features
 
 ### Output & Export
@@ -60,11 +62,48 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 
 ## Getting Started
 
-### Option 1: Use Online
+### Just Want to Use It?
 
-Visit **[yuzu-hub.github.io/appscreen](https://yuzu-hub.github.io/appscreen/)** to use the tool directly in your browser.
+Visit **[yuzu-hub.github.io/appscreen](https://yuzu-hub.github.io/appscreen/)** to use the tool directly in your browser. No installation needed!
 
-### Option 2: Run Locally
+---
+
+### Want to Develop & Customize?
+
+#### Option 1: With Claude Desktop (Easiest - No Technical Knowledge Required)
+
+Perfect for non-technical users who want to run and modify the tool locally with AI assistance:
+
+1. **Install GitHub Desktop**
+   - Download from [desktop.github.com](https://desktop.github.com)
+   - Install and sign in with your GitHub account
+
+2. **Clone this repository**
+   - Click the green "Code" button above → "Open with GitHub Desktop"
+   - Choose where to save it (e.g., Documents folder)
+
+3. **Install Claude Desktop**
+   - Download from [claude.ai/download](https://claude.ai/download)
+   - Sign in with your Anthropic account
+
+4. **Open in Claude Desktop**
+   - Open Claude Desktop app
+   - Click the "Code" tab at the top
+   - Click "Open Folder" and select the cloned repository folder
+
+5. **Start the app**
+   - Simply type: **"start the app"**
+   - Claude will automatically start the server and tell you which URL to open in your browser
+   - Claude monitors the server and reports any issues
+
+6. **Make changes**
+   - Ask Claude to modify features, fix bugs, or add functionality
+   - Claude will show you the proposed commit message before committing
+   - All changes are automatically saved to Git
+
+No command line, no technical setup - just chat with Claude!
+
+#### Option 2: Run Locally (Command Line)
 
 Since this app uses IndexedDB for persistence, you need to serve it through a local web server:
 
@@ -79,11 +118,11 @@ npx serve .
 
 Then open `http://localhost:8000` in your browser.
 
-### Option 3: VS Code Live Server
+#### Option 3: VS Code Live Server
 
 If you have the "Live Server" extension installed in VS Code, right-click `index.html` and select "Open with Live Server".
 
-### Option 4: Docker
+#### Option 4: Docker
 
 Run the pre-built Docker image from GitHub Container Registry:
 
@@ -147,6 +186,8 @@ Built something with this tool? Add your app to the list by submitting a pull re
 | Cable | Manage your 12V systems like Boats and RVs | [cable.yuzuhub.com](https://cable.yuzuhub.com) |
 | Eno | Wine pairings and food pairings made easy | [eno.yuzuhub.com](https://eno.yuzuhub.com) |
 | TravelRates Currency Converter* | Exchange Rates for Travelers | [apple.com](https://apps.apple.com/sg/app/travelrates-currency-converter/id6756080378) |
+| Trakz Sales Tracker | Manage sales for restaurants and small businesses | [apple.com](https://apps.apple.com/us/app/trakz-sales-tracker/id6748954468) |
+| AI Soccer Insights Football IQ | AI-powered football predictions and insights | [apple.com](https://apps.apple.com/us/app/ai-soccer-insights-football-iq/id6592649804) |
 | *Your app here* | *Submit a PR to add your app* | *Your app link* |
 
 ## License
@@ -160,4 +201,4 @@ MIT License - feel free to use, modify, and distribute.
 
 ## Author
 
-Proudly vibe coded by [Stefan from yuzuhub.com](https://yuzuhub.com/en)
+Proudly vibe coded by [Stefan](https://github.com/BlackMac) at [YuzuHub](https://yuzuhub.com/en) — building smart AI products from Düsseldorf, Germany.
