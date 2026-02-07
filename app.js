@@ -2097,6 +2097,11 @@ function setupEventListeners() {
         });
     });
 
+    // Ollama detect models button
+    document.getElementById('ollama-detect-btn').addEventListener('click', async () => {
+        await detectOllamaModels();
+    });
+
     document.getElementById('settings-modal').addEventListener('click', (e) => {
         if (e.target.id === 'settings-modal') {
             document.getElementById('settings-modal').classList.remove('visible');
@@ -3115,9 +3120,10 @@ async function aiTranslateAll() {
     // Get selected provider and API key
     const provider = getSelectedProvider();
     const providerConfig = llmProviders[provider];
-    const apiKey = localStorage.getItem(providerConfig.storageKey);
+    const apiKey = providerConfig.storageKey ? localStorage.getItem(providerConfig.storageKey) : null;
 
-    if (!apiKey) {
+    // Ollama doesn't need an API key, other providers do
+    if (!providerConfig.isLocal && !apiKey) {
         setTranslateStatus(`Add your LLM API key in Settings to use AI translation.`, 'error');
         return;
     }
@@ -3172,6 +3178,8 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithOpenAI(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
+        } else if (provider === 'ollama') {
+            responseText = await translateWithOllama(prompt);
         }
 
         // Clean up response - remove markdown code blocks if present
@@ -3198,7 +3206,14 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
         console.error('Translation error:', error);
 
         if (error.message === 'Failed to fetch') {
-            setTranslateStatus('Connection failed. Check your API key in Settings.', 'error');
+            const provider = getSelectedProvider();
+            if (provider === 'ollama') {
+                setTranslateStatus('Connection failed. Is Ollama running? Check Settings.', 'error');
+            } else {
+                setTranslateStatus('Connection failed. Check your API key in Settings.', 'error');
+            }
+        } else if (error.message === 'OLLAMA_MODEL_NOT_FOUND') {
+            setTranslateStatus('Model not found. Pull it first with: ollama pull <model>', 'error');
         } else if (error.message === 'AI_UNAVAILABLE' || error.message.includes('401') || error.message.includes('403')) {
             setTranslateStatus('Invalid API key. Update it in Settings (gear icon).', 'error');
         } else {
@@ -3428,9 +3443,10 @@ async function translateAllText() {
     // Get selected provider and API key
     const provider = getSelectedProvider();
     const providerConfig = llmProviders[provider];
-    const apiKey = localStorage.getItem(providerConfig.storageKey);
+    const apiKey = providerConfig.storageKey ? localStorage.getItem(providerConfig.storageKey) : null;
 
-    if (!apiKey) {
+    // Ollama doesn't need an API key, other providers do
+    if (!providerConfig.isLocal && !apiKey) {
         await showAppAlert('Add your LLM API key in Settings to use AI translation.', 'error');
         return;
     }
@@ -3568,6 +3584,8 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithOpenAI(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
+        } else if (provider === 'ollama') {
+            responseText = await translateWithOllama(prompt);
         }
 
         updateStatus('Processing response...', 'Parsing translations');
@@ -3723,6 +3741,32 @@ async function translateWithGoogle(apiKey, prompt) {
     return data.candidates[0].content.parts[0].text;
 }
 
+async function translateWithOllama(prompt) {
+    const model = getSelectedModel('ollama');
+    const baseUrl = getOllamaUrl();
+
+    const response = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            stream: false
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        if (status === 404) throw new Error('OLLAMA_MODEL_NOT_FOUND');
+        throw new Error(`Ollama request failed: ${status}. Make sure Ollama is running.`);
+    }
+
+    const data = await response.json();
+    return data.message.content;
+}
+
 function setTranslateStatus(message, type) {
     const status = document.getElementById('ai-translate-status');
     status.textContent = message;
@@ -3744,6 +3788,17 @@ function openSettingsModal() {
 
     // Load all saved API keys and models
     Object.entries(llmProviders).forEach(([provider, config]) => {
+        // Handle Ollama specially (no API key, has URL)
+        if (config.isLocal) {
+            const urlInput = document.getElementById('settings-ollama-url');
+
+            if (urlInput) {
+                urlInput.value = localStorage.getItem('ollamaUrl') || config.defaultUrl;
+            }
+            // Model dropdown will be populated by detectOllamaModels()
+            return;
+        }
+
         const savedKey = localStorage.getItem(config.storageKey);
         const input = document.getElementById(`settings-api-key-${provider}`);
         if (input) {
@@ -3780,6 +3835,82 @@ function updateProviderSection(provider) {
     document.querySelectorAll('.settings-api-section').forEach(section => {
         section.style.display = section.dataset.provider === provider ? 'block' : 'none';
     });
+
+    // Auto-detect Ollama models when switching to Ollama
+    if (provider === 'ollama') {
+        detectOllamaModels();
+    }
+}
+
+/**
+ * Detect and populate available Ollama models
+ */
+async function detectOllamaModels() {
+    const btn = document.getElementById('ollama-detect-btn');
+    const select = document.getElementById('settings-model-ollama');
+    const status = document.getElementById('settings-key-status-ollama');
+    const urlInput = document.getElementById('settings-ollama-url');
+
+    const baseUrl = urlInput.value.trim() || llmProviders.ollama.defaultUrl;
+
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+        Detecting...
+    `;
+
+    try {
+        const models = await fetchOllamaModels(baseUrl);
+
+        if (models.length === 0) {
+            select.innerHTML = '<option value="">No models found</option>';
+            status.textContent = 'No models found. Pull a model with: ollama pull llama3.2';
+            status.className = 'settings-key-status error';
+        } else {
+            // Get currently saved model
+            const savedModel = localStorage.getItem(llmProviders.ollama.modelStorageKey) || '';
+
+            // Populate dropdown
+            select.innerHTML = models.map(model => {
+                const name = model.name;
+                const size = model.size ? ` (${formatBytes(model.size)})` : '';
+                const selected = name === savedModel ? ' selected' : '';
+                return `<option value="${name}"${selected}>${name}${size}</option>`;
+            }).join('');
+
+            status.textContent = `✓ Found ${models.length} model(s)`;
+            status.className = 'settings-key-status success';
+        }
+    } catch (error) {
+        console.error('Failed to detect Ollama models:', error);
+        select.innerHTML = '<option value="">Connection failed</option>';
+        status.textContent = 'Cannot connect to Ollama. Is it running?';
+        status.className = 'settings-key-status error';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            Detect
+        `;
+    }
+}
+
+/**
+ * Format bytes to human-readable string
+ */
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
 function saveSettings() {
@@ -3790,6 +3921,27 @@ function saveSettings() {
     // Save all API keys and models
     let allValid = true;
     Object.entries(llmProviders).forEach(([provider, config]) => {
+        // Handle Ollama specially (no API key, has URL)
+        if (config.isLocal) {
+            const urlInput = document.getElementById('settings-ollama-url');
+            const modelInput = document.getElementById(`settings-model-${provider}`);
+            const status = document.getElementById(`settings-key-status-${provider}`);
+
+            if (urlInput) {
+                const url = urlInput.value.trim() || config.defaultUrl;
+                localStorage.setItem('ollamaUrl', url);
+            }
+            if (modelInput) {
+                const model = modelInput.value.trim() || config.defaultModel;
+                localStorage.setItem(config.modelStorageKey, model);
+            }
+            if (status) {
+                status.textContent = '✓ Settings saved';
+                status.className = 'settings-key-status success';
+            }
+            return;
+        }
+
         const input = document.getElementById(`settings-api-key-${provider}`);
         const status = document.getElementById(`settings-key-status-${provider}`);
         if (!input || !status) return;

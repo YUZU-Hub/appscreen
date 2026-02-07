@@ -13,11 +13,11 @@ function showMagicalTitlesTooltip() {
     if (magicalTitlesTooltipShown) return;
     if (localStorage.getItem('magicalTitlesTooltipDismissed')) return;
 
-    // Don't show if no API key is configured
+    // Don't show if no API key is configured (Ollama doesn't need one)
     const provider = getSelectedProvider();
     const providerConfig = llmProviders[provider];
-    const apiKey = localStorage.getItem(providerConfig.storageKey);
-    if (!apiKey) return;
+    const apiKey = providerConfig.storageKey ? localStorage.getItem(providerConfig.storageKey) : null;
+    if (!providerConfig.isLocal && !apiKey) return;
 
     magicalTitlesTooltipShown = true;
 
@@ -239,6 +239,46 @@ async function generateTitlesWithGoogle(apiKey, images, prompt) {
 }
 
 /**
+ * Generate titles using Ollama local API
+ * Note: Requires a vision-capable model like llava, llava-llama3, bakllava, etc.
+ * @param {Array} images - Array of { mimeType, base64 } objects
+ * @param {string} prompt - Text prompt
+ * @returns {Promise<string>} - Response text
+ */
+async function generateTitlesWithOllama(images, prompt) {
+    const model = getSelectedModel('ollama');
+    const baseUrl = getOllamaUrl();
+
+    // Ollama uses the /api/chat endpoint with images array
+    const response = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: [{
+                role: "user",
+                content: prompt,
+                images: images.map(img => img.base64)
+            }],
+            stream: false
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('Ollama Vision API Error:', { status, model, error: errorBody });
+        if (status === 404) throw new Error('OLLAMA_MODEL_NOT_FOUND');
+        throw new Error(`Ollama request failed: ${status}. Make sure Ollama is running and you have a vision model.`);
+    }
+
+    const data = await response.json();
+    return data.message.content;
+}
+
+/**
  * Show the magical titles confirmation dialog
  */
 function showMagicalTitlesDialog() {
@@ -251,9 +291,10 @@ function showMagicalTitlesDialog() {
     // Get provider and API key
     const provider = getSelectedProvider();
     const providerConfig = llmProviders[provider];
-    const apiKey = localStorage.getItem(providerConfig.storageKey);
+    const apiKey = providerConfig.storageKey ? localStorage.getItem(providerConfig.storageKey) : null;
 
-    if (!apiKey) {
+    // Ollama doesn't need an API key, other providers do
+    if (!providerConfig.isLocal && !apiKey) {
         showAppAlert('Please configure your AI API key in Settings first.', 'error');
         return;
     }
@@ -383,6 +424,8 @@ Write all titles in ${langName}.`;
             responseText = await generateTitlesWithOpenAI(apiKey, images, prompt);
         } else if (provider === 'google') {
             responseText = await generateTitlesWithGoogle(apiKey, images, prompt);
+        } else if (provider === 'ollama') {
+            responseText = await generateTitlesWithOllama(images, prompt);
         } else {
             throw new Error(`Unknown provider: ${provider}`);
         }
@@ -450,6 +493,15 @@ Write all titles in ${langName}.`;
 
         if (error.message === 'AI_UNAVAILABLE') {
             await showAppAlert('AI service unavailable. Please check your API key in Settings.', 'error');
+        } else if (error.message === 'OLLAMA_MODEL_NOT_FOUND') {
+            await showAppAlert('Model not found. Pull it with: ollama pull <model-name>', 'error');
+        } else if (error.message === 'Failed to fetch') {
+            const provider = getSelectedProvider();
+            if (provider === 'ollama') {
+                await showAppAlert('Cannot connect to Ollama. Make sure it is running.', 'error');
+            } else {
+                await showAppAlert('Connection failed. Please check your internet connection.', 'error');
+            }
         } else if (error instanceof SyntaxError) {
             await showAppAlert('Failed to parse AI response. Please try again.', 'error');
         } else {
