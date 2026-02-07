@@ -967,11 +967,21 @@ function updateProjectSelector() {
         const screenshotCount = project.id === currentProjectId ? state.screenshots.length : (project.screenshotCount || 0);
 
         option.innerHTML = `
-            <span class="project-option-name">${project.name}</span>
-            <span class="project-option-meta">${screenshotCount} screenshot${screenshotCount !== 1 ? 's' : ''}</span>
+            <div class="project-option-info">
+                <span class="project-option-name">${project.name}</span>
+                <span class="project-option-meta">${screenshotCount} screenshot${screenshotCount !== 1 ? 's' : ''}</span>
+            </div>
+            <button class="project-export-btn" data-project-id="${project.id}" title="Export this project">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+            </button>
         `;
 
-        option.addEventListener('click', (e) => {
+        // Click on option info area switches project
+        option.querySelector('.project-option-info').addEventListener('click', (e) => {
             e.stopPropagation();
             if (project.id !== currentProjectId) {
                 switchProject(project.id);
@@ -979,8 +989,46 @@ function updateProjectSelector() {
             document.getElementById('project-dropdown').classList.remove('open');
         });
 
+        // Click on export button exports that project
+        option.querySelector('.project-export-btn').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            document.getElementById('project-dropdown').classList.remove('open');
+
+            // If exporting current project, use current state
+            if (project.id === currentProjectId) {
+                exportProjectAsFile();
+            } else {
+                // Export a different project - need to load its data first
+                await exportProjectById(project.id, project.name);
+            }
+        });
+
         menu.appendChild(option);
     });
+
+    // Add divider and import action
+    const divider = document.createElement('div');
+    divider.className = 'project-menu-divider';
+    menu.appendChild(divider);
+
+    // Import button (only import, removed export from here)
+    const importBtn = document.createElement('button');
+    importBtn.className = 'project-menu-action';
+    importBtn.id = 'import-project-btn';
+    importBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Import Project...
+    `;
+    importBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('project-dropdown').classList.remove('open');
+        document.getElementById('import-project-input').click();
+    });
+    menu.appendChild(importBtn);
 }
 
 // Initialize
@@ -1454,6 +1502,284 @@ async function deleteProject() {
     updateProjectSelector();
 }
 
+// Export current project as a JSON file
+async function exportProjectAsFile() {
+    const project = projects.find(p => p.id === currentProjectId);
+    if (!project) {
+        await showAppAlert('No project to export', 'error');
+        return;
+    }
+
+    const exportBtn = document.getElementById('export-project-btn');
+    if (exportBtn) exportBtn.classList.add('loading');
+
+    try {
+        // Prepare screenshots data with base64 images
+        const screenshotsToExport = state.screenshots.map(s => {
+            // Export localized images (with src as base64 data URLs)
+            const localizedImages = {};
+            if (s.localizedImages) {
+                Object.keys(s.localizedImages).forEach(lang => {
+                    const langData = s.localizedImages[lang];
+                    if (langData?.src) {
+                        localizedImages[lang] = {
+                            src: langData.src,
+                            name: langData.name
+                        };
+                    }
+                });
+            }
+
+            return {
+                name: s.name,
+                deviceType: s.deviceType,
+                localizedImages: localizedImages,
+                background: s.background,
+                screenshot: s.screenshot,
+                text: s.text,
+                overrides: s.overrides
+            };
+        });
+
+        // Build export object
+        const exportData = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            appVersion: 'yuzu.shot 1.0',
+            project: {
+                name: project.name,
+                formatVersion: 2
+            },
+            state: {
+                screenshots: screenshotsToExport,
+                outputDevice: state.outputDevice,
+                customWidth: state.customWidth,
+                customHeight: state.customHeight,
+                currentLanguage: state.currentLanguage,
+                projectLanguages: state.projectLanguages,
+                defaults: state.defaults
+            }
+        };
+
+        // Convert to JSON and create blob
+        const jsonString = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Sanitize project name for filename
+        const sanitizedName = project.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        link.download = `${sanitizedName}.screenshotproject`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        await showAppAlert(`Project "${project.name}" exported successfully!`, 'success');
+    } catch (error) {
+        console.error('Error exporting project:', error);
+        await showAppAlert('Failed to export project: ' + error.message, 'error');
+    } finally {
+        if (exportBtn) exportBtn.classList.remove('loading');
+    }
+}
+
+// Export a project by its ID (for exporting non-current projects from dropdown)
+async function exportProjectById(projectId, projectName) {
+    try {
+        // Load project data from IndexedDB
+        if (!db) {
+            await showAppAlert('Database not available', 'error');
+            return;
+        }
+
+        const projectData = await new Promise((resolve, reject) => {
+            const transaction = db.transaction([PROJECTS_STORE], 'readonly');
+            const store = transaction.objectStore(PROJECTS_STORE);
+            const request = store.get(projectId);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(new Error('Failed to load project data'));
+        });
+
+        if (!projectData) {
+            await showAppAlert('Project data not found', 'error');
+            return;
+        }
+
+        // Build export object from stored data
+        const exportData = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            appVersion: 'yuzu.shot 1.0',
+            project: {
+                name: projectName,
+                formatVersion: projectData.formatVersion || 2
+            },
+            state: {
+                screenshots: projectData.screenshots || [],
+                outputDevice: projectData.outputDevice || 'iphone-6.9',
+                customWidth: projectData.customWidth || 1290,
+                customHeight: projectData.customHeight || 2796,
+                currentLanguage: projectData.currentLanguage || 'en',
+                projectLanguages: projectData.projectLanguages || ['en'],
+                defaults: projectData.defaults || state.defaults
+            }
+        };
+
+        // Convert to JSON and create blob
+        const jsonString = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Sanitize project name for filename
+        const sanitizedName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        link.download = `${sanitizedName}.screenshotproject`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        await showAppAlert(`Project "${projectName}" exported successfully!`, 'success');
+    } catch (error) {
+        console.error('Error exporting project:', error);
+        await showAppAlert('Failed to export project: ' + error.message, 'error');
+    }
+}
+
+// Import project from a JSON file
+async function importProjectFromFile(file) {
+    const importBtn = document.getElementById('import-project-btn');
+    if (importBtn) importBtn.classList.add('loading');
+
+    try {
+        // Read file content
+        const fileContent = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+        });
+
+        // Parse JSON
+        let importData;
+        try {
+            importData = JSON.parse(fileContent);
+        } catch (e) {
+            throw new Error('Invalid file format. Expected a valid JSON file.');
+        }
+
+        // Validate import data structure
+        if (!importData.version || !importData.project || !importData.state) {
+            throw new Error('Invalid project file format. Missing required fields.');
+        }
+
+        // Create new project with imported name (add suffix if name exists)
+        let projectName = importData.project.name || 'Imported Project';
+        const existingProject = projects.find(p => p.name === projectName);
+        if (existingProject) {
+            projectName = `${projectName} (imported)`;
+        }
+
+        // Create the new project
+        const projectId = 'project_' + Date.now();
+        projects.push({ id: projectId, name: projectName, screenshotCount: 0 });
+        saveProjectsMeta();
+
+        // Switch to the new project
+        currentProjectId = projectId;
+
+        // Reset state
+        state.screenshots = [];
+        state.selectedIndex = 0;
+        state.outputDevice = importData.state.outputDevice || 'iphone-6.9';
+        state.customWidth = importData.state.customWidth || 1290;
+        state.customHeight = importData.state.customHeight || 2796;
+        state.currentLanguage = importData.state.currentLanguage || 'en';
+        state.projectLanguages = importData.state.projectLanguages || ['en'];
+
+        if (importData.state.defaults) {
+            state.defaults = importData.state.defaults;
+        }
+
+        // Restore screenshots with their images
+        const importedScreenshots = importData.state.screenshots || [];
+        for (const screenshotData of importedScreenshots) {
+            // Recreate localized images with Image objects
+            const localizedImages = {};
+            if (screenshotData.localizedImages) {
+                for (const lang of Object.keys(screenshotData.localizedImages)) {
+                    const langData = screenshotData.localizedImages[lang];
+                    if (langData?.src) {
+                        // Create Image object from base64
+                        const img = new Image();
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = () => reject(new Error(`Failed to load image for ${lang}`));
+                            img.src = langData.src;
+                        });
+
+                        localizedImages[lang] = {
+                            image: img,
+                            src: langData.src,
+                            name: langData.name
+                        };
+                    }
+                }
+            }
+
+            // Get first image as the primary image (for legacy compatibility)
+            let primaryImage = null;
+            const firstLang = Object.keys(localizedImages)[0];
+            if (firstLang) {
+                primaryImage = localizedImages[firstLang].image;
+            }
+
+            // Create screenshot entry
+            const screenshot = {
+                image: primaryImage,
+                name: screenshotData.name || 'Imported Screenshot',
+                deviceType: screenshotData.deviceType,
+                localizedImages: localizedImages,
+                background: screenshotData.background || JSON.parse(JSON.stringify(state.defaults.background)),
+                screenshot: screenshotData.screenshot || JSON.parse(JSON.stringify(state.defaults.screenshot)),
+                text: screenshotData.text || JSON.parse(JSON.stringify(state.defaults.text)),
+                overrides: screenshotData.overrides || {}
+            };
+
+            state.screenshots.push(screenshot);
+        }
+
+        // Save the imported state
+        saveState();
+
+        // Update UI
+        state.selectedIndex = 0;
+        updateProjectSelector();
+        updateScreenshotList();
+        syncUIWithState();
+        updateCanvas();
+        updateLanguageButton();
+
+        await showAppAlert(`Project "${projectName}" imported successfully with ${state.screenshots.length} screenshot(s)!`, 'success');
+    } catch (error) {
+        console.error('Error importing project:', error);
+        await showAppAlert('Failed to import project: ' + error.message, 'error');
+    } finally {
+        if (importBtn) importBtn.classList.remove('loading');
+        // Reset the file input
+        document.getElementById('import-project-input').value = '';
+    }
+}
+
 async function duplicateProject(sourceProjectId, customName) {
     if (!db) return;
 
@@ -1853,6 +2179,14 @@ function setupEventListeners() {
         document.getElementById('delete-project-message').textContent =
             `Are you sure you want to delete "${project ? project.name : 'this project'}"? This cannot be undone.`;
         document.getElementById('delete-project-modal').classList.add('visible');
+    });
+
+    // Import project file input change handler (export/import buttons are created dynamically in updateProjectSelector)
+    document.getElementById('import-project-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            importProjectFromFile(file);
+        }
     });
 
     // Project modal buttons
@@ -2631,6 +2965,11 @@ function setupEventListeners() {
             btn.classList.add('active');
             applyPositionPreset(btn.dataset.preset);
         });
+    });
+
+    // Reset position button (center position)
+    document.getElementById('reset-position-btn').addEventListener('click', () => {
+        resetPosition();
     });
 
     // Device type selector (2D/3D)
@@ -3917,6 +4256,116 @@ function applyPositionPreset(preset) {
     updateCanvas();
 }
 
+// Reset position to centered defaults (works for both 2D and 3D)
+function resetPosition() {
+    const ss = getScreenshotSettings();
+    const is3D = ss.use3D;
+
+    // Reset common position settings
+    setScreenshotSetting('scale', 70);
+    setScreenshotSetting('x', 50);
+    setScreenshotSetting('y', 50);
+    setScreenshotSetting('rotation', 0);
+    setScreenshotSetting('perspective', 0);
+
+    // Reset 3D-specific settings if in 3D mode
+    if (is3D) {
+        setScreenshotSetting('rotation3D', { x: 0, y: 0, z: 0 });
+
+        // Update 3D rotation sliders if they exist
+        const rot3dX = document.getElementById('rotation-3d-x');
+        const rot3dY = document.getElementById('rotation-3d-y');
+        const rot3dZ = document.getElementById('rotation-3d-z');
+
+        if (rot3dX) {
+            rot3dX.value = 0;
+            document.getElementById('rotation-3d-x-value').textContent = '0°';
+        }
+        if (rot3dY) {
+            rot3dY.value = 0;
+            document.getElementById('rotation-3d-y-value').textContent = '0°';
+        }
+        if (rot3dZ) {
+            rot3dZ.value = 0;
+            document.getElementById('rotation-3d-z-value').textContent = '0°';
+        }
+
+        // Update Three.js rotation (scale is handled by updateCanvas via renderThreeJSToCanvas)
+        if (typeof setThreeJSRotation === 'function') {
+            setThreeJSRotation(0, 0, 0);
+        }
+    }
+
+    // Update 2D UI controls
+    document.getElementById('screenshot-scale').value = 70;
+    document.getElementById('screenshot-scale-value').textContent = '70%';
+    document.getElementById('screenshot-x').value = 50;
+    document.getElementById('screenshot-x-value').textContent = '50%';
+    document.getElementById('screenshot-y').value = 50;
+    document.getElementById('screenshot-y-value').textContent = '50%';
+    document.getElementById('screenshot-rotation').value = 0;
+    document.getElementById('screenshot-rotation-value').textContent = '0°';
+
+    // Update position preset active state (centered is now active)
+    document.querySelectorAll('.position-preset').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === 'centered');
+    });
+
+    saveState();
+    updateCanvas();
+}
+
+// Duplicate a screenshot with all its settings
+function duplicateScreenshot(index) {
+    if (index < 0 || index >= state.screenshots.length) return;
+
+    const original = state.screenshots[index];
+
+    // Deep clone the screenshot
+    const duplicate = {
+        // Copy the image reference (same image object)
+        image: original.image,
+        name: original.name + ' (copy)',
+        deviceType: original.deviceType,
+
+        // Deep clone localized images
+        localizedImages: {},
+
+        // Deep clone settings
+        background: JSON.parse(JSON.stringify(original.background)),
+        screenshot: JSON.parse(JSON.stringify(original.screenshot)),
+        text: JSON.parse(JSON.stringify(original.text)),
+        overrides: JSON.parse(JSON.stringify(original.overrides || {}))
+    };
+
+    // Copy localized images (with image object references)
+    if (original.localizedImages) {
+        Object.keys(original.localizedImages).forEach(lang => {
+            const langData = original.localizedImages[lang];
+            if (langData) {
+                duplicate.localizedImages[lang] = {
+                    image: langData.image, // Same image object reference
+                    src: langData.src,
+                    name: langData.name
+                };
+            }
+        });
+    }
+
+    // Insert duplicate after the original
+    state.screenshots.splice(index + 1, 0, duplicate);
+
+    // Select the new duplicate
+    state.selectedIndex = index + 1;
+
+    // Update UI
+    saveState();
+    updateScreenshotList();
+    syncUIWithState();
+    updateGradientStopsUI();
+    updateCanvas();
+}
+
 function handleFiles(files) {
     // Process files sequentially to handle duplicates one at a time
     processFilesSequentially(Array.from(files).filter(f => f.type.startsWith('image/')));
@@ -4387,6 +4836,7 @@ function updateScreenshotList() {
             });
         }
 
+        // Duplicate button handler
         const duplicateBtn = item.querySelector('.screenshot-duplicate');
         if (duplicateBtn) {
             duplicateBtn.addEventListener('click', (e) => {

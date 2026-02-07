@@ -15,7 +15,8 @@
     --accent-hover: #409cff;
 }
 
-html, body {
+html,
+body {
     /* Prevent browser back/forward gesture from horizontal swipe */
     overscroll-behavior-x: none;
 }
@@ -34,7 +35,8 @@ html.electron-app {
 
 html.electron-app body {
     padding-top: var(--electron-titlebar-height);
-    overflow: hidden; /* Prevent body scroll in Electron */
+    overflow: hidden;
+    /* Prevent body scroll in Electron */
 }
 
 /* Fixed drag region - added via JS as a real DOM element */
@@ -747,6 +749,38 @@ input[type="range"]::-webkit-slider-thumb {
     background: rgba(99, 102, 241, 0.1);
 }
 
+/* Reset position button */
+.reset-position-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.reset-position-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(10, 132, 255, 0.1);
+}
+
+.reset-position-btn svg {
+    opacity: 0.7;
+}
+
+.reset-position-btn:hover svg {
+    opacity: 1;
+}
+
 /* Canvas area */
 .canvas-area {
     display: flex;
@@ -1295,8 +1329,13 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .ai-translate-status {
@@ -1414,7 +1453,7 @@ input[type="range"]::-webkit-slider-thumb {
     margin: 0;
 }
 
-.settings-provider-option input[type="radio"]:checked + .provider-label {
+.settings-provider-option input[type="radio"]:checked+.provider-label {
     color: var(--accent);
 }
 
@@ -2216,7 +2255,8 @@ input[type="range"]::-webkit-slider-thumb {
     position: absolute;
     top: calc(100% + 4px);
     left: 0;
-    width: calc(320px - 40px); /* Full sidebar width minus padding */
+    width: calc(320px - 40px);
+    /* Full sidebar width minus padding */
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -2241,10 +2281,11 @@ input[type="range"]::-webkit-slider-thumb {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: 6px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.15s;
+    gap: 8px;
 }
 
 .project-option:hover {
@@ -2253,6 +2294,21 @@ input[type="range"]::-webkit-slider-thumb {
 
 .project-option.selected {
     background: rgba(10, 132, 255, 0.15);
+}
+
+.project-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.project-option-info:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .project-option-name {
@@ -2267,6 +2323,76 @@ input[type="range"]::-webkit-slider-thumb {
     font-size: 10px;
     color: var(--text-secondary);
     white-space: nowrap;
+}
+
+.project-export-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    opacity: 0.5;
+}
+
+.project-option:hover .project-export-btn {
+    opacity: 1;
+}
+
+.project-export-btn:hover {
+    background: var(--bg-primary);
+    color: var(--accent);
+}
+
+.project-menu-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 6px 0;
+}
+
+.project-menu-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.project-menu-action:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.project-menu-action svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.project-menu-action:hover svg {
+    opacity: 1;
+}
+
+.project-menu-action.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.project-menu-action.loading svg {
+    animation: spin 1s linear infinite;
 }
 
 .project-buttons {
@@ -2296,6 +2422,30 @@ input[type="range"]::-webkit-slider-thumb {
 .project-btn.danger:hover {
     border-color: #ff453a;
     color: #ff453a;
+}
+
+.project-btn.success:hover {
+    border-color: #30d158;
+    color: #30d158;
+}
+
+.project-btn.loading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.project-btn.loading svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Sidebar header with settings */
@@ -2398,13 +2548,27 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @keyframes tooltipPulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.02); }
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.02);
+    }
 }
 
 @keyframes tooltipFadeIn {
-    from { opacity: 0; transform: translateY(-5px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Language picker */

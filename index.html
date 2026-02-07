@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App Store Screenshot Generator</title>
-    <meta name="description" content="Free tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.">
+    <meta name="description"
+        content="Free tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.">
     <meta name="author" content="Stefan from yuzuhub.com">
 
     <!-- Open Graph / Social -->
     <meta property="og:title" content="App Store Screenshot Generator">
-    <meta property="og:description" content="Free tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.">
+    <meta property="og:description"
+        content="Free tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.">
     <meta property="og:type" content="website">
 
     <!-- Favicon (inline SVG) -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23667eea'/><rect x='20' y='30' width='60' height='45' rx='5' fill='white'/><circle cx='50' cy='20' r='5' fill='white'/></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23667eea'/><rect x='20' y='30' width='60' height='45' rx='5' fill='white'/><circle cx='50' cy='20' r='5' fill='white'/></svg>">
 
     <link rel="stylesheet" href="styles.css">
 
@@ -39,6 +43,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
+
 <body>
     <div class="app-container">
         <!-- Left Sidebar - Screenshots -->
@@ -57,33 +62,39 @@
                                 </div>
                                 <div class="language-menu-divider"></div>
                                 <button class="language-menu-edit" id="edit-languages-btn">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                                     </svg>
                                     Edit Languages...
                                 </button>
                                 <div class="language-menu-divider"></div>
                                 <button class="language-menu-edit" id="translate-all-btn">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6" />
                                     </svg>
                                     Translate All...
                                 </button>
                             </div>
                         </div>
-                        <button class="settings-btn" id="magical-titles-btn" title="Magical Titles - AI-generated headlines">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/>
+                        <button class="settings-btn" id="magical-titles-btn"
+                            title="Magical Titles - AI-generated headlines">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z" />
                             </svg>
                         </button>
                         <button class="settings-btn" id="about-btn" title="About">
                             <img src="img/info.svg" width="18" height="18" alt="About">
                         </button>
                         <button class="settings-btn" id="settings-btn" title="Settings">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"/>
-                                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="3" />
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
                             </svg>
                         </button>
                     </div>
@@ -95,29 +106,34 @@
                                 <span class="project-trigger-name" id="project-trigger-name">Default Project</span>
                                 <span class="project-trigger-meta" id="project-trigger-meta">0 screenshots</span>
                             </div>
-                            <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
+                            <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9" />
                             </svg>
                         </button>
                         <div class="project-menu" id="project-menu">
-                            <!-- Projects will be added here dynamically -->
+                            <!-- Projects and export/import actions are added dynamically by updateProjectSelector() -->
                         </div>
+                        <input type="file" id="import-project-input" accept=".json,.screenshotproject" hidden>
                     </div>
                     <div class="project-buttons">
                         <button class="project-btn" id="new-project-btn" title="New Project">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 5v14M5 12h14"/>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 5v14M5 12h14" />
                             </svg>
                         </button>
                         <button class="project-btn" id="rename-project-btn" title="Rename Project">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                             </svg>
                         </button>
                         <button class="project-btn danger" id="delete-project-btn" title="Delete Project">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3,6 5,6 21,6"/>
-                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="3,6 5,6 21,6" />
+                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
                             </svg>
                         </button>
                     </div>
@@ -142,8 +158,9 @@
                                     <span class="output-size-name" id="output-size-name">iPhone 6.9"</span>
                                     <span class="output-size-dims" id="output-size-dims">1320 × 2868</span>
                                 </div>
-                                <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="6 9 12 15 18 9"/>
+                                <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9" />
                                 </svg>
                             </button>
                             <div class="output-size-menu" id="output-size-menu">
@@ -212,21 +229,25 @@
                                     <span class="device-option-size">Set dimensions</span>
                                 </div>
                                 <div id="custom-size-inputs" class="custom-size-inputs">
-                                    <input type="number" id="custom-width" value="1290" min="100" max="4000" placeholder="Width">
+                                    <input type="number" id="custom-width" value="1290" min="100" max="4000"
+                                        placeholder="Width">
                                     <span class="custom-size-x">×</span>
-                                    <input type="number" id="custom-height" value="2796" min="100" max="4000" placeholder="Height">
+                                    <input type="number" id="custom-height" value="2796" min="100" max="4000"
+                                        placeholder="Height">
                                 </div>
                             </div>
                         </div>
                         <button class="export-btn secondary" id="export-current" title="Export current screenshot">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                             </svg>
                         </button>
                     </div>
                     <button class="export-btn export-all-btn" id="export-all" title="Export all screenshots as ZIP">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                         </svg>
                         Export All
                     </button>
@@ -248,9 +269,9 @@
                     <div id="threejs-container" style="display: none;"></div>
                     <div class="no-screenshot" id="no-screenshot">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <path d="M21 15l-5-5L5 21"/>
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
                         </svg>
                         <p>Upload screenshots to get started</p>
                     </div>
@@ -269,25 +290,28 @@
             <div class="sidebar-header">
                 <div class="tabs">
                     <button class="tab active" data-tab="background">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <path d="M21 15l-5-5L5 21"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
                         </svg>
                         <span>Background</span>
                     </button>
                     <button class="tab" data-tab="screenshot">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="5" y="2" width="14" height="20" rx="2"/>
-                            <line x1="12" y1="18" x2="12" y2="18"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="5" y="2" width="14" height="20" rx="2" />
+                            <line x1="12" y1="18" x2="12" y2="18" />
                         </svg>
                         <span>Device</span>
                     </button>
                     <button class="tab" data-tab="text">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 7V4h16v3"/>
-                            <path d="M9 20h6"/>
-                            <path d="M12 4v16"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 7V4h16v3" />
+                            <path d="M9 20h6" />
+                            <path d="M12 4v16" />
                         </svg>
                         <span>Text</span>
                     </button>
@@ -295,624 +319,705 @@
             </div>
 
             <div class="sidebar-content">
-            <!-- Background Tab -->
-            <div class="tab-content active" id="tab-background">
-                <div class="control-group">
-                    <label class="control-label">Background Type</label>
-                    <div class="btn-group" id="bg-type-selector">
-                        <button class="active" data-type="gradient">Gradient</button>
-                        <button data-type="solid">Solid</button>
-                        <button data-type="image">Image</button>
-                    </div>
-                </div>
-
-                <!-- Gradient Options -->
-                <div id="gradient-options">
+                <!-- Background Tab -->
+                <div class="tab-content active" id="tab-background">
                     <div class="control-group">
-                        <div class="preset-dropdown" id="gradient-preset-dropdown">
-                            <button class="preset-dropdown-trigger" id="gradient-preset-trigger">
-                                <span>Gradient Presets</span>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polyline points="6 9 12 15 18 9"/>
-                                </svg>
-                            </button>
-                            <div class="preset-dropdown-content" id="gradient-preset-content">
-                                <div class="preset-grid" id="gradient-presets">
-                                    <!-- Purples & Blues -->
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)" data-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)" data-gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)" data-gradient="linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #09203f 0%, #537895 100%)" data-gradient="linear-gradient(135deg, #09203f 0%, #537895 100%)"></div>
-                                    <!-- Pinks & Reds -->
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)" data-gradient="linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)" data-gradient="linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" data-gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)" data-gradient="linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)"></div>
-                                    <!-- Greens & Teals -->
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)" data-gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #96deda 0%, #50c9c3 100%)" data-gradient="linear-gradient(135deg, #96deda 0%, #50c9c3 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #13547a 0%, #80d0c7 100%)" data-gradient="linear-gradient(135deg, #13547a 0%, #80d0c7 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #B7F8DB 0%, #50A7C2 100%)" data-gradient="linear-gradient(135deg, #B7F8DB 0%, #50A7C2 100%)"></div>
-                                    <!-- Oranges & Yellows -->
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%)" data-gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)" data-gradient="linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)" data-gradient="linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #c79081 0%, #dfa579 100%)" data-gradient="linear-gradient(135deg, #c79081 0%, #dfa579 100%)"></div>
-                                    <!-- Darks & Neutrals -->
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #434343 0%, #000000 100%)" data-gradient="linear-gradient(135deg, #434343 0%, #000000 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #29323c 0%, #485563 100%)" data-gradient="linear-gradient(135deg, #29323c 0%, #485563 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #868f96 0%, #596164 100%)" data-gradient="linear-gradient(135deg, #868f96 0%, #596164 100%)"></div>
-                                    <div class="preset-swatch" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)" data-gradient="linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)"></div>
+                        <label class="control-label">Background Type</label>
+                        <div class="btn-group" id="bg-type-selector">
+                            <button class="active" data-type="gradient">Gradient</button>
+                            <button data-type="solid">Solid</button>
+                            <button data-type="image">Image</button>
+                        </div>
+                    </div>
+
+                    <!-- Gradient Options -->
+                    <div id="gradient-options">
+                        <div class="control-group">
+                            <div class="preset-dropdown" id="gradient-preset-dropdown">
+                                <button class="preset-dropdown-trigger" id="gradient-preset-trigger">
+                                    <span>Gradient Presets</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </button>
+                                <div class="preset-dropdown-content" id="gradient-preset-content">
+                                    <div class="preset-grid" id="gradient-presets">
+                                        <!-- Purples & Blues -->
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                                            data-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                                            data-gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)"
+                                            data-gradient="linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #09203f 0%, #537895 100%)"
+                                            data-gradient="linear-gradient(135deg, #09203f 0%, #537895 100%)"></div>
+                                        <!-- Pinks & Reds -->
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)"
+                                            data-gradient="linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)"
+                                            data-gradient="linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+                                            data-gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)"
+                                            data-gradient="linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)"></div>
+                                        <!-- Greens & Teals -->
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
+                                            data-gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #96deda 0%, #50c9c3 100%)"
+                                            data-gradient="linear-gradient(135deg, #96deda 0%, #50c9c3 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #13547a 0%, #80d0c7 100%)"
+                                            data-gradient="linear-gradient(135deg, #13547a 0%, #80d0c7 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #B7F8DB 0%, #50A7C2 100%)"
+                                            data-gradient="linear-gradient(135deg, #B7F8DB 0%, #50A7C2 100%)"></div>
+                                        <!-- Oranges & Yellows -->
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
+                                            data-gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)"
+                                            data-gradient="linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)"
+                                            data-gradient="linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #c79081 0%, #dfa579 100%)"
+                                            data-gradient="linear-gradient(135deg, #c79081 0%, #dfa579 100%)"></div>
+                                        <!-- Darks & Neutrals -->
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #434343 0%, #000000 100%)"
+                                            data-gradient="linear-gradient(135deg, #434343 0%, #000000 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #29323c 0%, #485563 100%)"
+                                            data-gradient="linear-gradient(135deg, #29323c 0%, #485563 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #868f96 0%, #596164 100%)"
+                                            data-gradient="linear-gradient(135deg, #868f96 0%, #596164 100%)"></div>
+                                        <div class="preset-swatch"
+                                            style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)"
+                                            data-gradient="linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Gradient Direction</label>
-                        <div class="control-row">
-                            <input type="range" id="gradient-angle" min="0" max="360" value="135">
-                            <span class="range-value" id="gradient-angle-value">135°</span>
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Colors</label>
-                        <div class="gradient-stops" id="gradient-stops">
-                            <div class="gradient-stop">
-                                <input type="color" value="#667eea" data-stop="0">
-                                <input type="number" value="0" min="0" max="100" data-stop="0">
-                                <span>%</span>
-                            </div>
-                            <div class="gradient-stop">
-                                <input type="color" value="#764ba2" data-stop="1">
-                                <input type="number" value="100" min="0" max="100" data-stop="1">
-                                <span>%</span>
+                        <div class="control-group">
+                            <label class="control-label">Gradient Direction</label>
+                            <div class="control-row">
+                                <input type="range" id="gradient-angle" min="0" max="360" value="135">
+                                <span class="range-value" id="gradient-angle-value">135°</span>
                             </div>
                         </div>
-                        <button class="add-stop-btn" id="add-gradient-stop">+ Add Color Stop</button>
-                    </div>
-                </div>
 
-                <!-- Solid Color Options -->
-                <div id="solid-options" style="display: none;">
-                    <div class="control-group">
-                        <label class="control-label">Background Color</label>
-                        <div class="color-input-wrapper">
-                            <input type="color" id="solid-color" value="#1a1a2e">
-                            <input type="text" id="solid-color-hex" value="#1a1a2e">
+                        <div class="control-group">
+                            <label class="control-label">Colors</label>
+                            <div class="gradient-stops" id="gradient-stops">
+                                <div class="gradient-stop">
+                                    <input type="color" value="#667eea" data-stop="0">
+                                    <input type="number" value="0" min="0" max="100" data-stop="0">
+                                    <span>%</span>
+                                </div>
+                                <div class="gradient-stop">
+                                    <input type="color" value="#764ba2" data-stop="1">
+                                    <input type="number" value="100" min="0" max="100" data-stop="1">
+                                    <span>%</span>
+                                </div>
+                            </div>
+                            <button class="add-stop-btn" id="add-gradient-stop">+ Add Color Stop</button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Image Options -->
-                <div id="image-options" style="display: none;">
-                    <div class="control-group">
-                        <label class="control-label">Background Image</label>
-                        <div class="bg-image-upload" id="bg-image-upload">
-                            <p>Click to upload image</p>
-                        </div>
-                        <input type="file" id="bg-image-input" accept="image/*" hidden>
-                        <img class="bg-image-preview" id="bg-image-preview" style="display: none;">
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Image Fit</label>
-                        <select id="bg-image-fit">
-                            <option value="cover">Cover</option>
-                            <option value="contain">Contain</option>
-                            <option value="stretch">Stretch</option>
-                        </select>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Blur</label>
-                        <div class="control-row">
-                            <input type="range" id="bg-blur" min="0" max="50" value="0">
-                            <span class="range-value" id="bg-blur-value">0px</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Overlay Color</label>
-                        <div class="color-input-wrapper">
-                            <input type="color" id="bg-overlay-color" value="#000000">
-                            <input type="text" id="bg-overlay-hex" value="#000000">
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Overlay Opacity</label>
-                        <div class="control-row">
-                            <input type="range" id="bg-overlay-opacity" min="0" max="100" value="0">
-                            <span class="range-value" id="bg-overlay-opacity-value">0%</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <div class="control-group">
-                    <div class="toggle-row collapsible collapsed" data-target="noise-options">
-                        <span class="toggle-label">
-                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                            Noise
-                        </span>
-                        <div class="toggle" id="noise-toggle"></div>
-                    </div>
-                </div>
-                <div id="noise-options" style="display: none;">
-                    <div class="control-group">
-                        <label class="control-label">Noise Intensity</label>
-                        <div class="control-row">
-                            <input type="range" id="noise-intensity" min="0" max="100" value="10">
-                            <span class="range-value" id="noise-intensity-value">10%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Screenshot Tab -->
-            <div class="tab-content" id="tab-screenshot">
-                <div class="control-group">
-                    <label class="control-label">Device Type</label>
-                    <div class="btn-group" id="device-type-selector">
-                        <button class="active" data-type="2d">2D</button>
-                        <button data-type="3d">3D</button>
-                    </div>
-                </div>
-
-                <div id="rotation-3d-options" style="display: none;">
-                    <div class="control-group">
-                        <label class="control-label">Device Model</label>
-                        <div class="btn-group" id="device-3d-selector">
-                            <button class="active" data-model="iphone">iPhone</button>
-                            <button data-model="samsung">Samsung</button>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Rotation X (Tilt)</label>
-                        <div class="control-row">
-                            <input type="range" id="rotation-3d-x" min="-45" max="45" value="0">
-                            <span class="range-value" id="rotation-3d-x-value">0°</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Rotation Y (Turn)</label>
-                        <div class="control-row">
-                            <input type="range" id="rotation-3d-y" min="-45" max="45" value="0">
-                            <span class="range-value" id="rotation-3d-y-value">0°</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Rotation Z (Roll)</label>
-                        <div class="control-row">
-                            <input type="range" id="rotation-3d-z" min="-45" max="45" value="0">
-                            <span class="range-value" id="rotation-3d-z-value">0°</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="position-presets-section">
-                <div class="control-group">
-                    <div class="preset-dropdown" id="position-preset-dropdown">
-                        <button class="preset-dropdown-trigger" id="position-preset-trigger">
-                            <span>Position Presets</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                        </button>
-                        <div class="preset-dropdown-content" id="position-preset-content">
-                            <div class="preset-positions" id="position-presets">
-                                <button class="position-preset active" data-preset="centered" title="Centered">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="8" y="12" width="24" height="36" rx="2"/>
-                                    </svg>
-                                    <span>Centered</span>
-                                </button>
-                                <button class="position-preset" data-preset="bleed-bottom" title="Bleed Bottom">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="8" y="20" width="24" height="45" rx="2"/>
-                                    </svg>
-                                    <span>Bleed Bottom</span>
-                                </button>
-                                <button class="position-preset" data-preset="bleed-top" title="Bleed Top">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="8" y="-5" width="24" height="45" rx="2"/>
-                                    </svg>
-                                    <span>Bleed Top</span>
-                                </button>
-                                <button class="position-preset" data-preset="float-center" title="Float Center">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="10" y="15" width="20" height="30" rx="2"/>
-                                    </svg>
-                                    <span>Float Center</span>
-                                </button>
-                                <button class="position-preset" data-preset="tilt-left" title="Tilt Left">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="8" y="12" width="24" height="36" rx="2" transform="rotate(-8 20 30)"/>
-                                    </svg>
-                                    <span>Tilt Left</span>
-                                </button>
-                                <button class="position-preset" data-preset="tilt-right" title="Tilt Right">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="8" y="12" width="24" height="36" rx="2" transform="rotate(8 20 30)"/>
-                                    </svg>
-                                    <span>Tilt Right</span>
-                                </button>
-                                <button class="position-preset" data-preset="perspective" title="Perspective">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 15 L28 12 L30 48 L10 45 Z"/>
-                                    </svg>
-                                    <span>Perspective</span>
-                                </button>
-                                <button class="position-preset" data-preset="float-bottom" title="Float Bottom">
-                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="10" y="25" width="20" height="30" rx="2"/>
-                                    </svg>
-                                    <span>Float Bottom</span>
-                                </button>
+                    <!-- Solid Color Options -->
+                    <div id="solid-options" style="display: none;">
+                        <div class="control-group">
+                            <label class="control-label">Background Color</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="solid-color" value="#1a1a2e">
+                                <input type="text" id="solid-color-hex" value="#1a1a2e">
                             </div>
                         </div>
                     </div>
-                </div>
-                </div><!-- end position-presets-section -->
 
-                <div class="divider"></div>
-
-                <div class="control-group">
-                    <label class="control-label">Screenshot Scale</label>
-                    <div class="control-row">
-                        <input type="range" id="screenshot-scale" min="30" max="100" value="70">
-                        <span class="range-value" id="screenshot-scale-value">70%</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label class="control-label">Vertical Position</label>
-                    <div class="control-row">
-                        <input type="range" id="screenshot-y" min="-30" max="130" value="55">
-                        <span class="range-value" id="screenshot-y-value">55%</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label class="control-label">Horizontal Position</label>
-                    <div class="control-row">
-                        <input type="range" id="screenshot-x" min="-30" max="130" value="50">
-                        <span class="range-value" id="screenshot-x-value">50%</span>
-                    </div>
-                </div>
-
-                <div id="2d-only-settings">
-                    <div class="divider"></div>
-
-                    <div class="control-group">
-                        <label class="control-label">Corner Radius</label>
-                        <div class="control-row">
-                            <input type="range" id="corner-radius" min="0" max="100" value="24">
-                            <span class="range-value" id="corner-radius-value">24px</span>
+                    <!-- Image Options -->
+                    <div id="image-options" style="display: none;">
+                        <div class="control-group">
+                            <label class="control-label">Background Image</label>
+                            <div class="bg-image-upload" id="bg-image-upload">
+                                <p>Click to upload image</p>
+                            </div>
+                            <input type="file" id="bg-image-input" accept="image/*" hidden>
+                            <img class="bg-image-preview" id="bg-image-preview" style="display: none;">
                         </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Tilt / Rotation</label>
-                        <div class="control-row">
-                            <input type="range" id="screenshot-rotation" min="-45" max="45" value="0">
-                            <span class="range-value" id="screenshot-rotation-value">0°</span>
+                        <div class="control-group">
+                            <label class="control-label">Image Fit</label>
+                            <select id="bg-image-fit">
+                                <option value="cover">Cover</option>
+                                <option value="contain">Contain</option>
+                                <option value="stretch">Stretch</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">Blur</label>
+                            <div class="control-row">
+                                <input type="range" id="bg-blur" min="0" max="50" value="0">
+                                <span class="range-value" id="bg-blur-value">0px</span>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">Overlay Color</label>
+                            <div class="color-input-wrapper">
+                                <input type="color" id="bg-overlay-color" value="#000000">
+                                <input type="text" id="bg-overlay-hex" value="#000000">
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">Overlay Opacity</label>
+                            <div class="control-row">
+                                <input type="range" id="bg-overlay-opacity" min="0" max="100" value="0">
+                                <span class="range-value" id="bg-overlay-opacity-value">0%</span>
+                            </div>
                         </div>
                     </div>
 
                     <div class="divider"></div>
 
-                <div class="control-group">
-                    <div class="toggle-row collapsible" data-target="shadow-options">
-                        <span class="toggle-label">
-                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                            Shadow
-                        </span>
-                        <div class="toggle active" id="shadow-toggle"></div>
-                    </div>
-                </div>
-
-                <div id="shadow-options">
                     <div class="control-group">
-                        <label class="control-label">Shadow Color</label>
-                        <div class="color-input-wrapper">
-                            <input type="color" id="shadow-color" value="#000000">
-                            <input type="text" id="shadow-color-hex" value="#000000">
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Blur</label>
-                        <div class="control-row">
-                            <input type="range" id="shadow-blur" min="0" max="100" value="40">
-                            <span class="range-value" id="shadow-blur-value">40px</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Opacity</label>
-                        <div class="control-row">
-                            <input type="range" id="shadow-opacity" min="0" max="100" value="30">
-                            <span class="range-value" id="shadow-opacity-value">30%</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Offset Y</label>
-                        <div class="control-row">
-                            <input type="range" id="shadow-y" min="-50" max="100" value="20">
-                            <span class="range-value" id="shadow-y-value">20px</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Offset X</label>
-                        <div class="control-row">
-                            <input type="range" id="shadow-x" min="-50" max="50" value="0">
-                            <span class="range-value" id="shadow-x-value">0px</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <div class="control-group">
-                    <div class="toggle-row collapsible collapsed" data-target="frame-options">
-                        <span class="toggle-label">
-                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                            Border
-                        </span>
-                        <div class="toggle" id="frame-toggle"></div>
-                    </div>
-                </div>
-
-                <div id="frame-options" style="display: none;">
-                    <div class="control-group">
-                        <label class="control-label">Border Color</label>
-                        <div class="color-input-wrapper">
-                            <input type="color" id="frame-color" value="#1d1d1f">
-                            <input type="text" id="frame-color-hex" value="#1d1d1f">
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Border Width</label>
-                        <div class="control-row">
-                            <input type="range" id="frame-width" min="1" max="50" value="12">
-                            <span class="range-value" id="frame-width-value">12px</span>
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">Border Opacity</label>
-                        <div class="control-row">
-                            <input type="range" id="frame-opacity" min="0" max="100" value="100">
-                            <span class="range-value" id="frame-opacity-value">100%</span>
-                        </div>
-                    </div>
-                </div>
-                </div><!-- end 2d-only-settings -->
-
-                <div id="3d-tip" class="tip-box" style="display: none;">
-                    <img src="img/info.svg" width="16" height="16" alt="Info">
-                    <div class="tip-content">
-                        <strong>Interactive Controls</strong>
-                        <span>Drag on preview to rotate • Alt+drag to move</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Text Tab -->
-            <div class="tab-content" id="tab-text">
-                <div class="control-group">
-                    <div class="toggle-row collapsible" data-target="headline-options">
-                        <span class="toggle-label">
-                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                            Headline
-                        </span>
-                        <div class="toggle active" id="headline-toggle"></div>
-                    </div>
-                </div>
-
-                <div id="headline-options">
-                <div class="control-group">
-                    <div class="textarea-with-button">
-                        <textarea id="headline-text" rows="2" placeholder="Your feature headline"></textarea>
-                        <button class="magic-translate-btn" id="translate-headline-btn" title="Translate to all languages">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label class="control-label">Headline Font</label>
-                    <div class="font-picker" id="font-picker">
-                        <button class="font-picker-trigger" id="font-picker-trigger">
-                            <span class="font-picker-preview" id="font-picker-preview">SF Pro Display</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                        </button>
-                        <div class="font-picker-dropdown" id="font-picker-dropdown">
-                            <div class="font-picker-search">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"/>
-                                    <path d="M21 21l-4.35-4.35"/>
+                        <div class="toggle-row collapsible collapsed" data-target="noise-options">
+                            <span class="toggle-label">
+                                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9" />
                                 </svg>
-                                <input type="text" id="font-search" placeholder="Search fonts..." autocomplete="off">
-                            </div>
-                            <div class="font-picker-categories">
-                                <button class="font-category active" data-category="popular">Popular</button>
-                                <button class="font-category" data-category="system">System</button>
-                                <button class="font-category" data-category="all">All</button>
-                            </div>
-                            <div class="font-picker-list" id="font-picker-list">
-                                <!-- Font options populated by JS -->
+                                Noise
+                            </span>
+                            <div class="toggle" id="noise-toggle"></div>
+                        </div>
+                    </div>
+                    <div id="noise-options" style="display: none;">
+                        <div class="control-group">
+                            <label class="control-label">Noise Intensity</label>
+                            <div class="control-row">
+                                <input type="range" id="noise-intensity" min="0" max="100" value="10">
+                                <span class="range-value" id="noise-intensity-value">10%</span>
                             </div>
                         </div>
                     </div>
-                    <input type="hidden" id="headline-font" value="-apple-system, BlinkMacSystemFont, 'SF Pro Display'">
-                    <div class="text-style-bar" id="headline-style">
-                        <input type="number" id="headline-size" min="12" max="300" value="100" title="Font Size">
-                        <input type="color" id="headline-color" value="#ffffff" title="Text Color">
-                        <select id="headline-weight" title="Font Weight">
-                            <option value="300">Light</option>
-                            <option value="400">Regular</option>
-                            <option value="500">Medium</option>
-                            <option value="600" selected>Semibold</option>
-                            <option value="700">Bold</option>
-                            <option value="800">Heavy</option>
-                            <option value="900">Black</option>
-                        </select>
-                        <button data-style="italic" title="Italic">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="19" y1="4" x2="10" y2="4"/>
-                                <line x1="14" y1="20" x2="5" y2="20"/>
-                                <line x1="15" y1="4" x2="9" y2="20"/>
+                </div>
+
+                <!-- Screenshot Tab -->
+                <div class="tab-content" id="tab-screenshot">
+                    <div class="control-group">
+                        <label class="control-label">Device Type</label>
+                        <div class="btn-group" id="device-type-selector">
+                            <button class="active" data-type="2d">2D</button>
+                            <button data-type="3d">3D</button>
+                        </div>
+                    </div>
+
+                    <div id="rotation-3d-options" style="display: none;">
+                        <div class="control-group">
+                            <label class="control-label">Device Model</label>
+                            <div class="btn-group" id="device-3d-selector">
+                                <button class="active" data-model="iphone">iPhone</button>
+                                <button data-model="samsung">Samsung</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">Rotation X (Tilt)</label>
+                            <div class="control-row">
+                                <input type="range" id="rotation-3d-x" min="-45" max="45" value="0">
+                                <span class="range-value" id="rotation-3d-x-value">0°</span>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">Rotation Y (Turn)</label>
+                            <div class="control-row">
+                                <input type="range" id="rotation-3d-y" min="-45" max="45" value="0">
+                                <span class="range-value" id="rotation-3d-y-value">0°</span>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label class="control-label">Rotation Z (Roll)</label>
+                            <div class="control-row">
+                                <input type="range" id="rotation-3d-z" min="-45" max="45" value="0">
+                                <span class="range-value" id="rotation-3d-z-value">0°</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="position-presets-section">
+                        <div class="control-group">
+                            <div class="preset-dropdown" id="position-preset-dropdown">
+                                <button class="preset-dropdown-trigger" id="position-preset-trigger">
+                                    <span>Position Presets</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </button>
+                                <div class="preset-dropdown-content" id="position-preset-content">
+                                    <div class="preset-positions" id="position-presets">
+                                        <button class="position-preset active" data-preset="centered" title="Centered">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="8" y="12" width="24" height="36" rx="2" />
+                                            </svg>
+                                            <span>Centered</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="bleed-bottom" title="Bleed Bottom">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="8" y="20" width="24" height="45" rx="2" />
+                                            </svg>
+                                            <span>Bleed Bottom</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="bleed-top" title="Bleed Top">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="8" y="-5" width="24" height="45" rx="2" />
+                                            </svg>
+                                            <span>Bleed Top</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="float-center" title="Float Center">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="10" y="15" width="20" height="30" rx="2" />
+                                            </svg>
+                                            <span>Float Center</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="tilt-left" title="Tilt Left">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="8" y="12" width="24" height="36" rx="2"
+                                                    transform="rotate(-8 20 30)" />
+                                            </svg>
+                                            <span>Tilt Left</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="tilt-right" title="Tilt Right">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="8" y="12" width="24" height="36" rx="2"
+                                                    transform="rotate(8 20 30)" />
+                                            </svg>
+                                            <span>Tilt Right</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="perspective" title="Perspective">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 15 L28 12 L30 48 L10 45 Z" />
+                                            </svg>
+                                            <span>Perspective</span>
+                                        </button>
+                                        <button class="position-preset" data-preset="float-bottom" title="Float Bottom">
+                                            <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="10" y="25" width="20" height="30" rx="2" />
+                                            </svg>
+                                            <span>Float Bottom</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end position-presets-section -->
+
+                    <div class="control-group">
+                        <button class="reset-position-btn" id="reset-position-btn" title="Reset position to center">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
                             </svg>
+                            Center Position
                         </button>
-                        <button data-style="underline" title="Underline">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/>
-                                <line x1="4" y1="21" x2="20" y2="21"/>
-                            </svg>
-                        </button>
-                        <button data-style="strikethrough" title="Strikethrough">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="4" y1="12" x2="20" y2="12"/>
-                                <path d="M17.5 7.5c-1-1.5-2.5-2.5-5.5-2.5-4 0-6 2-6 4.5 0 1.5.5 2.5 2 3.5"/>
-                                <path d="M10 16.5c.5.5 1.5 1 3 1 4 0 5.5-2 5.5-4"/>
-                            </svg>
-                        </button>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="control-group">
+                        <label class="control-label">Screenshot Scale</label>
+                        <div class="control-row">
+                            <input type="range" id="screenshot-scale" min="30" max="100" value="70">
+                            <span class="range-value" id="screenshot-scale-value">70%</span>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Vertical Position</label>
+                        <div class="control-row">
+                            <input type="range" id="screenshot-y" min="-30" max="130" value="55">
+                            <span class="range-value" id="screenshot-y-value">55%</span>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Horizontal Position</label>
+                        <div class="control-row">
+                            <input type="range" id="screenshot-x" min="-30" max="130" value="50">
+                            <span class="range-value" id="screenshot-x-value">50%</span>
+                        </div>
+                    </div>
+
+                    <div id="2d-only-settings">
+                        <div class="divider"></div>
+
+                        <div class="control-group">
+                            <label class="control-label">Corner Radius</label>
+                            <div class="control-row">
+                                <input type="range" id="corner-radius" min="0" max="100" value="24">
+                                <span class="range-value" id="corner-radius-value">24px</span>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Tilt / Rotation</label>
+                            <div class="control-row">
+                                <input type="range" id="screenshot-rotation" min="-45" max="45" value="0">
+                                <span class="range-value" id="screenshot-rotation-value">0°</span>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="control-group">
+                            <div class="toggle-row collapsible" data-target="shadow-options">
+                                <span class="toggle-label">
+                                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                    Shadow
+                                </span>
+                                <div class="toggle active" id="shadow-toggle"></div>
+                            </div>
+                        </div>
+
+                        <div id="shadow-options">
+                            <div class="control-group">
+                                <label class="control-label">Shadow Color</label>
+                                <div class="color-input-wrapper">
+                                    <input type="color" id="shadow-color" value="#000000">
+                                    <input type="text" id="shadow-color-hex" value="#000000">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label">Blur</label>
+                                <div class="control-row">
+                                    <input type="range" id="shadow-blur" min="0" max="100" value="40">
+                                    <span class="range-value" id="shadow-blur-value">40px</span>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label">Opacity</label>
+                                <div class="control-row">
+                                    <input type="range" id="shadow-opacity" min="0" max="100" value="30">
+                                    <span class="range-value" id="shadow-opacity-value">30%</span>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label">Offset Y</label>
+                                <div class="control-row">
+                                    <input type="range" id="shadow-y" min="-50" max="100" value="20">
+                                    <span class="range-value" id="shadow-y-value">20px</span>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label">Offset X</label>
+                                <div class="control-row">
+                                    <input type="range" id="shadow-x" min="-50" max="50" value="0">
+                                    <span class="range-value" id="shadow-x-value">0px</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="control-group">
+                            <div class="toggle-row collapsible collapsed" data-target="frame-options">
+                                <span class="toggle-label">
+                                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                    Border
+                                </span>
+                                <div class="toggle" id="frame-toggle"></div>
+                            </div>
+                        </div>
+
+                        <div id="frame-options" style="display: none;">
+                            <div class="control-group">
+                                <label class="control-label">Border Color</label>
+                                <div class="color-input-wrapper">
+                                    <input type="color" id="frame-color" value="#1d1d1f">
+                                    <input type="text" id="frame-color-hex" value="#1d1d1f">
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label">Border Width</label>
+                                <div class="control-row">
+                                    <input type="range" id="frame-width" min="1" max="50" value="12">
+                                    <span class="range-value" id="frame-width-value">12px</span>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="control-label">Border Opacity</label>
+                                <div class="control-row">
+                                    <input type="range" id="frame-opacity" min="0" max="100" value="100">
+                                    <span class="range-value" id="frame-opacity-value">100%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- end 2d-only-settings -->
+
+                    <div id="3d-tip" class="tip-box" style="display: none;">
+                        <img src="img/info.svg" width="16" height="16" alt="Info">
+                        <div class="tip-content">
+                            <strong>Interactive Controls</strong>
+                            <span>Drag on preview to rotate • Alt+drag to move</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="control-group">
-                    <label class="control-label">Text Position</label>
-                    <div class="btn-group" id="text-position">
-                        <button class="active" data-position="top">Top</button>
-                        <button data-position="bottom">Bottom</button>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label class="control-label">Text Vertical Offset</label>
-                    <div class="control-row">
-                        <input type="range" id="text-offset-y" min="0" max="100" value="12">
-                        <span class="range-value" id="text-offset-y-value">12%</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label class="control-label">Line Height</label>
-                    <div class="control-row">
-                        <input type="range" id="line-height" min="80" max="250" value="110">
-                        <span class="range-value" id="line-height-value">110%</span>
-                    </div>
-                </div>
-                </div><!-- end headline-options -->
-
-                <div class="divider"></div>
-
-                <div class="control-group">
-                    <div class="toggle-row collapsible collapsed" data-target="subheadline-options">
-                        <span class="toggle-label">
-                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                            Subheadline
-                        </span>
-                        <div class="toggle" id="subheadline-toggle"></div>
-                    </div>
-                </div>
-
-                <div id="subheadline-options" style="display: none;">
-                <div class="control-group">
-                    <div class="textarea-with-button">
-                        <textarea id="subheadline-text" rows="2" placeholder="Optional subheadline"></textarea>
-                        <button class="magic-translate-btn" id="translate-subheadline-btn" title="Translate to all languages">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label class="control-label">Subheadline Font</label>
-                    <div class="font-picker" id="subheadline-font-picker">
-                        <button class="font-picker-trigger" id="subheadline-font-picker-trigger">
-                            <span class="font-picker-preview" id="subheadline-font-picker-preview">SF Pro Display</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                            </svg>
-                        </button>
-                        <div class="font-picker-dropdown" id="subheadline-font-picker-dropdown">
-                            <div class="font-picker-search">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"/>
-                                    <path d="M21 21l-4.35-4.35"/>
+                <!-- Text Tab -->
+                <div class="tab-content" id="tab-text">
+                    <div class="control-group">
+                        <div class="toggle-row collapsible" data-target="headline-options">
+                            <span class="toggle-label">
+                                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9" />
                                 </svg>
-                                <input type="text" id="subheadline-font-search" placeholder="Search fonts..." autocomplete="off">
-                            </div>
-                            <div class="font-picker-categories">
-                                <button class="font-category active" data-category="popular">Popular</button>
-                                <button class="font-category" data-category="system">System</button>
-                                <button class="font-category" data-category="all">All</button>
-                            </div>
-                            <div class="font-picker-list" id="subheadline-font-picker-list">
-                                <!-- Font options populated by JS -->
-                            </div>
+                                Headline
+                            </span>
+                            <div class="toggle active" id="headline-toggle"></div>
                         </div>
                     </div>
-                    <input type="hidden" id="subheadline-font" value="-apple-system, BlinkMacSystemFont, 'SF Pro Display'">
-                    <div class="text-style-bar" id="subheadline-style">
-                        <input type="number" id="subheadline-size" min="12" max="200" value="50" title="Font Size">
-                        <input type="color" id="subheadline-color" value="#ffffff" title="Text Color">
-                        <select id="subheadline-weight" title="Font Weight">
-                            <option value="300">Light</option>
-                            <option value="400" selected>Regular</option>
-                            <option value="500">Medium</option>
-                            <option value="600">Semibold</option>
-                            <option value="700">Bold</option>
-                            <option value="800">Heavy</option>
-                            <option value="900">Black</option>
-                        </select>
-                        <button data-style="italic" title="Italic">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="19" y1="4" x2="10" y2="4"/>
-                                <line x1="14" y1="20" x2="5" y2="20"/>
-                                <line x1="15" y1="4" x2="9" y2="20"/>
-                            </svg>
-                        </button>
-                        <button data-style="underline" title="Underline">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/>
-                                <line x1="4" y1="21" x2="20" y2="21"/>
-                            </svg>
-                        </button>
-                        <button data-style="strikethrough" title="Strikethrough">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="4" y1="12" x2="20" y2="12"/>
-                                <path d="M17.5 7.5c-1-1.5-2.5-2.5-5.5-2.5-4 0-6 2-6 4.5 0 1.5.5 2.5 2 3.5"/>
-                                <path d="M10 16.5c.5.5 1.5 1 3 1 4 0 5.5-2 5.5-4"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
 
-                <div class="control-group">
-                    <label class="control-label">Subheadline Opacity</label>
-                    <div class="control-row">
-                        <input type="range" id="subheadline-opacity" min="0" max="100" value="70">
-                        <span class="range-value" id="subheadline-opacity-value">70%</span>
+                    <div id="headline-options">
+                        <div class="control-group">
+                            <div class="textarea-with-button">
+                                <textarea id="headline-text" rows="2" placeholder="Your feature headline"></textarea>
+                                <button class="magic-translate-btn" id="translate-headline-btn"
+                                    title="Translate to all languages">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Headline Font</label>
+                            <div class="font-picker" id="font-picker">
+                                <button class="font-picker-trigger" id="font-picker-trigger">
+                                    <span class="font-picker-preview" id="font-picker-preview">SF Pro Display</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </button>
+                                <div class="font-picker-dropdown" id="font-picker-dropdown">
+                                    <div class="font-picker-search">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8" />
+                                            <path d="M21 21l-4.35-4.35" />
+                                        </svg>
+                                        <input type="text" id="font-search" placeholder="Search fonts..."
+                                            autocomplete="off">
+                                    </div>
+                                    <div class="font-picker-categories">
+                                        <button class="font-category active" data-category="popular">Popular</button>
+                                        <button class="font-category" data-category="system">System</button>
+                                        <button class="font-category" data-category="all">All</button>
+                                    </div>
+                                    <div class="font-picker-list" id="font-picker-list">
+                                        <!-- Font options populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="headline-font"
+                                value="-apple-system, BlinkMacSystemFont, 'SF Pro Display'">
+                            <div class="text-style-bar" id="headline-style">
+                                <input type="number" id="headline-size" min="12" max="300" value="100"
+                                    title="Font Size">
+                                <input type="color" id="headline-color" value="#ffffff" title="Text Color">
+                                <select id="headline-weight" title="Font Weight">
+                                    <option value="300">Light</option>
+                                    <option value="400">Regular</option>
+                                    <option value="500">Medium</option>
+                                    <option value="600" selected>Semibold</option>
+                                    <option value="700">Bold</option>
+                                    <option value="800">Heavy</option>
+                                    <option value="900">Black</option>
+                                </select>
+                                <button data-style="italic" title="Italic">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="19" y1="4" x2="10" y2="4" />
+                                        <line x1="14" y1="20" x2="5" y2="20" />
+                                        <line x1="15" y1="4" x2="9" y2="20" />
+                                    </svg>
+                                </button>
+                                <button data-style="underline" title="Underline">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+                                        <line x1="4" y1="21" x2="20" y2="21" />
+                                    </svg>
+                                </button>
+                                <button data-style="strikethrough" title="Strikethrough">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="4" y1="12" x2="20" y2="12" />
+                                        <path d="M17.5 7.5c-1-1.5-2.5-2.5-5.5-2.5-4 0-6 2-6 4.5 0 1.5.5 2.5 2 3.5" />
+                                        <path d="M10 16.5c.5.5 1.5 1 3 1 4 0 5.5-2 5.5-4" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Text Position</label>
+                            <div class="btn-group" id="text-position">
+                                <button class="active" data-position="top">Top</button>
+                                <button data-position="bottom">Bottom</button>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Text Vertical Offset</label>
+                            <div class="control-row">
+                                <input type="range" id="text-offset-y" min="0" max="100" value="12">
+                                <span class="range-value" id="text-offset-y-value">12%</span>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Line Height</label>
+                            <div class="control-row">
+                                <input type="range" id="line-height" min="80" max="250" value="110">
+                                <span class="range-value" id="line-height-value">110%</span>
+                            </div>
+                        </div>
+                    </div><!-- end headline-options -->
+
+                    <div class="divider"></div>
+
+                    <div class="control-group">
+                        <div class="toggle-row collapsible collapsed" data-target="subheadline-options">
+                            <span class="toggle-label">
+                                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                                Subheadline
+                            </span>
+                            <div class="toggle" id="subheadline-toggle"></div>
+                        </div>
                     </div>
+
+                    <div id="subheadline-options" style="display: none;">
+                        <div class="control-group">
+                            <div class="textarea-with-button">
+                                <textarea id="subheadline-text" rows="2" placeholder="Optional subheadline"></textarea>
+                                <button class="magic-translate-btn" id="translate-subheadline-btn"
+                                    title="Translate to all languages">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Subheadline Font</label>
+                            <div class="font-picker" id="subheadline-font-picker">
+                                <button class="font-picker-trigger" id="subheadline-font-picker-trigger">
+                                    <span class="font-picker-preview" id="subheadline-font-picker-preview">SF Pro
+                                        Display</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </button>
+                                <div class="font-picker-dropdown" id="subheadline-font-picker-dropdown">
+                                    <div class="font-picker-search">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8" />
+                                            <path d="M21 21l-4.35-4.35" />
+                                        </svg>
+                                        <input type="text" id="subheadline-font-search" placeholder="Search fonts..."
+                                            autocomplete="off">
+                                    </div>
+                                    <div class="font-picker-categories">
+                                        <button class="font-category active" data-category="popular">Popular</button>
+                                        <button class="font-category" data-category="system">System</button>
+                                        <button class="font-category" data-category="all">All</button>
+                                    </div>
+                                    <div class="font-picker-list" id="subheadline-font-picker-list">
+                                        <!-- Font options populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" id="subheadline-font"
+                                value="-apple-system, BlinkMacSystemFont, 'SF Pro Display'">
+                            <div class="text-style-bar" id="subheadline-style">
+                                <input type="number" id="subheadline-size" min="12" max="200" value="50"
+                                    title="Font Size">
+                                <input type="color" id="subheadline-color" value="#ffffff" title="Text Color">
+                                <select id="subheadline-weight" title="Font Weight">
+                                    <option value="300">Light</option>
+                                    <option value="400" selected>Regular</option>
+                                    <option value="500">Medium</option>
+                                    <option value="600">Semibold</option>
+                                    <option value="700">Bold</option>
+                                    <option value="800">Heavy</option>
+                                    <option value="900">Black</option>
+                                </select>
+                                <button data-style="italic" title="Italic">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="19" y1="4" x2="10" y2="4" />
+                                        <line x1="14" y1="20" x2="5" y2="20" />
+                                        <line x1="15" y1="4" x2="9" y2="20" />
+                                    </svg>
+                                </button>
+                                <button data-style="underline" title="Underline">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+                                        <line x1="4" y1="21" x2="20" y2="21" />
+                                    </svg>
+                                </button>
+                                <button data-style="strikethrough" title="Strikethrough">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <line x1="4" y1="12" x2="20" y2="12" />
+                                        <path d="M17.5 7.5c-1-1.5-2.5-2.5-5.5-2.5-4 0-6 2-6 4.5 0 1.5.5 2.5 2 3.5" />
+                                        <path d="M10 16.5c.5.5 1.5 1 3 1 4 0 5.5-2 5.5-4" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label class="control-label">Subheadline Opacity</label>
+                            <div class="control-row">
+                                <input type="range" id="subheadline-opacity" min="0" max="100" value="70">
+                                <span class="range-value" id="subheadline-opacity-value">70%</span>
+                            </div>
+                        </div>
+                    </div><!-- end subheadline-options -->
                 </div>
-                </div><!-- end subheadline-options -->
-            </div>
 
             </div><!-- end sidebar-content -->
         </div>
@@ -922,8 +1027,9 @@
     <div class="modal-overlay" id="project-modal">
         <div class="modal">
             <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
-                    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="color: var(--accent);">
+                    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
                 </svg>
             </div>
             <h3 class="modal-title" id="project-modal-title">New Project</h3>
@@ -939,7 +1045,8 @@
             </div>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="project-modal-cancel">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" id="project-modal-confirm" style="background: var(--accent);">Create</button>
+                <button class="modal-btn modal-btn-confirm" id="project-modal-confirm"
+                    style="background: var(--accent);">Create</button>
             </div>
         </div>
     </div>
@@ -949,11 +1056,12 @@
         <div class="modal">
             <div class="modal-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
             <h3 class="modal-title">Delete Project?</h3>
-            <p class="modal-message" id="delete-project-message">Are you sure you want to delete this project? This cannot be undone.</p>
+            <p class="modal-message" id="delete-project-message">Are you sure you want to delete this project? This
+                cannot be undone.</p>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="delete-project-cancel">Cancel</button>
                 <button class="modal-btn modal-btn-confirm" id="delete-project-confirm">Delete</button>
@@ -965,16 +1073,19 @@
     <div class="modal-overlay" id="apply-style-modal">
         <div class="modal">
             <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
-                    <rect x="9" y="9" width="13" height="13" rx="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="color: var(--accent);">
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
             </div>
             <h3 class="modal-title">Apply Style to All?</h3>
-            <p class="modal-message">This will copy the background, device, and text settings from this screenshot to all other screenshots. This cannot be undone.</p>
+            <p class="modal-message">This will copy the background, device, and text settings from this screenshot to
+                all other screenshots. This cannot be undone.</p>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="apply-style-cancel">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" id="apply-style-confirm" style="background: var(--accent);">Apply to All</button>
+                <button class="modal-btn modal-btn-confirm" id="apply-style-confirm"
+                    style="background: var(--accent);">Apply to All</button>
             </div>
         </div>
     </div>
@@ -982,14 +1093,18 @@
     <!-- Magical Titles Confirmation Modal -->
     <div class="modal-overlay" id="magical-titles-modal">
         <div class="modal">
-            <div class="modal-icon" style="background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 140, 0, 0.2) 100%);">
+            <div class="modal-icon"
+                style="background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 140, 0, 0.2) 100%);">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #ffa500;">
-                    <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/>
+                    <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z" />
                 </svg>
             </div>
             <h3 class="modal-title">Generate Magical Titles</h3>
-            <p class="modal-message">This will use AI to analyze your screenshots and generate marketing headlines and subheadlines for each screen.</p>
-            <p class="modal-message" style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">Screenshots: <span id="magical-titles-count">0</span> · Provider: <span id="magical-titles-provider">-</span></p>
+            <p class="modal-message">This will use AI to analyze your screenshots and generate marketing headlines and
+                subheadlines for each screen.</p>
+            <p class="modal-message" style="margin-top: 8px; font-size: 12px; color: var(--text-tertiary);">Screenshots:
+                <span id="magical-titles-count">0</span> · Provider: <span id="magical-titles-provider">-</span>
+            </p>
             <div class="translate-source" style="margin-top: 16px;">
                 <label class="control-label">Generate titles in</label>
                 <select id="magical-titles-language" style="margin-bottom: 0;">
@@ -998,7 +1113,8 @@
             </div>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="magical-titles-cancel">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" id="magical-titles-confirm" style="background: linear-gradient(135deg, #ffa500 0%, #ff8c00 100%);">Generate Titles</button>
+                <button class="modal-btn modal-btn-confirm" id="magical-titles-confirm"
+                    style="background: linear-gradient(135deg, #ffa500 0%, #ff8c00 100%);">Generate Titles</button>
             </div>
         </div>
     </div>
@@ -1008,12 +1124,14 @@
         <div class="modal">
             <div class="modal-icon modal-icon-info">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
             <h3 class="modal-title">Old Project Format Detected</h3>
-            <p class="modal-message">This project uses an older format where all screenshots share the same settings. The new format allows each screenshot to have its own background, position, and text settings.</p>
-            <p class="modal-message" style="margin-top: 8px;">Would you like to convert this project to the new format?</p>
+            <p class="modal-message">This project uses an older format where all screenshots share the same settings.
+                The new format allows each screenshot to have its own background, position, and text settings.</p>
+            <p class="modal-message" style="margin-top: 8px;">Would you like to convert this project to the new format?
+            </p>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" onclick="hideMigrationPrompt()">Keep Old Format</button>
                 <button class="modal-btn modal-btn-primary" onclick="convertProject()">Convert Project</button>
@@ -1024,14 +1142,15 @@
     <!-- Translate Modal -->
     <div class="modal-overlay" id="translate-modal">
         <div class="modal translate-modal">
-            <div class="modal-icon" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
+            <div class="modal-icon"
+                style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #764ba2;">
-                    <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
+                    <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6" />
                 </svg>
             </div>
             <h3 class="modal-title">Translate <span id="translate-target-type">Headline</span></h3>
             <p class="modal-message">Select a source language and enter translations for each active language.</p>
-            
+
             <div class="translate-source">
                 <label class="control-label">Source Language</label>
                 <select id="translate-source-lang">
@@ -1040,7 +1159,7 @@
                 <div class="source-text-preview" id="source-text-preview">No text entered</div>
                 <button class="ai-translate-btn" id="ai-translate-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                     </svg>
                     <span>Auto-translate with AI</span>
                 </button>
@@ -1053,7 +1172,8 @@
 
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="translate-modal-cancel">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" id="translate-modal-apply" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">Apply Translations</button>
+                <button class="modal-btn modal-btn-confirm" id="translate-modal-apply"
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">Apply Translations</button>
             </div>
         </div>
     </div>
@@ -1065,7 +1185,7 @@
                 <h3 class="modal-title">Settings</h3>
                 <button class="modal-close" id="settings-modal-close">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
+                        <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
                 </button>
             </div>
@@ -1073,11 +1193,12 @@
             <div class="settings-section">
                 <h4 class="settings-section-title">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                     </svg>
                     AI Translation Provider
                 </h4>
-                <p class="settings-description">Choose which AI provider to use for translations. API keys are stored locally in your browser.</p>
+                <p class="settings-description">Choose which AI provider to use for translations. API keys are stored
+                    locally in your browser.</p>
                 <div class="settings-provider-selector">
                     <label class="settings-provider-option">
                         <input type="radio" name="ai-provider" value="anthropic" checked>
@@ -1097,16 +1218,18 @@
             <div class="settings-section settings-api-section" id="settings-anthropic" data-provider="anthropic">
                 <h4 class="settings-section-title">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        <path
+                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
                     </svg>
                     Claude API Key
                 </h4>
                 <div class="settings-input-group">
                     <input type="password" id="settings-api-key-anthropic" placeholder="sk-ant-api03-..." />
                     <button class="settings-show-key" data-target="settings-api-key-anthropic" title="Show/hide key">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
                         </svg>
                     </button>
                 </div>
@@ -1119,25 +1242,28 @@
                 </div>
                 <a href="https://console.anthropic.com/settings/keys" target="_blank" class="settings-link">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
                     </svg>
                     Get your API key from Anthropic Console
                 </a>
             </div>
 
-            <div class="settings-section settings-api-section" id="settings-openai" data-provider="openai" style="display: none;">
+            <div class="settings-section settings-api-section" id="settings-openai" data-provider="openai"
+                style="display: none;">
                 <h4 class="settings-section-title">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        <path
+                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
                     </svg>
                     OpenAI API Key
                 </h4>
                 <div class="settings-input-group">
                     <input type="password" id="settings-api-key-openai" placeholder="sk-..." />
                     <button class="settings-show-key" data-target="settings-api-key-openai" title="Show/hide key">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
                         </svg>
                     </button>
                 </div>
@@ -1150,25 +1276,28 @@
                 </div>
                 <a href="https://platform.openai.com/api-keys" target="_blank" class="settings-link">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
                     </svg>
                     Get your API key from OpenAI Platform
                 </a>
             </div>
 
-            <div class="settings-section settings-api-section" id="settings-google" data-provider="google" style="display: none;">
+            <div class="settings-section settings-api-section" id="settings-google" data-provider="google"
+                style="display: none;">
                 <h4 class="settings-section-title">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        <path
+                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
                     </svg>
                     Google AI API Key
                 </h4>
                 <div class="settings-input-group">
                     <input type="password" id="settings-api-key-google" placeholder="AIza..." />
                     <button class="settings-show-key" data-target="settings-api-key-google" title="Show/hide key">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
                         </svg>
                     </button>
                 </div>
@@ -1181,7 +1310,7 @@
                 </div>
                 <a href="https://aistudio.google.com/app/apikey" target="_blank" class="settings-link">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/>
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
                     </svg>
                     Get your API key from Google AI Studio
                 </a>
@@ -1197,19 +1326,27 @@
     <!-- About Modal -->
     <div class="modal-overlay" id="about-modal">
         <div class="modal">
-            <div class="modal-icon" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
-                <img src="img/info.svg" width="32" height="32" alt="Info" style="filter: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);">
+            <div class="modal-icon"
+                style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
+                <img src="img/info.svg" width="32" height="32" alt="Info"
+                    style="filter: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);">
             </div>
             <h3 class="modal-title">App Store Screenshot Generator</h3>
-            <p class="modal-message" style="margin-bottom: 16px;">A free vibe coded tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.</p>
-            <p class="modal-message" style="margin-bottom: 16px;">Created by <a href="https://yuzuhub.com/en" target="_blank" style="color: var(--accent);">Stefan from yuzuhub.com</a></p>
-            <p class="modal-message" style="margin-bottom: 16px;">This project is free and open source under the MIT License.</p>
+            <p class="modal-message" style="margin-bottom: 16px;">A free vibe coded tool for creating beautiful App
+                Store screenshots with customizable backgrounds, text overlays, and device frames.</p>
+            <p class="modal-message" style="margin-bottom: 16px;">Created by <a href="https://yuzuhub.com/en"
+                    target="_blank" style="color: var(--accent);">Stefan from yuzuhub.com</a></p>
+            <p class="modal-message" style="margin-bottom: 16px;">This project is free and open source under the MIT
+                License.</p>
             <p class="modal-message" style="margin-bottom: 8px;">
-                <a href="https://yuzu-hub.github.io/appscreen/" target="_blank" style="color: var(--accent);">Live Version</a> ·
-                <a href="https://github.com/YUZU-Hub/appscreen" target="_blank" style="color: var(--accent);">GitHub Repo</a>
+                <a href="https://yuzu-hub.github.io/appscreen/" target="_blank" style="color: var(--accent);">Live
+                    Version</a> ·
+                <a href="https://github.com/YUZU-Hub/appscreen" target="_blank" style="color: var(--accent);">GitHub
+                    Repo</a>
             </p>
             <div class="modal-buttons">
-                <button class="modal-btn modal-btn-confirm" id="about-modal-close" style="background: var(--accent);">Close</button>
+                <button class="modal-btn modal-btn-confirm" id="about-modal-close"
+                    style="background: var(--accent);">Close</button>
             </div>
         </div>
     </div>
@@ -1221,7 +1358,7 @@
                 <h3 class="modal-title">Project Languages</h3>
                 <button class="modal-close" id="languages-modal-close">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
+                        <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
                 </button>
             </div>
@@ -1239,7 +1376,8 @@
             </div>
 
             <div class="modal-buttons">
-                <button class="modal-btn modal-btn-confirm" id="languages-modal-done" style="background: var(--accent);">Done</button>
+                <button class="modal-btn modal-btn-confirm" id="languages-modal-done"
+                    style="background: var(--accent);">Done</button>
             </div>
         </div>
     </div>
@@ -1251,7 +1389,7 @@
                 <h3 class="modal-title">Screenshot Translations</h3>
                 <button class="modal-close" id="screenshot-translations-modal-close">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
+                        <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
                 </button>
             </div>
@@ -1265,7 +1403,8 @@
             <input type="file" id="translation-file-input" accept="image/*" style="display: none;">
 
             <div class="modal-buttons">
-                <button class="modal-btn modal-btn-confirm" id="screenshot-translations-modal-done" style="background: var(--accent);">Done</button>
+                <button class="modal-btn modal-btn-confirm" id="screenshot-translations-modal-done"
+                    style="background: var(--accent);">Done</button>
             </div>
         </div>
     </div>
@@ -1274,10 +1413,11 @@
     <div class="modal-overlay" id="export-language-modal">
         <div class="modal">
             <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
             </div>
             <h3 class="modal-title">Export Screenshots</h3>
@@ -1305,7 +1445,7 @@
         <div class="modal duplicate-screenshot-modal">
             <div class="modal-icon" style="background: rgba(255, 159, 10, 0.2);">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #ff9f0a;">
-                    <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
             <h3 class="modal-title">Screenshot Already Exists</h3>
@@ -1319,7 +1459,7 @@
                 </div>
                 <div class="duplicate-arrow">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                        <path d="M5 12h14M12 5l7 7-7 7" />
                     </svg>
                 </div>
                 <div class="duplicate-item">
@@ -1332,16 +1472,17 @@
             <div class="duplicate-options">
                 <button class="duplicate-option" id="duplicate-replace">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 2v6h-6M3 12a9 9 0 0115-6.7L21 8M3 22v-6h6M21 12a9 9 0 01-15 6.7L3 16"/>
+                        <path d="M21 2v6h-6M3 12a9 9 0 0115-6.7L21 8M3 22v-6h6M21 12a9 9 0 01-15 6.7L3 16" />
                     </svg>
                     <div class="duplicate-option-text">
                         <span class="duplicate-option-title">Replace</span>
-                        <span class="duplicate-option-desc">Replace the <span id="duplicate-lang-name">language</span> version</span>
+                        <span class="duplicate-option-desc">Replace the <span id="duplicate-lang-name">language</span>
+                            version</span>
                     </div>
                 </button>
                 <button class="duplicate-option" id="duplicate-create-new">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 5v14M5 12h14"/>
+                        <path d="M12 5v14M5 12h14" />
                     </svg>
                     <div class="duplicate-option-text">
                         <span class="duplicate-option-title">Create New</span>
@@ -1350,7 +1491,7 @@
                 </button>
                 <button class="duplicate-option" id="duplicate-ignore">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
+                        <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
                     <div class="duplicate-option-text">
                         <span class="duplicate-option-title">Skip</span>
@@ -1365,10 +1506,11 @@
     <div class="modal-overlay" id="export-progress-modal">
         <div class="modal export-progress-modal">
             <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
             </div>
             <h2>Exporting Screenshots</h2>
@@ -1386,4 +1528,5 @@
     <script src="three-renderer.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
