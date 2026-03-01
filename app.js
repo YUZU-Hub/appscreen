@@ -1,5 +1,14 @@
 // State management
 const state = {
+    screenshotSets: {
+        phone: [],
+        ipad: []
+    },
+    activeScreenshotSet: 'phone',
+    selectedIndexBySet: {
+        phone: 0,
+        ipad: 0
+    },
     screenshots: [],
     selectedIndex: 0,
     transferTarget: null, // Index of screenshot waiting to receive style transfer
@@ -98,6 +107,80 @@ const state = {
 };
 
 const baseTextDefaults = JSON.parse(JSON.stringify(state.defaults.text));
+
+const screenshotSetKeys = {
+    phone: 'phone',
+    ipad: 'ipad'
+};
+
+function getScreenshotSetForDevice3D(device3D) {
+    return device3D === 'ipad' ? screenshotSetKeys.ipad : screenshotSetKeys.phone;
+}
+
+function getTotalScreenshotCount() {
+    const phoneCount = state.screenshotSets?.phone?.length || 0;
+    const ipadCount = state.screenshotSets?.ipad?.length || 0;
+    return phoneCount + ipadCount;
+}
+
+function forEachScreenshotAcrossSets(callback) {
+    normalizeScreenshotSetState();
+    state.screenshotSets.phone.forEach((screenshot, index) => callback(screenshot, screenshotSetKeys.phone, index));
+    state.screenshotSets.ipad.forEach((screenshot, index) => callback(screenshot, screenshotSetKeys.ipad, index));
+}
+
+function normalizeScreenshotSetState() {
+    if (!state.screenshotSets || typeof state.screenshotSets !== 'object') {
+        state.screenshotSets = { phone: [], ipad: [] };
+    }
+    if (!Array.isArray(state.screenshotSets.phone)) state.screenshotSets.phone = [];
+    if (!Array.isArray(state.screenshotSets.ipad)) state.screenshotSets.ipad = [];
+
+    if (!state.selectedIndexBySet || typeof state.selectedIndexBySet !== 'object') {
+        state.selectedIndexBySet = { phone: 0, ipad: 0 };
+    }
+    if (!Number.isInteger(state.selectedIndexBySet.phone) || state.selectedIndexBySet.phone < 0) state.selectedIndexBySet.phone = 0;
+    if (!Number.isInteger(state.selectedIndexBySet.ipad) || state.selectedIndexBySet.ipad < 0) state.selectedIndexBySet.ipad = 0;
+
+    if (state.activeScreenshotSet !== screenshotSetKeys.phone && state.activeScreenshotSet !== screenshotSetKeys.ipad) {
+        state.activeScreenshotSet = screenshotSetKeys.phone;
+    }
+}
+
+function syncSelectedIndexForActiveSet() {
+    normalizeScreenshotSetState();
+    const activeSet = state.activeScreenshotSet === screenshotSetKeys.ipad ? screenshotSetKeys.ipad : screenshotSetKeys.phone;
+    const maxIndex = Math.max(0, state.screenshots.length - 1);
+    const normalizedIndex = state.screenshots.length
+        ? Math.min(Math.max(0, state.selectedIndex || 0), maxIndex)
+        : 0;
+    state.selectedIndex = normalizedIndex;
+    state.selectedIndexBySet[activeSet] = normalizedIndex;
+}
+
+function switchScreenshotSet(setKey) {
+    normalizeScreenshotSetState();
+
+    const nextSet = setKey === screenshotSetKeys.ipad ? screenshotSetKeys.ipad : screenshotSetKeys.phone;
+    const currentSet = state.activeScreenshotSet;
+    if (currentSet === screenshotSetKeys.phone || currentSet === screenshotSetKeys.ipad) {
+        state.selectedIndexBySet[currentSet] = state.selectedIndex || 0;
+    }
+
+    state.activeScreenshotSet = nextSet;
+    state.screenshots = state.screenshotSets[nextSet];
+    state.transferTarget = null;
+
+    const savedIndex = state.selectedIndexBySet[nextSet] || 0;
+    if (!state.screenshots.length) {
+        state.selectedIndex = 0;
+        return;
+    }
+
+    state.selectedIndex = Math.min(savedIndex, state.screenshots.length - 1);
+}
+
+switchScreenshotSet(screenshotSetKeys.phone);
 
 // Runtime-only state (not persisted)
 let selectedElementId = null;
@@ -520,6 +603,136 @@ function formatValue(num) {
     const rounded = Math.round(num * 10) / 10;
     return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
 }
+
+const rotation3DLimits = {
+    default: { xMin: -45, xMax: 45, yMin: -45, yMax: 45, zMin: -45, zMax: 45 },
+    // iPad uses its own rotation constraints.
+    ipad: { xMin: -5, xMax: 60, yMin: -20, yMax: 20, zMin: -1200, zMax: 1200 }
+};
+const positionYLimits = {
+    default: { min: -30, max: 130 },
+    ipad: { min: -200, max: 400 }
+};
+const positionYSliderRange = { min: -130, max: 230 };
+const screenshotScaleLimits = {
+    default: { min: 30, max: 100 },
+    ipad: { min: 100, max: 200 }
+};
+
+function getRotationLimitsForDevice3D(device3D) {
+    return device3D === 'ipad' ? rotation3DLimits.ipad : rotation3DLimits.default;
+}
+
+function getPositionYLimitsForDevice3D(device3D) {
+    return device3D === 'ipad' ? positionYLimits.ipad : positionYLimits.default;
+}
+
+function clampToRange(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function getScaleLimitsForScreenshot(ss) {
+    const use3D = !!(ss?.use3D);
+    const device3D = ss?.device3D || 'iphone';
+    return (use3D && device3D === 'ipad') ? screenshotScaleLimits.ipad : screenshotScaleLimits.default;
+}
+
+function applyScaleSliderLimits(ss) {
+    const scaleInput = document.getElementById('screenshot-scale');
+    if (!scaleInput) return;
+    const limits = getScaleLimitsForScreenshot(ss);
+    scaleInput.min = String(limits.min);
+    scaleInput.max = String(limits.max);
+    scaleInput.step = '1';
+}
+
+function clampScaleForScreenshot(ss) {
+    if (!ss) return false;
+    const limits = getScaleLimitsForScreenshot(ss);
+    const oldScale = Number.isFinite(ss.scale) ? ss.scale : 70;
+    const newScale = clampToRange(oldScale, limits.min, limits.max);
+    ss.scale = newScale;
+    return newScale !== oldScale;
+}
+
+function applyRotationSliderLimits(device3D) {
+    const limits = getRotationLimitsForDevice3D(device3D);
+    const xInput = document.getElementById('rotation-3d-x');
+    const yInput = document.getElementById('rotation-3d-y');
+    const zInput = document.getElementById('rotation-3d-z');
+    if (!xInput || !yInput || !zInput) return;
+
+    xInput.min = String(limits.xMin);
+    xInput.max = String(limits.xMax);
+    yInput.min = String(limits.yMin);
+    yInput.max = String(limits.yMax);
+    zInput.min = String(limits.zMin);
+    zInput.max = String(limits.zMax);
+}
+
+function applyPositionSliderLimits(device3D) {
+    const yInput = document.getElementById('screenshot-y');
+    if (!yInput) return;
+    yInput.min = String(positionYSliderRange.min);
+    yInput.max = String(positionYSliderRange.max);
+    yInput.step = '0.1';
+}
+
+function clampRotation3DForDevice(ss, device3D) {
+    if (!ss) return false;
+    if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
+
+    const limits = getRotationLimitsForDevice3D(device3D || ss.device3D || 'iphone');
+    const oldX = Number.isFinite(ss.rotation3D.x) ? ss.rotation3D.x : 0;
+    const oldY = Number.isFinite(ss.rotation3D.y) ? ss.rotation3D.y : 0;
+    const oldZ = Number.isFinite(ss.rotation3D.z) ? ss.rotation3D.z : 0;
+
+    const newX = clampToRange(oldX, limits.xMin, limits.xMax);
+    const newY = clampToRange(oldY, limits.yMin, limits.yMax);
+    const newZ = clampToRange(oldZ, limits.zMin, limits.zMax);
+
+    ss.rotation3D.x = newX;
+    ss.rotation3D.y = newY;
+    ss.rotation3D.z = newZ;
+
+    return newX !== oldX || newY !== oldY || newZ !== oldZ;
+}
+
+function clampPositionYForDevice(ss, device3D) {
+    if (!ss) return false;
+    const limits = getPositionYLimitsForDevice3D(device3D || ss.device3D || 'iphone');
+    const oldY = Number.isFinite(ss.y) ? ss.y : 60;
+    const newY = clampToRange(oldY, limits.min, limits.max);
+    ss.y = newY;
+    return newY !== oldY;
+}
+
+function positionYToSliderPercent(y, device3D) {
+    const limits = getPositionYLimitsForDevice3D(device3D || 'iphone');
+    const span = limits.max - limits.min;
+    const sliderSpan = positionYSliderRange.max - positionYSliderRange.min;
+    if (!Number.isFinite(span) || span <= 0 || !Number.isFinite(sliderSpan) || sliderSpan <= 0) {
+        return (positionYSliderRange.min + positionYSliderRange.max) / 2;
+    }
+    const rawRatio = (y - limits.min) / span;
+    const sliderValue = positionYSliderRange.min + rawRatio * sliderSpan;
+    return clampToRange(sliderValue, positionYSliderRange.min, positionYSliderRange.max);
+}
+
+function sliderPercentToPositionY(percent, device3D) {
+    const limits = getPositionYLimitsForDevice3D(device3D || 'iphone');
+    const sliderSpan = positionYSliderRange.max - positionYSliderRange.min;
+    if (!Number.isFinite(sliderSpan) || sliderSpan <= 0) {
+        return (limits.min + limits.max) / 2;
+    }
+    const safeSlider = clampToRange(percent, positionYSliderRange.min, positionYSliderRange.max);
+    const normalized = (safeSlider - positionYSliderRange.min) / sliderSpan;
+    return limits.min + ((limits.max - limits.min) * normalized);
+}
+
+window.getRotationLimitsForDevice3D = getRotationLimitsForDevice3D;
+window.getPositionYLimitsForDevice3D = getPositionYLimitsForDevice3D;
+window.positionYToSliderPercent = positionYToSliderPercent;
 
 function setBackground(key, value) {
     const screenshot = getCurrentScreenshot();
@@ -1409,7 +1622,7 @@ function updateProjectSelector() {
 
     // Update trigger display - always use actual state for current project
     document.getElementById('project-trigger-name').textContent = currentProject.name;
-    const count = state.screenshots.length;
+    const count = getTotalScreenshotCount();
     document.getElementById('project-trigger-meta').textContent = `${count} screenshot${count !== 1 ? 's' : ''}`;
 
     // Build menu options
@@ -1418,7 +1631,7 @@ function updateProjectSelector() {
         option.className = 'project-option' + (project.id === currentProjectId ? ' selected' : '');
         option.dataset.projectId = project.id;
 
-        const screenshotCount = project.id === currentProjectId ? state.screenshots.length : (project.screenshotCount || 0);
+        const screenshotCount = project.id === currentProjectId ? getTotalScreenshotCount() : (project.screenshotCount || 0);
 
         option.innerHTML = `
             <span class="project-option-name">${project.name}</span>
@@ -1465,13 +1678,8 @@ function initSync() {
     init();
 }
 
-// Save state to IndexedDB for current project
-function saveState() {
-    if (!db) return;
-
-    // Convert screenshots to base64 for storage, including per-screenshot settings and localized images
-    const screenshotsToSave = state.screenshots.map(s => {
-        // Save localized images (without Image objects, just src/name)
+function serializeScreenshotsForStorage(screenshots) {
+    return screenshots.map(s => {
         const localizedImages = {};
         if (s.localizedImages) {
             Object.keys(s.localizedImages).forEach(lang => {
@@ -1486,7 +1694,7 @@ function saveState() {
         }
 
         return {
-            src: s.image?.src || '', // Legacy compatibility
+            src: s.image?.src || '',
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
@@ -1495,18 +1703,35 @@ function saveState() {
             text: s.text,
             elements: (s.elements || []).map(el => ({
                 ...el,
-                image: undefined // Don't serialize Image objects
+                image: undefined
             })),
             popouts: s.popouts || [],
             overrides: s.overrides
         };
     });
+}
+
+// Save state to IndexedDB for current project
+function saveState() {
+    if (!db) return;
+
+    syncSelectedIndexForActiveSet();
+
+    const screenshotSetsToSave = {
+        phone: serializeScreenshotsForStorage(state.screenshotSets.phone || []),
+        ipad: serializeScreenshotsForStorage(state.screenshotSets.ipad || [])
+    };
+    const activeSet = state.activeScreenshotSet === screenshotSetKeys.ipad ? screenshotSetKeys.ipad : screenshotSetKeys.phone;
+    const activeScreenshotsToSave = screenshotSetsToSave[activeSet] || [];
 
     const stateToSave = {
         id: currentProjectId,
-        formatVersion: 2, // Version 2: new 3D positioning formula
-        screenshots: screenshotsToSave,
-        selectedIndex: state.selectedIndex,
+        formatVersion: 3, // Version 3: separate screenshot sets for phone and iPad
+        screenshots: activeScreenshotsToSave, // Legacy compatibility
+        screenshotSets: screenshotSetsToSave,
+        activeScreenshotSet: activeSet,
+        selectedIndexBySet: state.selectedIndexBySet,
+        selectedIndex: state.selectedIndexBySet[activeSet] ?? 0, // Legacy compatibility
         outputDevice: state.outputDevice,
         customWidth: state.customWidth,
         customHeight: state.customHeight,
@@ -1518,7 +1743,7 @@ function saveState() {
     // Update screenshot count in project metadata
     const project = projects.find(p => p.id === currentProjectId);
     if (project) {
-        project.screenshotCount = state.screenshots.length;
+        project.screenshotCount = getTotalScreenshotCount();
         saveProjectsMeta();
     }
 
@@ -1572,6 +1797,140 @@ function reconstructElementImages(elements) {
     });
 }
 
+function loadStoredImageFromDataUrl(src) {
+    return new Promise((resolve) => {
+        if (!src) {
+            resolve(null);
+            return;
+        }
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
+}
+
+function deserializeStoredScreenshot(s, migratedBackground, migratedScreenshot, migratedText, needs3DMigration) {
+    const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
+    if (needs3DMigration) {
+        migrate3DPosition(screenshotSettings);
+    }
+
+    const baseScreenshot = {
+        name: s.name || 'Blank Screen',
+        deviceType: s.deviceType,
+        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+        screenshot: screenshotSettings,
+        text: s.text || JSON.parse(JSON.stringify(migratedText)),
+        elements: reconstructElementImages(s.elements),
+        popouts: s.popouts || [],
+        overrides: s.overrides || {}
+    };
+
+    const hasLocalizedImages = s.localizedImages && Object.keys(s.localizedImages).length > 0;
+    if (hasLocalizedImages) {
+        const entries = Object.entries(s.localizedImages);
+        return Promise.all(entries.map(async ([lang, langData]) => {
+            const img = await loadStoredImageFromDataUrl(langData?.src);
+            return { lang, langData, img };
+        })).then((loadedEntries) => {
+            const localizedImages = {};
+            loadedEntries.forEach(({ lang, langData, img }) => {
+                if (img && langData?.src) {
+                    localizedImages[lang] = {
+                        image: img,
+                        src: langData.src,
+                        name: langData.name || s.name
+                    };
+                }
+            });
+
+            const firstLang = Object.keys(localizedImages)[0];
+            return {
+                image: firstLang ? localizedImages[firstLang].image : null,
+                localizedImages,
+                ...baseScreenshot
+            };
+        });
+    }
+
+    if (s.src) {
+        return loadStoredImageFromDataUrl(s.src).then((img) => {
+            if (!img) {
+                return {
+                    image: null,
+                    localizedImages: {},
+                    ...baseScreenshot
+                };
+            }
+
+            const detectedLang = typeof detectLanguageFromFilename === 'function'
+                ? detectLanguageFromFilename(s.name || '')
+                : 'en';
+            const localizedImages = {
+                [detectedLang]: {
+                    image: img,
+                    src: s.src,
+                    name: s.name
+                }
+            };
+
+            return {
+                image: img,
+                localizedImages,
+                ...baseScreenshot
+            };
+        });
+    }
+
+    return Promise.resolve({
+        image: null,
+        localizedImages: {},
+        ...baseScreenshot
+    });
+}
+
+function deserializeStoredScreenshots(savedScreenshots, migratedBackground, migratedScreenshot, migratedText, needs3DMigration) {
+    if (!Array.isArray(savedScreenshots) || savedScreenshots.length === 0) {
+        return Promise.resolve([]);
+    }
+    return Promise.all(savedScreenshots.map((s) => deserializeStoredScreenshot(
+        s,
+        migratedBackground,
+        migratedScreenshot,
+        migratedText,
+        needs3DMigration
+    )));
+}
+
+function splitLegacyScreenshotsBySet(screenshots, selectedIndex) {
+    const split = {
+        phone: [],
+        ipad: [],
+        activeSet: screenshotSetKeys.phone,
+        selectedIndexBySet: { phone: 0, ipad: 0 }
+    };
+
+    if (!Array.isArray(screenshots) || screenshots.length === 0) {
+        return split;
+    }
+
+    const safeSelectedIndex = Math.max(0, Math.min(selectedIndex || 0, screenshots.length - 1));
+    const selectedScreenshot = screenshots[safeSelectedIndex];
+    split.activeSet = getScreenshotSetForDevice3D(selectedScreenshot?.screenshot?.device3D || 'iphone');
+
+    screenshots.forEach((s, index) => {
+        const setKey = getScreenshotSetForDevice3D(s?.screenshot?.device3D || 'iphone');
+        split[setKey].push(s);
+        if (index <= safeSelectedIndex && setKey === split.activeSet) {
+            split.selectedIndexBySet[setKey] += 1;
+        }
+    });
+
+    split.selectedIndexBySet[split.activeSet] = Math.max(0, split.selectedIndexBySet[split.activeSet] - 1);
+    return split;
+}
+
 // Load state from IndexedDB for current project
 function loadState() {
     if (!db) return Promise.resolve();
@@ -1587,14 +1946,12 @@ function loadState() {
                 if (parsed) {
                     // Check if this is an old-style project (no per-screenshot settings)
                     const isOldFormat = !parsed.defaults && (parsed.background || parsed.screenshot || parsed.text);
-                    const hasScreenshotsWithoutSettings = parsed.screenshots?.some(s => !s.background && !s.screenshot && !s.text);
+                    const legacyScreenshots = parsed.screenshots || [];
+                    const hasScreenshotsWithoutSettings = legacyScreenshots?.some(s => !s.background && !s.screenshot && !s.text);
                     const needsMigration = isOldFormat || hasScreenshotsWithoutSettings;
 
                     // Check if we need to migrate 3D positions (formatVersion < 2)
                     const needs3DMigration = !parsed.formatVersion || parsed.formatVersion < 2;
-
-                    // Load screenshots with their per-screenshot settings
-                    state.screenshots = [];
 
                     // Build migrated settings from old format if needed
                     let migratedBackground = state.defaults.background;
@@ -1624,144 +1981,6 @@ function loadState() {
                         }
                     }
 
-                    if (parsed.screenshots && parsed.screenshots.length > 0) {
-                        let loadedCount = 0;
-                        const totalToLoad = parsed.screenshots.length;
-
-                        parsed.screenshots.forEach((s, index) => {
-                            // Check if we have new localized format or old single-image format
-                            const hasLocalizedImages = s.localizedImages && Object.keys(s.localizedImages).length > 0;
-
-                            if (!hasLocalizedImages && !s.src) {
-                                // Blank screen (no image)
-                                const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
-                                if (needs3DMigration) {
-                                    migrate3DPosition(screenshotSettings);
-                                }
-                                state.screenshots[index] = {
-                                    image: null,
-                                    name: s.name || 'Blank Screen',
-                                    deviceType: s.deviceType,
-                                    localizedImages: {},
-                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
-                                    screenshot: screenshotSettings,
-                                    text: s.text || JSON.parse(JSON.stringify(migratedText)),
-                                    elements: reconstructElementImages(s.elements),
-                                    popouts: s.popouts || [],
-                                    overrides: s.overrides || {}
-                                };
-                                loadedCount++;
-                                checkAllLoaded();
-                            } else if (hasLocalizedImages) {
-                                // New format: load all localized images
-                                const langKeys = Object.keys(s.localizedImages);
-                                let langLoadedCount = 0;
-                                const localizedImages = {};
-
-                                langKeys.forEach(lang => {
-                                    const langData = s.localizedImages[lang];
-                                    if (langData?.src) {
-                                        const langImg = new Image();
-                                        langImg.onload = () => {
-                                            localizedImages[lang] = {
-                                                image: langImg,
-                                                src: langData.src,
-                                                name: langData.name || s.name
-                                            };
-                                            langLoadedCount++;
-
-                                            if (langLoadedCount === langKeys.length) {
-                                                // All language versions loaded
-                                                const firstLang = langKeys[0];
-                                                const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
-                                                if (needs3DMigration) {
-                                                    migrate3DPosition(screenshotSettings);
-                                                }
-                                                state.screenshots[index] = {
-                                                    image: localizedImages[firstLang]?.image, // Legacy compat
-                                                    name: s.name,
-                                                    deviceType: s.deviceType,
-                                                    localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
-                                                    screenshot: screenshotSettings,
-                                                    text: s.text || JSON.parse(JSON.stringify(migratedText)),
-                                                    elements: reconstructElementImages(s.elements),
-                                                    popouts: s.popouts || [],
-                                                    overrides: s.overrides || {}
-                                                };
-                                                loadedCount++;
-                                                checkAllLoaded();
-                                            }
-                                        };
-                                        langImg.src = langData.src;
-                                    } else {
-                                        langLoadedCount++;
-                                        if (langLoadedCount === langKeys.length) {
-                                            loadedCount++;
-                                            checkAllLoaded();
-                                        }
-                                    }
-                                });
-                            } else {
-                                // Old format: migrate to localized images
-                                const img = new Image();
-                                img.onload = () => {
-                                    // Detect language from filename, default to 'en'
-                                    const detectedLang = typeof detectLanguageFromFilename === 'function'
-                                        ? detectLanguageFromFilename(s.name || '')
-                                        : 'en';
-
-                                    const localizedImages = {};
-                                    localizedImages[detectedLang] = {
-                                        image: img,
-                                        src: s.src,
-                                        name: s.name
-                                    };
-
-                                    const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
-                                    if (needs3DMigration) {
-                                        migrate3DPosition(screenshotSettings);
-                                    }
-                                    state.screenshots[index] = {
-                                        image: img,
-                                        name: s.name,
-                                        deviceType: s.deviceType,
-                                        localizedImages: localizedImages,
-                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
-                                        screenshot: screenshotSettings,
-                                        text: s.text || JSON.parse(JSON.stringify(migratedText)),
-                                        elements: reconstructElementImages(s.elements),
-                                        popouts: s.popouts || [],
-                                        overrides: s.overrides || {}
-                                    };
-                                    loadedCount++;
-                                    checkAllLoaded();
-                                };
-                                img.src = s.src;
-                            }
-                        });
-
-                        function checkAllLoaded() {
-                            if (loadedCount === totalToLoad) {
-                                updateScreenshotList();
-                                syncUIWithState();
-                                updateGradientStopsUI();
-                                updateCanvas();
-
-                                if (needsMigration && parsed.screenshots.length > 0) {
-                                    showMigrationPrompt();
-                                }
-                            }
-                        }
-                    } else {
-                        // No screenshots - still need to update UI
-                        updateScreenshotList();
-                        syncUIWithState();
-                        updateGradientStopsUI();
-                        updateCanvas();
-                    }
-
-                    state.selectedIndex = parsed.selectedIndex || 0;
                     state.outputDevice = parsed.outputDevice || 'iphone-6.9';
                     state.customWidth = parsed.customWidth || 1320;
                     state.customHeight = parsed.customHeight || 2868;
@@ -1780,6 +1999,66 @@ function loadState() {
                         state.defaults.screenshot = migratedScreenshot;
                         state.defaults.text = migratedText;
                     }
+
+                    const hasSeparateSets = !!parsed.screenshotSets
+                        && (Array.isArray(parsed.screenshotSets.phone) || Array.isArray(parsed.screenshotSets.ipad));
+                    let phoneScreenshotsRaw = [];
+                    let ipadScreenshotsRaw = [];
+                    let inferredActiveSet = screenshotSetKeys.phone;
+                    let inferredSelectedIndexBySet = { phone: 0, ipad: 0 };
+
+                    if (hasSeparateSets) {
+                        phoneScreenshotsRaw = parsed.screenshotSets.phone || [];
+                        ipadScreenshotsRaw = parsed.screenshotSets.ipad || [];
+                    } else {
+                        const split = splitLegacyScreenshotsBySet(legacyScreenshots, parsed.selectedIndex || 0);
+                        phoneScreenshotsRaw = split.phone;
+                        ipadScreenshotsRaw = split.ipad;
+                        inferredActiveSet = split.activeSet;
+                        inferredSelectedIndexBySet = split.selectedIndexBySet;
+                    }
+
+                    Promise.all([
+                        deserializeStoredScreenshots(phoneScreenshotsRaw, migratedBackground, migratedScreenshot, migratedText, needs3DMigration),
+                        deserializeStoredScreenshots(ipadScreenshotsRaw, migratedBackground, migratedScreenshot, migratedText, needs3DMigration)
+                    ]).then(([phoneScreenshots, ipadScreenshots]) => {
+                        state.screenshotSets.phone = phoneScreenshots;
+                        state.screenshotSets.ipad = ipadScreenshots;
+
+                        const parsedSelectedIndexBySet = parsed.selectedIndexBySet || {};
+                        state.selectedIndexBySet = {
+                            phone: Number.isInteger(parsedSelectedIndexBySet.phone) && parsedSelectedIndexBySet.phone >= 0
+                                ? parsedSelectedIndexBySet.phone
+                                : inferredSelectedIndexBySet.phone,
+                            ipad: Number.isInteger(parsedSelectedIndexBySet.ipad) && parsedSelectedIndexBySet.ipad >= 0
+                                ? parsedSelectedIndexBySet.ipad
+                                : inferredSelectedIndexBySet.ipad
+                        };
+
+                        const activeSet = (parsed.activeScreenshotSet === screenshotSetKeys.ipad || parsed.activeScreenshotSet === screenshotSetKeys.phone)
+                            ? parsed.activeScreenshotSet
+                            : inferredActiveSet;
+                        if (!parsed.selectedIndexBySet && Number.isInteger(parsed.selectedIndex) && parsed.selectedIndex >= 0) {
+                            state.selectedIndexBySet[activeSet] = parsed.selectedIndex;
+                        }
+                        switchScreenshotSet(activeSet);
+
+                        updateScreenshotList();
+                        syncUIWithState();
+                        updateGradientStopsUI();
+                        updateCanvas();
+
+                        if (needsMigration && legacyScreenshots.length > 0) {
+                            showMigrationPrompt();
+                        }
+                        resolve();
+                    }).catch((e) => {
+                        console.error('Error loading screenshots:', e);
+                        resetStateToDefaults();
+                        updateScreenshotList();
+                        resolve();
+                    });
+                    return;
                 } else {
                     // New project, reset to defaults
                     resetStateToDefaults();
@@ -1822,8 +2101,10 @@ function convertProject() {
 
 // Reset state to defaults (without clearing storage)
 function resetStateToDefaults() {
-    state.screenshots = [];
-    state.selectedIndex = 0;
+    state.screenshotSets = { phone: [], ipad: [] };
+    state.selectedIndexBySet = { phone: 0, ipad: 0 };
+    state.activeScreenshotSet = screenshotSetKeys.phone;
+    switchScreenshotSet(screenshotSetKeys.phone);
     state.outputDevice = 'iphone-6.9';
     state.customWidth = 1320;
     state.customHeight = 2868;
@@ -1855,6 +2136,9 @@ function resetStateToDefaults() {
             rotation: 0,
             perspective: 0,
             cornerRadius: 24,
+            use3D: false,
+            device3D: 'iphone',
+            rotation3D: { x: 0, y: 0, z: 0 },
             shadow: {
                 enabled: true,
                 color: '#000000',
@@ -1999,7 +2283,10 @@ async function duplicateProject(sourceProjectId, customName) {
             const clonedData = JSON.parse(JSON.stringify(projectData));
             clonedData.id = newId;
 
-            projects.push({ id: newId, name: newName, screenshotCount: clonedData.screenshots?.length || 0 });
+            const clonedCount = clonedData.screenshotSets
+                ? ((clonedData.screenshotSets.phone?.length || 0) + (clonedData.screenshotSets.ipad?.length || 0))
+                : (clonedData.screenshots?.length || 0);
+            projects.push({ id: newId, name: newName, screenshotCount: clonedCount });
             saveProjectsMeta();
 
             const writeTransaction = db.transaction([PROJECTS_STORE], 'readwrite');
@@ -2131,10 +2418,16 @@ function syncUIWithState() {
     document.getElementById('noise-intensity-value').textContent = formatValue(bg.noiseIntensity) + '%';
 
     // Screenshot settings
+    const use3D = ss.use3D || false;
+    const device3D = ss.device3D || 'iphone';
+    applyScaleSliderLimits(ss);
+    clampScaleForScreenshot(ss);
     document.getElementById('screenshot-scale').value = ss.scale;
     document.getElementById('screenshot-scale-value').textContent = formatValue(ss.scale) + '%';
-    document.getElementById('screenshot-y').value = ss.y;
-    document.getElementById('screenshot-y-value').textContent = formatValue(ss.y) + '%';
+    const positionDevice3D = ss.device3D || 'iphone';
+    const yPercent = positionYToSliderPercent(ss.y, positionDevice3D);
+    document.getElementById('screenshot-y').value = yPercent;
+    document.getElementById('screenshot-y-value').textContent = formatValue(yPercent);
     document.getElementById('screenshot-x').value = ss.x;
     document.getElementById('screenshot-x-value').textContent = formatValue(ss.x) + '%';
     document.getElementById('corner-radius').value = ss.cornerRadius;
@@ -2220,8 +2513,10 @@ function syncUIWithState() {
     updateSubheadlineLanguageUI();
 
     // 3D mode
-    const use3D = ss.use3D || false;
-    const device3D = ss.device3D || 'iphone';
+    applyPositionSliderLimits(device3D);
+    clampPositionYForDevice(ss, device3D);
+    applyRotationSliderLimits(device3D);
+    clampRotation3DForDevice(ss, device3D);
     const rotation3D = ss.rotation3D || { x: 0, y: 0, z: 0 };
     document.querySelectorAll('#device-type-selector button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === (use3D ? '3d' : '2d'));
@@ -3555,7 +3850,8 @@ function setupEventListeners() {
 
     // Add blank screen button
     document.getElementById('add-blank-btn').addEventListener('click', () => {
-        createNewScreenshot(null, null, 'Blank Screen', null, state.outputDevice);
+        const blankDeviceType = state.activeScreenshotSet === screenshotSetKeys.ipad ? 'iPad' : 'iPhone';
+        createNewScreenshot(null, null, 'Blank Screen', null, blankDeviceType);
         state.selectedIndex = state.screenshots.length - 1;
         updateScreenshotList();
         syncUIWithState();
@@ -4207,14 +4503,23 @@ function setupEventListeners() {
 
     // Screenshot settings
     document.getElementById('screenshot-scale').addEventListener('input', (e) => {
-        setScreenshotSetting('scale', parseInt(e.target.value));
-        document.getElementById('screenshot-scale-value').textContent = formatValue(e.target.value) + '%';
+        const ss = getScreenshotSettings();
+        const limits = getScaleLimitsForScreenshot(ss);
+        const scale = clampToRange(parseInt(e.target.value), limits.min, limits.max);
+        setScreenshotSetting('scale', scale);
+        e.target.value = scale;
+        document.getElementById('screenshot-scale-value').textContent = formatValue(scale) + '%';
         updateCanvas();
     });
 
     document.getElementById('screenshot-y').addEventListener('input', (e) => {
-        setScreenshotSetting('y', parseInt(e.target.value));
-        document.getElementById('screenshot-y-value').textContent = formatValue(e.target.value) + '%';
+        const ss = getScreenshotSettings();
+        const device3D = ss?.device3D || 'iphone';
+        const yPercent = clampToRange(parseFloat(e.target.value), positionYSliderRange.min, positionYSliderRange.max);
+        const y = sliderPercentToPositionY(yPercent, device3D);
+        setScreenshotSetting('y', y);
+        e.target.value = yPercent;
+        document.getElementById('screenshot-y-value').textContent = formatValue(yPercent);
         updateCanvas();
     });
 
@@ -4506,6 +4811,16 @@ function setupEventListeners() {
 
             const use3D = btn.dataset.type === '3d';
             setScreenshotSetting('use3D', use3D);
+            const after = getScreenshotSettings();
+            applyScaleSliderLimits(after);
+            clampScaleForScreenshot(after);
+            document.getElementById('screenshot-scale').value = after?.scale ?? 70;
+            document.getElementById('screenshot-scale-value').textContent = formatValue(after?.scale ?? 70) + '%';
+            applyPositionSliderLimits(after?.device3D || 'iphone');
+            const modeYPercent = positionYToSliderPercent(after?.y ?? 60, after?.device3D || 'iphone');
+            document.getElementById('screenshot-y').value = modeYPercent;
+            document.getElementById('screenshot-y-value').textContent = formatValue(modeYPercent);
+            applyRotationSliderLimits(after?.device3D || 'iphone');
             document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
 
             // Hide 2D-only settings in 3D mode, show 3D tip
@@ -4528,16 +4843,13 @@ function setupEventListeners() {
     // 3D device model selector
     document.querySelectorAll('#device-3d-selector button').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('#device-3d-selector button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
             const device3D = btn.dataset.model;
+            const targetSet = getScreenshotSetForDevice3D(device3D);
+            switchScreenshotSet(targetSet);
             setScreenshotSetting('device3D', device3D);
-
-            if (typeof switchPhoneModel === 'function') {
-                switchPhoneModel(device3D);
-            }
-
+            updateScreenshotList();
+            syncUIWithState();
+            updateGradientStopsUI();
             updateCanvas();
         });
     });
@@ -4546,8 +4858,10 @@ function setupEventListeners() {
     document.getElementById('rotation-3d-x').addEventListener('input', (e) => {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
-        ss.rotation3D.x = parseInt(e.target.value);
-        document.getElementById('rotation-3d-x-value').textContent = formatValue(e.target.value) + '°';
+        const limits = getRotationLimitsForDevice3D(ss.device3D || 'iphone');
+        ss.rotation3D.x = clampToRange(parseFloat(e.target.value), limits.xMin, limits.xMax);
+        e.target.value = ss.rotation3D.x;
+        document.getElementById('rotation-3d-x-value').textContent = formatValue(ss.rotation3D.x) + '°';
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -4557,8 +4871,10 @@ function setupEventListeners() {
     document.getElementById('rotation-3d-y').addEventListener('input', (e) => {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
-        ss.rotation3D.y = parseInt(e.target.value);
-        document.getElementById('rotation-3d-y-value').textContent = formatValue(e.target.value) + '°';
+        const limits = getRotationLimitsForDevice3D(ss.device3D || 'iphone');
+        ss.rotation3D.y = clampToRange(parseFloat(e.target.value), limits.yMin, limits.yMax);
+        e.target.value = ss.rotation3D.y;
+        document.getElementById('rotation-3d-y-value').textContent = formatValue(ss.rotation3D.y) + '°';
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -4568,8 +4884,10 @@ function setupEventListeners() {
     document.getElementById('rotation-3d-z').addEventListener('input', (e) => {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
-        ss.rotation3D.z = parseInt(e.target.value);
-        document.getElementById('rotation-3d-z-value').textContent = formatValue(e.target.value) + '°';
+        const limits = getRotationLimitsForDevice3D(ss.device3D || 'iphone');
+        ss.rotation3D.z = clampToRange(parseFloat(e.target.value), limits.zMin, limits.zMax);
+        e.target.value = ss.rotation3D.z;
+        document.getElementById('rotation-3d-z-value').textContent = formatValue(ss.rotation3D.z) + '°';
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -4608,7 +4926,7 @@ function switchGlobalLanguage(lang) {
     state.currentLanguage = lang;
 
     // Update all screenshots to use this language for display
-    state.screenshots.forEach(screenshot => {
+    forEachScreenshotAcrossSets((screenshot) => {
         screenshot.text.currentHeadlineLang = lang;
         screenshot.text.currentSubheadlineLang = lang;
     });
@@ -4688,7 +5006,7 @@ function addProjectLanguage(lang) {
     state.projectLanguages.push(lang);
 
     // Add the language to all screenshots' text settings
-    state.screenshots.forEach(screenshot => {
+    forEachScreenshotAcrossSets((screenshot) => {
         if (!screenshot.text.headlineLanguages.includes(lang)) {
             screenshot.text.headlineLanguages.push(lang);
             if (!screenshot.text.headlines) screenshot.text.headlines = { en: '' };
@@ -4732,7 +5050,7 @@ function removeProjectLanguage(lang) {
         }
 
         // Remove from all screenshots
-        state.screenshots.forEach(screenshot => {
+        forEachScreenshotAcrossSets((screenshot) => {
             const hIndex = screenshot.text.headlineLanguages.indexOf(lang);
             if (hIndex > -1) {
                 screenshot.text.headlineLanguages.splice(hIndex, 1);
@@ -5861,13 +6179,18 @@ function applyPositionPreset(preset) {
     setScreenshotSetting('rotation', p.rotation);
     setScreenshotSetting('perspective', p.perspective);
 
+    const ss = getScreenshotSettings();
+    applyScaleSliderLimits(ss);
+    clampScaleForScreenshot(ss);
+
     // Update UI controls
-    document.getElementById('screenshot-scale').value = p.scale;
-    document.getElementById('screenshot-scale-value').textContent = formatValue(p.scale) + '%';
+    document.getElementById('screenshot-scale').value = ss?.scale ?? p.scale;
+    document.getElementById('screenshot-scale-value').textContent = formatValue(ss?.scale ?? p.scale) + '%';
     document.getElementById('screenshot-x').value = p.x;
     document.getElementById('screenshot-x-value').textContent = formatValue(p.x) + '%';
-    document.getElementById('screenshot-y').value = p.y;
-    document.getElementById('screenshot-y-value').textContent = formatValue(p.y) + '%';
+    const yPercent = positionYToSliderPercent(p.y, ss?.device3D || 'iphone');
+    document.getElementById('screenshot-y').value = yPercent;
+    document.getElementById('screenshot-y-value').textContent = formatValue(yPercent);
     document.getElementById('screenshot-rotation').value = p.rotation;
     document.getElementById('screenshot-rotation-value').textContent = formatValue(p.rotation) + '°';
 
@@ -6059,15 +6382,23 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
 
     const textDefaults = normalizeTextSettings(state.defaults.text);
     state.defaults.text = textDefaults;
+    const activeSet = state.activeScreenshotSet === screenshotSetKeys.ipad ? screenshotSetKeys.ipad : screenshotSetKeys.phone;
+    const screenshotDefaults = JSON.parse(JSON.stringify(state.defaults.screenshot));
+    if (activeSet === screenshotSetKeys.ipad) {
+        screenshotDefaults.device3D = 'ipad';
+    } else if (screenshotDefaults.device3D === 'ipad' || !screenshotDefaults.device3D) {
+        screenshotDefaults.device3D = 'iphone';
+    }
+    const effectiveDeviceType = activeSet === screenshotSetKeys.ipad ? 'iPad' : 'iPhone';
 
     // Each screenshot gets its own copy of all settings from defaults
     state.screenshots.push({
         image: img || null, // Keep for legacy compatibility
         name: name || 'Blank Screen',
-        deviceType: deviceType,
+        deviceType: effectiveDeviceType,
         localizedImages: localizedImages,
         background: JSON.parse(JSON.stringify(state.defaults.background)),
-        screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
+        screenshot: screenshotDefaults,
         text: JSON.parse(JSON.stringify(textDefaults)),
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),
         popouts: [],
@@ -6088,11 +6419,12 @@ let draggedScreenshotIndex = null;
 function updateScreenshotList() {
     screenshotList.innerHTML = '';
     const isEmpty = state.screenshots.length === 0;
+    const hasAnyScreenshots = getTotalScreenshotCount() > 0;
     noScreenshot.style.display = isEmpty ? 'block' : 'none';
 
     // Disable right sidebar and export buttons when no screenshots
     const rightSidebar = document.querySelector('.sidebar-right');
-    if (rightSidebar) rightSidebar.classList.toggle('disabled', isEmpty);
+    if (rightSidebar) rightSidebar.classList.toggle('disabled', !hasAnyScreenshots);
     const exportCurrent = document.getElementById('export-current');
     const exportAll = document.getElementById('export-all');
     if (exportCurrent) { exportCurrent.disabled = isEmpty; exportCurrent.style.opacity = isEmpty ? '0.4' : ''; exportCurrent.style.pointerEvents = isEmpty ? 'none' : ''; }

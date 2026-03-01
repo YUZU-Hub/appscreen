@@ -1,4 +1,6 @@
-// Three.js 3D Renderer for iPhone mockups
+// Three.js 3D Renderer for device mockups
+
+console.log('[3D] three-renderer build: ipad-angle-v6-ipad-no-rounding-only');
 
 let threeRenderer = null;
 let threeScene = null;
@@ -11,6 +13,7 @@ let orbitControls = null;
 let isThreeJSInitialized = false;
 let phoneModelLoaded = false;
 let phoneModelLoading = false;
+let activeModelLoadRequestId = 0;
 
 // Screen texture for the screenshot
 let screenTexture = null;
@@ -26,6 +29,8 @@ let currentDeviceModel = 'iphone';
 
 // Cache for loaded phone models (for rendering different devices in side previews)
 let phoneModelCache = {};  // { deviceType: { model, pivot, screenPlane, baseScale, loaded } }
+// Runtime-resolved screen anchors per device
+let resolvedScreenAnchors = {}; // { deviceType: { offset: {x,y,z}, size: {x,y,z}|null, source } }
 
 // Device-specific configurations
 const deviceConfigs = {
@@ -46,8 +51,270 @@ const deviceConfigs = {
         positionOffsetFactor: 0.5,
         cornerRadiusFactor: 0.04,
         modelRotation: { x: 0, y: 0, z: 0 }  // Adjust to correct model tilt (in degrees)
+    },
+    ipad: {
+        modelPath: 'models/ipad_pro.glb',
+        aspectRatio: 2048 / 2732,
+        screenHeightFactor: 0.814,
+        // Calibrated to the iPad inner display area in model-local units.
+        screenOffset: { x: -0.00048, y: 0.14044, z: 1.495 },
+        // Fine tune while keeping autoDetectScreenAnchor=true (use tiny values).
+        screenOffsetNudge: { x: 0, y: 0.000006, z: 0 },
+        screenPlaneSize: { width: 0.0019, height: 0.0025 },
+        screenDepthOffset: 0.0000,
+        positionOffsetFactor: 0.6,
+        cornerRadiusFactor: 0.0,
+        modelRotation: { x: 0, y: 0, z: 0 },
+        autoDetectScreenAnchor: true,
+        screenAnchorHints: ['black_front', 'front_texture', 'screen', 'display', 'glass'],
+        screenSizeMultiplier: 1.065,
+        modelScaleMultiplier: 0.72
     }
 };
+
+function detectScreenAnchor(model, config) {
+    const hints = (config.screenAnchorHints && config.screenAnchorHints.length > 0)
+        ? config.screenAnchorHints.map(h => h.toLowerCase())
+        : ['screen', 'display', 'glass', 'front'];
+
+    model.updateMatrixWorld(true);
+    const modelWorldQuaternion = new THREE.Quaternion();
+    model.getWorldQuaternion(modelWorldQuaternion);
+    const inverseModelWorldQuaternion = modelWorldQuaternion.clone().invert();
+
+    let best = null;
+
+    model.traverse((child) => {
+        if (!child.isMesh || !child.geometry) return;
+
+        const name = (child.name || '').toLowerCase();
+        const materialNameRaw = Array.isArray(child.material)
+            ? child.material.map(m => m?.name || '').join(' ')
+            : (child.material?.name || '');
+        const materialName = materialNameRaw.toLowerCase();
+
+        const matchesHint = hints.some((hint) => name.includes(hint) || materialName.includes(hint));
+        if (!matchesHint) return;
+
+        const boxWorld = new THREE.Box3().setFromObject(child);
+        if (!Number.isFinite(boxWorld.min.x) || !Number.isFinite(boxWorld.max.x)) return;
+
+        const centerWorld = boxWorld.getCenter(new THREE.Vector3());
+        const sizeWorld = boxWorld.getSize(new THREE.Vector3());
+        const centerLocal = model.worldToLocal(centerWorld.clone());
+        const childWorldQuaternion = new THREE.Quaternion();
+        child.getWorldQuaternion(childWorldQuaternion);
+        const rotationLocal = inverseModelWorldQuaternion.clone().multiply(childWorldQuaternion);
+
+        const modelScale = model.scale.x || 1;
+        const sizeLocal = sizeWorld.clone().multiplyScalar(1 / modelScale);
+        const areaWorld = Math.max(0, sizeWorld.x * sizeWorld.y);
+        const aspect = (sizeWorld.y !== 0) ? Math.abs(sizeWorld.x / sizeWorld.y) : 0;
+        const targetAspect = config.aspectRatio || 1;
+        const aspectError = aspect > 0 ? Math.abs(Math.log(aspect / targetAspect)) : Number.POSITIVE_INFINITY;
+        const aspectScore = Number.isFinite(aspectError) ? Math.max(0, 1 - aspectError) : 0;
+
+        let bonus = 0;
+        if (materialName.includes('black_front')) bonus += 5000;
+        if (materialName.includes('front_texture')) bonus += 4000;
+        if (materialName.includes('screen') || materialName.includes('display')) bonus += 3000;
+        if (materialName.includes('glass')) bonus += 1500;
+        if (name.includes('screen') || name.includes('display')) bonus += 1500;
+
+        // Strongly prioritize aspect-ratio match to avoid picking front/bezel helper meshes.
+        const score = aspectScore * 1_000_000_000 + areaWorld * 100_000 + centerLocal.z * 10_000 + bonus;
+
+        if (!best || score > best.score) {
+            best = {
+                score,
+                meshName: child.name || '',
+                materialName: materialNameRaw || '',
+                offset: { x: centerLocal.x, y: centerLocal.y, z: centerLocal.z },
+                size: { x: sizeLocal.x, y: sizeLocal.y, z: sizeLocal.z },
+                rotationQuaternion: {
+                    x: rotationLocal.x,
+                    y: rotationLocal.y,
+                    z: rotationLocal.z,
+                    w: rotationLocal.w
+                }
+            };
+        }
+    });
+
+    if (!best) return null;
+
+    return {
+        offset: best.offset,
+        size: best.size,
+        rotationQuaternion: best.rotationQuaternion,
+        source: 'auto-detected',
+        meshName: best.meshName,
+        materialName: best.materialName
+    };
+}
+
+function getScreenOffsetNudge(config) {
+    const n = config?.screenOffsetNudge || {};
+    return {
+        x: Number.isFinite(n.x) ? n.x : 0,
+        y: Number.isFinite(n.y) ? n.y : 0,
+        z: Number.isFinite(n.z) ? n.z : 0
+    };
+}
+
+function resolveScreenAnchorForDevice(model, deviceType, config) {
+    const nudge = getScreenOffsetNudge(config);
+    if (config.autoDetectScreenAnchor) {
+        const detected = detectScreenAnchor(model, config);
+        if (detected) {
+            resolvedScreenAnchors[deviceType] = {
+                offset: {
+                    x: detected.offset.x + nudge.x,
+                    y: detected.offset.y + nudge.y,
+                    z: detected.offset.z + nudge.z
+                },
+                size: detected.size ? { ...detected.size } : null,
+                rotationQuaternion: detected.rotationQuaternion ? { ...detected.rotationQuaternion } : null,
+                source: detected.source
+            };
+            return resolvedScreenAnchors[deviceType];
+        }
+    }
+
+    resolvedScreenAnchors[deviceType] = {
+        offset: {
+            x: (config.screenOffset?.x || 0) + nudge.x,
+            y: (config.screenOffset?.y || 0) + nudge.y,
+            z: (config.screenOffset?.z || 0) + nudge.z
+        },
+        size: null,
+        rotationQuaternion: null,
+        source: 'config'
+    };
+    return resolvedScreenAnchors[deviceType];
+}
+
+function getScreenPlaneSize(config, screenAnchor) {
+    if (config.screenPlaneSize?.width > 0 && config.screenPlaneSize?.height > 0) {
+        const multiplier = config.screenSizeMultiplier || 1;
+        return {
+            width: config.screenPlaneSize.width * multiplier,
+            height: config.screenPlaneSize.height * multiplier,
+            source: 'config-plane-size'
+        };
+    }
+
+    if (screenAnchor?.size?.x > 0 && screenAnchor?.size?.y > 0) {
+        const multiplier = config.screenSizeMultiplier || 1;
+        let width = screenAnchor.size.x * multiplier;
+        let height = screenAnchor.size.y * multiplier;
+        const targetAspect = config.aspectRatio || 0;
+
+        // Keep the detected screen plane coherent with device aspect ratio.
+        if (targetAspect > 0 && width > 0 && height > 0) {
+            const currentAspect = width / height;
+            const aspectDelta = Math.abs(currentAspect - targetAspect) / targetAspect;
+            if (Number.isFinite(aspectDelta) && aspectDelta > 0.08) {
+                if (currentAspect > targetAspect) {
+                    width = height * targetAspect;
+                } else {
+                    height = width / targetAspect;
+                }
+            }
+        }
+
+        return {
+            width,
+            height,
+            source: 'anchor-size'
+        };
+    }
+
+    const height = 4.3 * config.screenHeightFactor;
+    return {
+        width: height * config.aspectRatio,
+        height: height,
+        source: 'config-size'
+    };
+}
+
+function getModelRenderScale(baseScale, config) {
+    const multiplier = config.modelScaleMultiplier || 1;
+    return baseScale * multiplier;
+}
+
+function recenterIpadModelIfNeeded(model, deviceType) {
+    if (deviceType !== 'ipad') return;
+
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const threshold = 5;
+    const isFar =
+        Math.abs(center.x) > threshold ||
+        Math.abs(center.y) > threshold ||
+        Math.abs(center.z) > threshold;
+
+    if (!isFar) return;
+
+    model.position.sub(center);
+    model.updateMatrixWorld(true);
+
+    const fixedBox = new THREE.Box3().setFromObject(model);
+    const fixedCenter = fixedBox.getCenter(new THREE.Vector3());
+    console.log('[3D][iPad] recentered model', {
+        beforeCenter: { x: center.x, y: center.y, z: center.z },
+        afterCenter: { x: fixedCenter.x, y: fixedCenter.y, z: fixedCenter.z }
+    });
+}
+
+function shouldForceOverlayOnTop(deviceType) {
+    return deviceType !== 'ipad';
+}
+
+function getScreenPlaneRenderOrder(deviceType) {
+    return shouldForceOverlayOnTop(deviceType) ? 10 : -1;
+}
+
+function applyScreenPlaneRotation(screenPlane, screenAnchor, config) {
+    const anchorQuat = screenAnchor?.rotationQuaternion;
+    if (anchorQuat && Number.isFinite(anchorQuat.x) && Number.isFinite(anchorQuat.y) && Number.isFinite(anchorQuat.z) && Number.isFinite(anchorQuat.w)) {
+        screenPlane.quaternion.set(anchorQuat.x, anchorQuat.y, anchorQuat.z, anchorQuat.w);
+        return;
+    }
+
+    const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
+    screenPlane.rotation.set(
+        -modelRot.x * Math.PI / 180,
+        -modelRot.y * Math.PI / 180,
+        -modelRot.z * Math.PI / 180
+    );
+}
+
+function createScreenMaterial(texture, deviceType) {
+    const forceOnTop = shouldForceOverlayOnTop(deviceType);
+    if (!forceOnTop) {
+        // iPad: render in opaque pipeline with alpha cutout so bezel/frame depth occlusion works correctly.
+        return new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.FrontSide,
+            transparent: false,
+            alphaTest: 0.01,
+            depthTest: true,
+            depthWrite: true
+        });
+    }
+    return new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -2
+    });
+}
 
 // Initialize Three.js scene
 function initThreeJS() {
@@ -133,14 +400,28 @@ function loadPhoneModel() {
     if (phoneModelLoading) return; // Prevent double loading
     phoneModelLoading = true;
 
-    const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
+    const requestedDevice = currentDeviceModel;
+    const config = deviceConfigs[requestedDevice] || deviceConfigs.iphone;
+    const requestId = ++activeModelLoadRequestId;
     const loader = new THREE.GLTFLoader();
 
     loader.load(
         config.modelPath,
         (gltf) => {
+            // Ignore stale async responses from older model requests.
+            if (requestId !== activeModelLoadRequestId) {
+                gltf.scene?.traverse((child) => {
+                    if (child.isMesh) {
+                        child.geometry?.dispose();
+                        child.material?.dispose?.();
+                    }
+                });
+                return;
+            }
+
             phoneModelLoading = false;
             phoneModel = gltf.scene;
+            currentDeviceModel = requestedDevice;
 
             // Center and scale the model
             const box = new THREE.Box3().setFromObject(phoneModel);
@@ -153,69 +434,22 @@ function loadPhoneModel() {
             // Scale to fit view (3.75 = 2.5 * 1.5 to match 2D scale at 100%)
             const maxDim = Math.max(size.x, size.y, size.z);
             baseModelScale = 3.75 / maxDim;
-            phoneModel.scale.setScalar(baseModelScale);
-
-            // Log all meshes to help identify the screen
-            console.log('Phone model meshes:');
-            let blackMeshes = [];
-            phoneModel.traverse((child) => {
-                if (child.isMesh) {
-                    console.log('  Mesh:', child.name, '| Material:', child.material?.name);
-
-                    // Look for screen mesh - in this model it's likely "black" material
-                    const name = (child.name || '').toLowerCase();
-                    const matName = (child.material?.name || '').toLowerCase();
-
-                    if (matName === 'black') {
-                        blackMeshes.push(child);
-                    }
-
-                    if (name.includes('screen') || name.includes('display') ||
-                        matName.includes('screen') || matName.includes('display') ||
-                        matName.includes('emission') || matName.includes('emissive')) {
-                        screenMesh = child;
-                        console.log('  -> Identified as screen mesh');
-                    }
-                }
-            });
-
-            // Find the front glass - that's where the screen actually is
-            // Don't use black meshes, those are small elements like notch/dynamic island
-            let glassMeshes = [];
-            phoneModel.traverse((child) => {
-                if (child.isMesh) {
-                    const matName = (child.material?.name || '').toLowerCase();
-                    if (matName === 'glass') {
-                        child.geometry.computeBoundingBox();
-                        const box = child.geometry.boundingBox;
-                        const size = new THREE.Vector3();
-                        box.getSize(size);
-                        const area = size.x * size.y;
-                        glassMeshes.push({ mesh: child, area, size });
-                        console.log('  Glass mesh:', child.name, 'size:', size.x.toFixed(3), 'x', size.y.toFixed(3), 'area:', area.toFixed(3));
-                    }
-                }
-            });
-
-            // Use the largest glass mesh (front screen glass)
-            if (glassMeshes.length > 0) {
-                glassMeshes.sort((a, b) => b.area - a.area);
-                screenMesh = glassMeshes[0].mesh;
-                console.log('  -> Using largest glass mesh as screen:', screenMesh.name);
-            }
+            const modelRenderScale = getModelRenderScale(baseModelScale, config);
+            phoneModel.scale.setScalar(modelRenderScale);
 
             // Create a pivot group for rotation around screen center
-            const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-            const screenOffset = config.screenOffset;
+            const screenAnchor = resolveScreenAnchorForDevice(phoneModel, requestedDevice, config);
+            const screenOffset = screenAnchor.offset;
 
             phonePivot = new THREE.Group();
 
             // Offset the phone model so the screen center is at the pivot's origin
             phoneModel.position.set(
-                -screenOffset.x * baseModelScale,
-                -screenOffset.y * baseModelScale,
-                -screenOffset.z * baseModelScale
+                -screenOffset.x * modelRenderScale,
+                -screenOffset.y * modelRenderScale,
+                -screenOffset.z * modelRenderScale
             );
+            recenterIpadModelIfNeeded(phoneModel, requestedDevice);
 
             phonePivot.add(phoneModel);
             threeScene.add(phonePivot);
@@ -243,13 +477,18 @@ function loadPhoneModel() {
                 }
             }
 
-            console.log('Phone model loaded successfully');
         },
         (progress) => {
             const percent = Math.round(progress.loaded / progress.total * 100);
             console.log('Loading phone model... ' + percent + '%');
         },
         (error) => {
+            if (requestId !== activeModelLoadRequestId) {
+                return;
+            }
+            phoneModelLoading = false;
+            phoneModelLoaded = false;
+            phoneModel = null;
             console.error('Error loading phone model:', error);
         }
     );
@@ -298,13 +537,29 @@ function switchPhoneModel(deviceType) {
     phoneModelLoaded = false;
 
     // Load new model using the config
-    const config = deviceConfigs[currentDeviceModel];
+    const requestedDevice = deviceType;
+    const config = deviceConfigs[requestedDevice];
     const loader = new THREE.GLTFLoader();
+    phoneModelLoading = true;
+    const requestId = ++activeModelLoadRequestId;
 
     loader.load(
         config.modelPath,
         (gltf) => {
+            // Ignore stale async responses from older model requests.
+            if (requestId !== activeModelLoadRequestId) {
+                gltf.scene?.traverse((child) => {
+                    if (child.isMesh) {
+                        child.geometry?.dispose();
+                        child.material?.dispose?.();
+                    }
+                });
+                return;
+            }
+
+            phoneModelLoading = false;
             phoneModel = gltf.scene;
+            currentDeviceModel = requestedDevice;
 
             // Center and scale the model
             const box = new THREE.Box3().setFromObject(phoneModel);
@@ -315,18 +570,21 @@ function switchPhoneModel(deviceType) {
 
             const maxDim = Math.max(size.x, size.y, size.z);
             baseModelScale = 3.75 / maxDim;
-            phoneModel.scale.setScalar(baseModelScale);
+            const modelRenderScale = getModelRenderScale(baseModelScale, config);
+            phoneModel.scale.setScalar(modelRenderScale);
 
             // Create a pivot group for rotation around screen center
-            const screenOffset = config.screenOffset;
+            const screenAnchor = resolveScreenAnchorForDevice(phoneModel, requestedDevice, config);
+            const screenOffset = screenAnchor.offset;
             phonePivot = new THREE.Group();
 
             // Offset the phone model so the screen center is at the pivot's origin
             phoneModel.position.set(
-                -screenOffset.x * baseModelScale,
-                -screenOffset.y * baseModelScale,
-                -screenOffset.z * baseModelScale
+                -screenOffset.x * modelRenderScale,
+                -screenOffset.y * modelRenderScale,
+                -screenOffset.z * modelRenderScale
             );
+            recenterIpadModelIfNeeded(phoneModel, requestedDevice);
 
             phonePivot.add(phoneModel);
             threeScene.add(phonePivot);
@@ -353,14 +611,19 @@ function switchPhoneModel(deviceType) {
                 }
             }
 
-            console.log(deviceType + ' model loaded successfully');
         },
         (progress) => {
             const percent = Math.round(progress.loaded / progress.total * 100);
-            console.log('Loading ' + deviceType + ' model... ' + percent + '%');
+            console.log('Loading ' + requestedDevice + ' model... ' + percent + '%');
         },
         (error) => {
-            console.error('Error loading ' + deviceType + ' model:', error);
+            if (requestId !== activeModelLoadRequestId) {
+                return;
+            }
+            phoneModelLoading = false;
+            phoneModelLoaded = false;
+            phoneModel = null;
+            console.error('Error loading ' + requestedDevice + ' model:', error);
         }
     );
 }
@@ -397,40 +660,45 @@ function loadCachedPhoneModel(deviceType) {
 
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const modelBaseScale = 3.75 / maxDim;
-                model.scale.setScalar(modelBaseScale);
+                const modelRenderScale = getModelRenderScale(modelBaseScale, config);
+                model.scale.setScalar(modelRenderScale);
 
                 // Create pivot for this model
-                const screenOffset = config.screenOffset;
+                const screenAnchor = resolveScreenAnchorForDevice(model, deviceType, config);
+                const screenOffset = screenAnchor.offset;
                 const pivot = new THREE.Group();
 
                 model.position.set(
-                    -screenOffset.x * modelBaseScale,
-                    -screenOffset.y * modelBaseScale,
-                    -screenOffset.z * modelBaseScale
+                    -screenOffset.x * modelRenderScale,
+                    -screenOffset.y * modelRenderScale,
+                    -screenOffset.z * modelRenderScale
                 );
+                recenterIpadModelIfNeeded(model, deviceType);
 
                 pivot.add(model);
 
                 // Create screen plane for this model
-                const aspectRatio = config.aspectRatio;
-                const planeHeight = 4.3 * config.screenHeightFactor;
-                const planeWidth = planeHeight * aspectRatio;
+                const planeSize = getScreenPlaneSize(config, screenAnchor);
+                const planeHeight = planeSize.height;
+                const planeWidth = planeSize.width;
 
                 const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+                const forceOnTop = shouldForceOverlayOnTop(deviceType);
                 const material = new THREE.MeshBasicMaterial({
                     color: 0x111111,
-                    side: THREE.DoubleSide
+                    side: forceOnTop ? THREE.DoubleSide : THREE.FrontSide,
+                    depthTest: true,
+                    depthWrite: !forceOnTop,
+                    polygonOffset: forceOnTop,
+                    polygonOffsetFactor: forceOnTop ? -1 : 0,
+                    polygonOffsetUnits: forceOnTop ? -2 : 0
                 });
 
                 const screenPlane = new THREE.Mesh(geometry, material);
-                screenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
-
-                const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
-                screenPlane.rotation.set(
-                    -modelRot.x * Math.PI / 180,
-                    -modelRot.y * Math.PI / 180,
-                    -modelRot.z * Math.PI / 180
-                );
+                const depthOffset = config.screenDepthOffset || 0;
+                screenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z + depthOffset);
+                screenPlane.renderOrder = getScreenPlaneRenderOrder(deviceType);
+                applyScreenPlaneRotation(screenPlane, screenAnchor, config);
 
                 model.add(screenPlane);
 
@@ -438,12 +706,11 @@ function loadCachedPhoneModel(deviceType) {
                     model: model,
                     pivot: pivot,
                     screenPlane: screenPlane,
-                    baseScale: modelBaseScale,
+                    baseScale: modelRenderScale,
                     loaded: true,
                     loading: false
                 };
 
-                console.log('Cached ' + deviceType + ' model for side previews');
                 resolve(phoneModelCache[deviceType]);
             },
             undefined,
@@ -475,54 +742,85 @@ function createScreenOverlay() {
     }
 
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
+    const screenAnchor = resolvedScreenAnchors[currentDeviceModel] || {
+        offset: { ...config.screenOffset },
+        size: null,
+        rotationQuaternion: null,
+        source: 'config'
+    };
+    const screenOffset = screenAnchor.offset;
 
-    // Use device-specific aspect ratio and screen size
-    const aspectRatio = config.aspectRatio;
-    const planeHeight = 4.3 * config.screenHeightFactor;
-    const planeWidth = planeHeight * aspectRatio;
+    const planeSize = getScreenPlaneSize(config, screenAnchor);
+    const planeHeight = planeSize.height;
+    const planeWidth = planeSize.width;
 
     const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const forceOnTop = shouldForceOverlayOnTop(currentDeviceModel);
     const material = new THREE.MeshBasicMaterial({
         color: 0x111111,
-        side: THREE.DoubleSide
+        side: forceOnTop ? THREE.DoubleSide : THREE.FrontSide,
+        depthTest: true,
+        depthWrite: !forceOnTop,
+        polygonOffset: forceOnTop,
+        polygonOffsetFactor: forceOnTop ? -1 : 0,
+        polygonOffsetUnits: forceOnTop ? -2 : 0
     });
 
     customScreenPlane = new THREE.Mesh(geometry, material);
+    customScreenPlane.renderOrder = getScreenPlaneRenderOrder(currentDeviceModel);
 
     // Position at center of phone, slightly in front of glass
-    const screenOffset = config.screenOffset;
-    customScreenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
+    const depthOffset = config.screenDepthOffset || 0;
+    customScreenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z + depthOffset);
 
-    // Counter-rotate the screen to cancel out the model's base rotation
-    // This keeps the screen facing forward when the pivot applies the base rotation
-    const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
-    customScreenPlane.rotation.set(
-        -modelRot.x * Math.PI / 180,
-        -modelRot.y * Math.PI / 180,
-        -modelRot.z * Math.PI / 180
-    );
+    // Match the detected screen-surface orientation when available.
+    applyScreenPlaneRotation(customScreenPlane, screenAnchor, config);
 
     // Add directly to phoneModel so it moves with it
     phoneModel.add(customScreenPlane);
 
+    if (currentDeviceModel === 'ipad') {
+        console.log('[3D][iPad] overlay-v3', {
+            build: 'ipad-angle-v3',
+            planeLocal: { width: planeWidth, height: planeHeight },
+            planeWorld: {
+                width: planeWidth * phoneModel.scale.x,
+                height: planeHeight * phoneModel.scale.y
+            },
+            modelScale: phoneModel.scale.x,
+            depthOffset,
+            renderOrder: customScreenPlane.renderOrder,
+            screenOffset,
+            planeRotationDeg: {
+                x: customScreenPlane.rotation.x * (180 / Math.PI),
+                y: customScreenPlane.rotation.y * (180 / Math.PI),
+                z: customScreenPlane.rotation.z * (180 / Math.PI)
+            },
+            planeQuaternion: {
+                x: customScreenPlane.quaternion.x,
+                y: customScreenPlane.quaternion.y,
+                z: customScreenPlane.quaternion.z,
+                w: customScreenPlane.quaternion.w
+            },
+            anchorQuaternion: screenAnchor.rotationQuaternion || null,
+            anchorSource: screenAnchor.source || 'config'
+        });
+    }
+
     // basePositionOffset is no longer needed since we use pivot-based rotation
     basePositionOffset.y = 0;
 
-    console.log('Created screen overlay for ' + currentDeviceModel + ' at:', customScreenPlane.position);
-    console.log('Plane size:', planeWidth.toFixed(4), 'x', planeHeight.toFixed(4));
 }
 
-// Create a rounded corner version of the screenshot
 function createRoundedScreenImage(image, cornerRadius) {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
     canvas.height = image.height;
     const ctx = canvas.getContext('2d');
 
-    // Draw rounded rectangle path
     const w = canvas.width;
     const h = canvas.height;
-    const r = cornerRadius;
+    const r = Math.max(0, Math.min(cornerRadius, Math.min(w, h) / 2));
 
     ctx.beginPath();
     ctx.moveTo(r, 0);
@@ -535,12 +833,23 @@ function createRoundedScreenImage(image, cornerRadius) {
     ctx.lineTo(0, r);
     ctx.quadraticCurveTo(0, 0, r, 0);
     ctx.closePath();
-
-    // Clip to rounded rectangle and draw image
     ctx.clip();
     ctx.drawImage(image, 0, 0);
 
     return canvas;
+}
+
+function getTextureSourceImageForDevice(image, deviceType) {
+    if (!image) return image;
+    if (deviceType === 'ipad') return image;
+
+    const config = deviceConfigs[deviceType] || deviceConfigs.iphone;
+    const factor = Number.isFinite(config.cornerRadiusFactor) ? config.cornerRadiusFactor : 0;
+    if (factor <= 0) return image;
+
+    const cornerRadius = Math.round(image.width * factor);
+    if (cornerRadius <= 0) return image;
+    return createRoundedScreenImage(image, cornerRadius);
 }
 
 // Update the screen texture with current screenshot
@@ -560,28 +869,19 @@ function updateScreenTexture() {
         screenTexture.dispose();
     }
 
-    // Create rounded corner version of the image using device-specific corner radius
-    const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-    const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
-    const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
-
-    screenTexture = new THREE.Texture(roundedImage);
+    const textureSource = getTextureSourceImageForDevice(screenshotImage, currentDeviceModel);
+    screenTexture = new THREE.Texture(textureSource);
     screenTexture.needsUpdate = true;
     screenTexture.encoding = THREE.sRGBEncoding;
     screenTexture.flipY = true;
 
     // Create a material for the screen with transparency for rounded corners
-    const screenMaterial = new THREE.MeshBasicMaterial({
-        map: screenTexture,
-        side: THREE.FrontSide,
-        transparent: true
-    });
+    const screenMaterial = createScreenMaterial(screenTexture, currentDeviceModel);
 
     // Apply to custom screen plane (preferred)
     if (customScreenPlane) {
         customScreenPlane.material.dispose();
         customScreenPlane.material = screenMaterial;
-        console.log('Applied rounded texture to custom screen plane');
     }
 
     // Trigger render update
@@ -595,8 +895,6 @@ function setThreeJSRotation(rotX, rotY, rotZ) {
     // Add the device's base model rotation to the user's rotation
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
     const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
-
-    console.log('setThreeJSRotation:', currentDeviceModel, 'modelRot:', modelRot, 'user:', rotX, rotY, rotZ);
 
     // Rotate the pivot (which rotates around the screen center)
     phonePivot.rotation.x = (rotX + modelRot.x) * Math.PI / 180;
@@ -774,18 +1072,13 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         : screenshot?.image;
     const oldMaterial = screenPlaneToUse ? screenPlaneToUse.material : null;
     if (screenshotImage && screenPlaneToUse) {
-        const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
-        const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
-        const newTexture = new THREE.Texture(roundedImage);
+        const textureSource = getTextureSourceImageForDevice(screenshotImage, screenshotDeviceType);
+        const newTexture = new THREE.Texture(textureSource);
         newTexture.needsUpdate = true;
         newTexture.encoding = THREE.sRGBEncoding;
         newTexture.flipY = true;
 
-        const newMaterial = new THREE.MeshBasicMaterial({
-            map: newTexture,
-            side: THREE.FrontSide,
-            transparent: true
-        });
+        const newMaterial = createScreenMaterial(newTexture, screenshotDeviceType);
         screenPlaneToUse.material = newMaterial;
     }
 
@@ -938,6 +1231,47 @@ let lastMouseX = 0;
 let lastMouseY = 0;
 let dragUpdatePending = false;
 
+function getRotationLimitsForActiveDevice(ss) {
+    const device3D = ss?.device3D || currentDeviceModel || 'iphone';
+    if (typeof window.getRotationLimitsForDevice3D === 'function') {
+        return window.getRotationLimitsForDevice3D(device3D);
+    }
+    return { xMin: -45, xMax: 45, yMin: -45, yMax: 45, zMin: -45, zMax: 45 };
+}
+
+function getPositionYLimitsForActiveDevice(ss) {
+    const device3D = ss?.device3D || currentDeviceModel || 'iphone';
+    if (typeof window.getPositionYLimitsForDevice3D === 'function') {
+        return window.getPositionYLimitsForDevice3D(device3D);
+    }
+    return { min: -30, max: 130 };
+}
+
+function getPositionYPercentForActiveDevice(ss) {
+    const y = ss?.y ?? 60;
+    if (typeof window.positionYToSliderPercent === 'function') {
+        return window.positionYToSliderPercent(y, ss?.device3D || currentDeviceModel || 'iphone');
+    }
+    const limits = getPositionYLimitsForActiveDevice(ss);
+    const span = limits.max - limits.min;
+    const sliderMin = -130;
+    const sliderMax = 230;
+    const sliderSpan = sliderMax - sliderMin;
+    if (!Number.isFinite(span) || span <= 0 || !Number.isFinite(sliderSpan) || sliderSpan <= 0) return 50;
+    const rawRatio = (y - limits.min) / span;
+    const sliderValue = sliderMin + rawRatio * sliderSpan;
+    return Math.max(sliderMin, Math.min(sliderMax, sliderValue));
+}
+
+function clampRotationToActiveLimits(ss) {
+    if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
+    const limits = getRotationLimitsForActiveDevice(ss);
+    ss.rotation3D.x = Math.max(limits.xMin, Math.min(limits.xMax, ss.rotation3D.x));
+    ss.rotation3D.y = Math.max(limits.yMin, Math.min(limits.yMax, ss.rotation3D.y));
+    ss.rotation3D.z = Math.max(limits.zMin, Math.min(limits.zMax, ss.rotation3D.z));
+    return limits;
+}
+
 function getUse3D() {
     if (typeof getScreenshotSettings === 'function') {
         const ss = getScreenshotSettings();
@@ -983,25 +1317,28 @@ function setup3DCanvasInteraction() {
         if (isAltDragging) {
             // Alt+drag: move position (x, y)
             ss.x = Math.max(0, Math.min(100, ss.x + deltaX * 0.2));
-            ss.y = Math.max(0, Math.min(100, ss.y + deltaY * 0.2));
+            const yLimits = getPositionYLimitsForActiveDevice(ss);
+            ss.y = Math.max(yLimits.min, Math.min(yLimits.max, ss.y + deltaY * 0.2));
 
             // Update sliders
             document.getElementById('screenshot-x').value = ss.x;
             document.getElementById('screenshot-x-value').textContent = Math.round(ss.x) + '%';
-            document.getElementById('screenshot-y').value = ss.y;
-            document.getElementById('screenshot-y-value').textContent = Math.round(ss.y) + '%';
+            const yPercent = getPositionYPercentForActiveDevice(ss);
+            document.getElementById('screenshot-y').value = yPercent;
+            document.getElementById('screenshot-y-value').textContent = formatValue(yPercent);
         } else {
             // Regular drag: rotate
             if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
 
-            ss.rotation3D.y = Math.max(-45, Math.min(45, ss.rotation3D.y + deltaX * 0.5));
-            ss.rotation3D.x = Math.max(-45, Math.min(45, ss.rotation3D.x + deltaY * 0.5));
+            ss.rotation3D.y = Number((ss.rotation3D.y + deltaX * 0.5).toFixed(2));
+            ss.rotation3D.x = Number((ss.rotation3D.x + deltaY * 0.5).toFixed(2));
+            clampRotationToActiveLimits(ss);
 
             // Update sliders
             document.getElementById('rotation-3d-y').value = ss.rotation3D.y;
-            document.getElementById('rotation-3d-y-value').textContent = Math.round(ss.rotation3D.y) + '°';
+            document.getElementById('rotation-3d-y-value').textContent = formatValue(ss.rotation3D.y) + '°';
             document.getElementById('rotation-3d-x').value = ss.rotation3D.x;
-            document.getElementById('rotation-3d-x-value').textContent = Math.round(ss.rotation3D.x) + '°';
+            document.getElementById('rotation-3d-x-value').textContent = formatValue(ss.rotation3D.x) + '°';
 
             // Apply rotation directly to model (fast path - skip full updateCanvas)
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);

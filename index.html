@@ -528,26 +528,27 @@
                         <div class="btn-group" id="device-3d-selector">
                             <button class="active" data-model="iphone">iPhone</button>
                             <button data-model="samsung">Samsung</button>
+                            <button data-model="ipad">iPad</button>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation X (Tilt)</label>
                         <div class="control-row">
-                            <input type="range" id="rotation-3d-x" min="-45" max="45" value="0">
+                            <input type="range" id="rotation-3d-x" min="-45" max="45" step="0.1" value="0">
                             <span class="range-value" id="rotation-3d-x-value">0°</span>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation Y (Turn)</label>
                         <div class="control-row">
-                            <input type="range" id="rotation-3d-y" min="-45" max="45" value="0">
+                            <input type="range" id="rotation-3d-y" min="-45" max="45" step="0.1" value="0">
                             <span class="range-value" id="rotation-3d-y-value">0°</span>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation Z (Roll)</label>
                         <div class="control-row">
-                            <input type="range" id="rotation-3d-z" min="-45" max="45" value="0">
+                            <input type="range" id="rotation-3d-z" min="-45" max="45" step="0.1" value="0">
                             <span class="range-value" id="rotation-3d-z-value">0°</span>
                         </div>
                     </div>
@@ -631,8 +632,8 @@
                 <div class="control-group">
                     <label class="control-label">Vertical Position</label>
                     <div class="control-row">
-                        <input type="range" id="screenshot-y" min="-30" max="130" value="55">
-                        <span class="range-value" id="screenshot-y-value">55%</span>
+                        <input type="range" id="screenshot-y" min="-130" max="230" step="0.1" value="55">
+                        <span class="range-value" id="screenshot-y-value">55</span>
                     </div>
                 </div>
 
@@ -1936,7 +1937,7 @@
     <script src="language-utils.js"></script>
     <script src="magical-titles.js"></script>
     <script src="lucide-icons.js"></script>
-    <script src="three-renderer.js"></script>
-    <script src="app.js"></script>
+    <script src="three-renderer.js?v=20260302-ipad-no-rounding-only-v1"></script>
+    <script src="app.js?v=20260301-ipad-screensets-v1"></script>
 </body>
 </html>
