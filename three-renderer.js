@@ -47,7 +47,7 @@ const deviceConfigs = {
         modelPath: 'models/samsung-galaxy-s25-ultra.glb',
         aspectRatio: 1440 / 3120,
         screenHeightFactor: 0.66,
-        screenOffset: { x: 0, y: 0.0, z: 0.08},  // Will need adjustment
+        screenOffset: { x: 0, y: 0.0, z: 0.08 },  // Will need adjustment
         positionOffsetFactor: 0.5,
         cornerRadiusFactor: 0.04,
         modelRotation: { x: 0, y: 0, z: 0 }  // Adjust to correct model tilt (in degrees)

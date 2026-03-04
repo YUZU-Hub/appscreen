@@ -2050,6 +2050,8 @@ function loadState() {
                         state.screenshotSets.phone = phoneScreenshots;
                         state.screenshotSets.ipad = ipadScreenshots;
 
+
+
                         const parsedSelectedIndexBySet = parsed.selectedIndexBySet || {};
                         state.selectedIndexBySet = {
                             phone: Number.isInteger(parsedSelectedIndexBySet.phone) && parsedSelectedIndexBySet.phone >= 0
@@ -6424,6 +6426,10 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
     const screenshotDefaults = JSON.parse(JSON.stringify(state.defaults.screenshot));
     if (activeSet === screenshotSetKeys.ipad) {
         screenshotDefaults.device3D = 'ipad';
+        screenshotDefaults.use3D = true;
+        screenshotDefaults.rotation3D = { x: 23.5, y: -8.5, z: 0 };
+        screenshotDefaults.scale = 105;
+        screenshotDefaults.y = -72.3;
     } else if (screenshotDefaults.device3D === 'ipad' || !screenshotDefaults.device3D) {
         screenshotDefaults.device3D = 'iphone';
     }
@@ -6437,7 +6443,16 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         localizedImages: localizedImages,
         background: JSON.parse(JSON.stringify(state.defaults.background)),
         screenshot: screenshotDefaults,
-        text: JSON.parse(JSON.stringify(textDefaults)),
+        text: (() => {
+            const t = JSON.parse(JSON.stringify(textDefaults));
+            if (activeSet === screenshotSetKeys.ipad) {
+                t.offsetY = 7;
+                if (t.languageSettings) {
+                    Object.values(t.languageSettings).forEach(ls => { ls.offsetY = 7; });
+                }
+            }
+            return t;
+        })(),
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),
         popouts: [],
         // Legacy overrides for backwards compatibility
