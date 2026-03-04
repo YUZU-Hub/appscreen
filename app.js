@@ -187,6 +187,31 @@ let selectedElementId = null;
 let selectedPopoutId = null;
 let draggingElement = null;
 
+// Remember last-used output size per device category (3D mode only)
+let lastPhoneOutputDevice = 'iphone-6.9';
+let lastIpadOutputDevice = 'ipad-12.9';
+
+function getOutputDeviceCategory(device) {
+    if (!device) return 'other';
+    if (device.startsWith('ipad-') || device.startsWith('android-tablet-')) return 'ipad';
+    if (device.startsWith('iphone-') || device.startsWith('android-phone')) return 'phone';
+    return 'other';
+}
+
+function applyOutputDeviceSwitch(device) {
+    state.outputDevice = device;
+    // Update dropdown UI
+    document.querySelectorAll('.output-size-menu .device-option').forEach(o => o.classList.remove('selected'));
+    const opt = document.querySelector(`.output-size-menu .device-option[data-device="${device}"]`);
+    if (opt) {
+        opt.classList.add('selected');
+        document.getElementById('output-size-name').textContent = opt.querySelector('.device-option-name').textContent;
+        document.getElementById('output-size-dims').textContent = opt.querySelector('.device-option-size').textContent;
+    }
+    const customInputs = document.getElementById('custom-size-inputs');
+    if (customInputs) customInputs.classList.remove('visible');
+}
+
 // Preload laurel SVG images for element frames
 const laurelImages = {};
 ['laurel-simple-left', 'laurel-detailed-left'].forEach(name => {
@@ -607,7 +632,7 @@ function formatValue(num) {
 const rotation3DLimits = {
     default: { xMin: -45, xMax: 45, yMin: -45, yMax: 45, zMin: -45, zMax: 45 },
     // iPad uses its own rotation constraints.
-    ipad: { xMin: -5, xMax: 60, yMin: -20, yMax: 20, zMin: -1200, zMax: 1200 }
+    ipad: { xMin: -15, xMax: 90, yMin: -40, yMax: 40, zMin: -1200, zMax: 1200 }
 };
 const positionYLimits = {
     default: { min: -30, max: 130 },
@@ -913,7 +938,7 @@ async function fetchAllGoogleFonts() {
         if (apiKey) {
             url.searchParams.set('key', apiKey);
         }
-        
+
         try {
             const response = await fetch(url);
             if (response.ok) {
@@ -4263,6 +4288,11 @@ function setupEventListeners() {
             opt.classList.add('selected');
             state.outputDevice = opt.dataset.device;
 
+            // Remember last-used output size per device category
+            const category = getOutputDeviceCategory(opt.dataset.device);
+            if (category === 'phone') lastPhoneOutputDevice = opt.dataset.device;
+            else if (category === 'ipad') lastIpadOutputDevice = opt.dataset.device;
+
             // Update trigger text
             document.getElementById('output-size-name').textContent = opt.querySelector('.device-option-name').textContent;
             document.getElementById('output-size-dims').textContent = opt.querySelector('.device-option-size').textContent;
@@ -4847,6 +4877,14 @@ function setupEventListeners() {
             const targetSet = getScreenshotSetForDevice3D(device3D);
             switchScreenshotSet(targetSet);
             setScreenshotSetting('device3D', device3D);
+
+            // Auto-switch output size to last-used value for this device category
+            if (device3D === 'ipad') {
+                applyOutputDeviceSwitch(lastIpadOutputDevice);
+            } else {
+                applyOutputDeviceSwitch(lastPhoneOutputDevice);
+            }
+
             updateScreenshotList();
             syncUIWithState();
             updateGradientStopsUI();
@@ -7644,9 +7682,9 @@ function drawElementsToContext(context, dims, elements, layer) {
             if (el.iconShadow?.enabled) {
                 const s = el.iconShadow;
                 const hex = s.color || '#000000';
-                const r = parseInt(hex.slice(1,3), 16);
-                const g = parseInt(hex.slice(3,5), 16);
-                const b = parseInt(hex.slice(5,7), 16);
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
                 context.shadowColor = `rgba(${r},${g},${b},${(s.opacity || 0) / 100})`;
                 context.shadowBlur = s.blur || 0;
                 context.shadowOffsetX = s.x || 0;
@@ -8670,7 +8708,7 @@ function renderIconGrid(category) {
     const grid = document.getElementById('icon-grid');
     if (!grid) return;
     const icons = category === 'popular' ? (typeof LUCIDE_POPULAR !== 'undefined' ? LUCIDE_POPULAR : []) :
-                                            (typeof LUCIDE_ALL !== 'undefined' ? LUCIDE_ALL : []);
+        (typeof LUCIDE_ALL !== 'undefined' ? LUCIDE_ALL : []);
     grid.innerHTML = icons.map(name =>
         `<div class="picker-grid-item icon-grid-item" data-icon-name="${name}" title="${name}"><div class="icon-placeholder"></div></div>`
     ).join('');
