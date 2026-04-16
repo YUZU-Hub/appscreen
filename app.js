@@ -536,6 +536,9 @@ function setupSliderResetButtons() {
 
 // Format number to at most 1 decimal place
 function formatValue(num) {
+    if(isNaN(num)){
+        return ""
+    }
     const rounded = Math.round(num * 10) / 10;
     return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
 }
@@ -2594,7 +2597,16 @@ function setupElementEventListeners() {
             const el = getSelectedElement();
             if (!el || el.type !== 'icon' || !el.iconShadow) return;
             el.iconShadow[prop] = parseFloat(input.value);
-            if (valEl) valEl.textContent = input.value + suffix;
+            if (valEl) valEl.value = input.value
+            if (input) input.value = input.value
+            updateCanvas();
+        });
+        valEl.addEventListener('input', () => {
+            const el = getSelectedElement();
+            if (!el || el.type !== 'icon' || !el.iconShadow) return;
+            el.iconShadow[prop] = parseFloat(valEl.value);
+            if (valEl) valEl.value = valEl.value
+            if (input) input.value = valEl.value
             updateCanvas();
         });
     };
@@ -2634,12 +2646,26 @@ function setupElementEventListeners() {
         const input = document.getElementById(id);
         const valueEl = document.getElementById(id + '-value');
         if (!input) return;
+        if(!valueEl) return
         input.addEventListener('input', () => {
             const val = parser ? parser(input.value) : parseFloat(input.value);
-            if (valueEl) valueEl.textContent = formatValue(val) + suffix;
+            if (valueEl) valueEl.value = formatValue(val)
+            if (input) input.value = formatValue(val)
+            if (selectedElementId) setElementProperty(selectedElementId, prop, val);
+        });
+        valueEl.addEventListener('input', () => {
+            const val = parser ? parser(valueEl.value) : parseFloat(valueEl.value);
+            if (valueEl) valueEl.value = formatValue(val)
+            if (input) input.value = formatValue(val)
             if (selectedElementId) setElementProperty(selectedElementId, prop, val);
         });
     };
+
+    /*document.getElementById('element-x-value').addEventListener('input', (e) => {
+        setScreenshotSetting('element-x', parseInt(e.target.value));
+        document.getElementById('element-x').value = formatValue(e.target.value)
+        updateCanvas();
+    });*/
 
     bindSlider('element-x', 'x', '%');
     bindSlider('element-y', 'y', '%');
@@ -3476,7 +3502,15 @@ function setupPopoutEventListeners() {
         if (!input) return;
         input.addEventListener('input', () => {
             const val = parseFloat(input.value);
-            if (valueEl) valueEl.textContent = formatValue(val) + suffix;
+            if (valueEl) valueEl.value = formatValue(val)
+            if (input) input.value = formatValue(val)
+            if (selectedPopoutId) setPopoutProperty(selectedPopoutId, key, val);
+            if (key.startsWith('crop')) updateCropPreview();
+        });
+        valueEl.addEventListener('input', () => {
+            const val = parseFloat(valueEl.value);
+            if (valueEl) valueEl.value = formatValue(val)
+            if (input) input.value = formatValue(val)
             if (selectedPopoutId) setPopoutProperty(selectedPopoutId, key, val);
             if (key.startsWith('crop')) updateCropPreview();
         });
@@ -3514,7 +3548,16 @@ function setupPopoutEventListeners() {
             const p = getSelectedPopout();
             if (!p) return;
             p.shadow[prop] = parseFloat(input.value);
-            if (valEl) valEl.textContent = formatValue(parseFloat(input.value)) + suffix;
+            if (valEl) valEl.value = formatValue(parseFloat(input.value))
+            if (input) input.value = formatValue(parseFloat(input.value))
+            updateCanvas();
+        });
+        valEl.addEventListener('input', () => {
+            const p = getSelectedPopout();
+            if (!p) return;
+            p.shadow[prop] = parseFloat(valEl.value);
+            if (valEl) valEl.value = formatValue(parseFloat(valEl.value))
+            if (input) input.value = formatValue(parseFloat(valEl.value))
             updateCanvas();
         });
     };
@@ -3562,7 +3605,16 @@ function setupPopoutEventListeners() {
             const p = getSelectedPopout();
             if (!p) return;
             p.border[prop] = parseFloat(input.value);
-            if (valEl) valEl.textContent = formatValue(parseFloat(input.value)) + suffix;
+            if (valEl) valEl.value = formatValue(parseFloat(input.value))
+            if (input) input.value = formatValue(parseFloat(input.value))
+            updateCanvas();
+        });
+        valEl.addEventListener('input', () => {
+            const p = getSelectedPopout();
+            if (!p) return;
+            p.border[prop] = parseFloat(valEl.value);
+            if (valEl) valEl.value = formatValue(parseFloat(valEl.value))
+            if (input) input.value = formatValue(parseFloat(valEl.value))
             updateCanvas();
         });
     };
