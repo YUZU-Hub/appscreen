@@ -422,7 +422,10 @@
                         <label class="control-label">Gradient Direction</label>
                         <div class="control-row">
                             <input type="range" id="gradient-angle" min="0" max="360" value="135">
-                            <div class="trailing-input-symbol-wrapper"><input type="text" class="range-value" id="gradient-angle-value"></input><span class="trailing-input-symbol">°</span></div>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="gradient-angle-value" min="0" max="360" value="135"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
 
                         </div>
                     </div>
@@ -478,7 +481,10 @@
                         <label class="control-label">Blur</label>
                         <div class="control-row">
                             <input type="range" id="bg-blur" min="0" max="50" value="0">
-                            <span class="range-value" id="bg-blur-value">0px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="bg-blur-value" min="0" max="50" value="0"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
@@ -492,7 +498,10 @@
                         <label class="control-label">Overlay Opacity</label>
                         <div class="control-row">
                             <input type="range" id="bg-overlay-opacity" min="0" max="100" value="0">
-                            <span class="range-value" id="bg-overlay-opacity-value">0%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="bg-overlay-opacity-value" min="0" max="100" value="0"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -515,7 +524,10 @@
                         <label class="control-label">Noise Intensity</label>
                         <div class="control-row">
                             <input type="range" id="noise-intensity" min="0" max="100" value="10">
-                            <span class="range-value" id="noise-intensity-value">10%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="noise-intensity-value" min="0" max="100" value="10"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -543,21 +555,30 @@
                         <label class="control-label">Rotation X (Tilt)</label>
                         <div class="control-row">
                             <input type="range" id="rotation-3d-x" min="-45" max="45" value="0">
-                            <span class="range-value" id="rotation-3d-x-value">0°</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="rotation-3d-x-value" min="-45" max="45" value="0"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation Y (Turn)</label>
                         <div class="control-row">
                             <input type="range" id="rotation-3d-y" min="-45" max="45" value="0">
-                            <span class="range-value" id="rotation-3d-y-value">0°</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="rotation-3d-y-value" min="-45" max="45" value="0"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation Z (Roll)</label>
                         <div class="control-row">
                             <input type="range" id="rotation-3d-z" min="-45" max="45" value="0">
-                            <span class="range-value" id="rotation-3d-z-value">0°</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="rotation-3d-z-value" min="-45" max="45" value="0"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -633,7 +654,10 @@
                     <label class="control-label">Screenshot Scale</label>
                     <div class="control-row">
                         <input type="range" id="screenshot-scale" min="30" max="100" value="70">
-                        <span class="range-value" id="screenshot-scale-value">70%</span>
+                        <div class="trailing-input-symbol-wrapper">
+                            <input type="text" class="range-value" id="screenshot-scale-value" min="30" max="100" value="70"></input>
+                            <span class="trailing-input-symbol">%</span>
+                        </div>
                     </div>
                 </div>
 
@@ -641,7 +665,10 @@
                     <label class="control-label">Vertical Position</label>
                     <div class="control-row">
                         <input type="range" id="screenshot-y" min="-80" max="180" value="55">
-                        <span class="range-value" id="screenshot-y-value">55%</span>
+                        <div class="trailing-input-symbol-wrapper">
+                            <input type="text" class="range-value" id="screenshot-y-value" min="-80" max="180" value="55"></input>
+                            <span class="trailing-input-symbol">%</span>
+                        </div>
                     </div>
                 </div>
 
@@ -649,7 +676,10 @@
                     <label class="control-label">Horizontal Position</label>
                     <div class="control-row">
                         <input type="range" id="screenshot-x" min="-80" max="180" value="50">
-                        <span class="range-value" id="screenshot-x-value">50%</span>
+                        <div class="trailing-input-symbol-wrapper">
+                            <input type="text" class="range-value" id="screenshot-x-value" min="-80" max="180" value="50"></input>
+                            <span class="trailing-input-symbol">%</span>
+                        </div>
                     </div>
                 </div>
 
@@ -665,7 +695,10 @@
                         <label class="control-label">Corner Radius</label>
                         <div class="control-row">
                             <input type="range" id="corner-radius" min="0" max="100" value="24">
-                            <span class="range-value" id="corner-radius-value">24px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="corner-radius-value" min="0" max="100" value="24"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
 
@@ -673,7 +706,10 @@
                         <label class="control-label">Tilt / Rotation</label>
                         <div class="control-row">
                             <input type="range" id="screenshot-rotation" min="-45" max="45" value="0">
-                            <span class="range-value" id="screenshot-rotation-value">0°</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="screenshot-rotation-value" min="-45" max="45" value="0"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
                         </div>
                     </div>
 
@@ -703,28 +739,40 @@
                         <label class="control-label">Blur</label>
                         <div class="control-row">
                             <input type="range" id="shadow-blur" min="0" max="100" value="40">
-                            <span class="range-value" id="shadow-blur-value">40px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="shadow-blur-value" min="0" max="100" value="40"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Opacity</label>
                         <div class="control-row">
                             <input type="range" id="shadow-opacity" min="0" max="100" value="30">
-                            <span class="range-value" id="shadow-opacity-value">30%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="shadow-opacity-value" min="0" max="100" value="30"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Offset Y</label>
                         <div class="control-row">
                             <input type="range" id="shadow-y" min="-50" max="100" value="20">
-                            <span class="range-value" id="shadow-y-value">20px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="shadow-y-value" min="-50" max="100" value="20"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Offset X</label>
                         <div class="control-row">
                             <input type="range" id="shadow-x" min="-50" max="50" value="0">
-                            <span class="range-value" id="shadow-x-value">0px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="shadow-x-value" min="-50" max="50" value="0"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -755,14 +803,20 @@
                         <label class="control-label">Border Width</label>
                         <div class="control-row">
                             <input type="range" id="frame-width" min="1" max="50" value="12">
-                            <span class="range-value" id="frame-width-value">12px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="frame-width-value" min="1" max="50" value="12"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Border Opacity</label>
                         <div class="control-row">
                             <input type="range" id="frame-opacity" min="0" max="100" value="100">
-                            <span class="range-value" id="frame-opacity-value">100%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="frame-opacity-value" min="0" max="100" value="100"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -885,7 +939,10 @@
                     <label class="control-label">Text Vertical Offset</label>
                     <div class="control-row">
                         <input type="range" id="text-offset-y" min="0" max="100" value="12">
-                        <span class="range-value" id="text-offset-y-value">12%</span>
+                        <div class="trailing-input-symbol-wrapper">
+                            <input type="text" class="range-value" id="text-offset-y-value" min="0" max="100" value="12"></input>
+                            <span class="trailing-input-symbol">%</span>
+                        </div>
                     </div>
                 </div>
 
@@ -893,7 +950,10 @@
                     <label class="control-label">Line Height</label>
                     <div class="control-row">
                         <input type="range" id="line-height" min="80" max="250" value="110">
-                        <span class="range-value" id="line-height-value">110%</span>
+                        <div class="trailing-input-symbol-wrapper">
+                            <input type="text" class="range-value" id="line-height-value" min="80" max="250" value="110"></input>
+                            <span class="trailing-input-symbol">%</span>
+                        </div>
                     </div>
                 </div>
                 </div><!-- end headline-options -->
@@ -991,7 +1051,10 @@
                     <label class="control-label">Subheadline Opacity</label>
                     <div class="control-row">
                         <input type="range" id="subheadline-opacity" min="0" max="100" value="70">
-                        <span class="range-value" id="subheadline-opacity-value">70%</span>
+                        <div class="trailing-input-symbol-wrapper">
+                            <input type="text" class="range-value" id="subheadline-opacity-value" min="0" max="100" value="70"></input>
+                            <span class="trailing-input-symbol">%</span>
+                        </div>
                     </div>
                 </div>
                 </div><!-- end subheadline-options -->
@@ -1091,7 +1154,10 @@
                         <label class="control-label">Position X</label>
                         <div class="control-row">
                             <input type="range" id="element-x" min="0" max="100" value="50">
-                            <span class="range-value" id="element-x-value">50%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="element-x-value" min="0" max="100" value="50"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1099,7 +1165,10 @@
                         <label class="control-label">Position Y</label>
                         <div class="control-row">
                             <input type="range" id="element-y" min="0" max="100" value="50">
-                            <span class="range-value" id="element-y-value">50%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="element-y-value" min="0" max="100" value="50"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1107,7 +1176,10 @@
                         <label class="control-label">Size</label>
                         <div class="control-row">
                             <input type="range" id="element-width" min="2" max="100" value="20">
-                            <span class="range-value" id="element-width-value">20%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="element-width-value" min="2" max="100" value="20"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1115,7 +1187,10 @@
                         <label class="control-label">Rotation</label>
                         <div class="control-row">
                             <input type="range" id="element-rotation" min="-180" max="180" value="0">
-                            <span class="range-value" id="element-rotation-value">0°</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="element-rotation-value" min="-180" max="180" value="0"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1123,7 +1198,10 @@
                         <label class="control-label">Opacity</label>
                         <div class="control-row">
                             <input type="range" id="element-opacity" min="0" max="100" value="100">
-                            <span class="range-value" id="element-opacity-value">100%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="element-opacity-value" min="0" max="100" value="100"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1141,7 +1219,10 @@
                             <label class="control-label">Stroke Width</label>
                             <div class="control-row">
                                 <input type="range" id="element-icon-stroke-width" min="0.5" max="4" step="0.25" value="2">
-                                <span class="range-value" id="element-icon-stroke-width-value">2</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="element-icon-stroke-width-value" min="0.5" max="4" step="0.25" value="2"></input>
+                                    <span class="trailing-input-symbol"></span>
+                                </div>
                             </div>
                         </div>
                         <div class="divider"></div>
@@ -1168,28 +1249,40 @@
                                 <label class="control-label">Blur</label>
                                 <div class="control-row">
                                     <input type="range" id="element-icon-shadow-blur" min="0" max="100" value="20">
-                                    <span class="range-value" id="element-icon-shadow-blur-value">20px</span>
+                                    <div class="trailing-input-symbol-wrapper">
+                                        <input type="text" class="range-value" id="element-icon-shadow-blur-value" min="0" max="100" value="20"></input>
+                                        <span class="trailing-input-symbol">px</span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="control-group">
                                 <label class="control-label">Opacity</label>
                                 <div class="control-row">
                                     <input type="range" id="element-icon-shadow-opacity" min="0" max="100" value="40">
-                                    <span class="range-value" id="element-icon-shadow-opacity-value">40%</span>
+                                    <div class="trailing-input-symbol-wrapper">
+                                        <input type="text" class="range-value" id="element-icon-shadow-opacity-value" min="0" max="100" value="40"></input>
+                                        <span class="trailing-input-symbol">%</span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="control-group">
                                 <label class="control-label">Offset X</label>
                                 <div class="control-row">
                                     <input type="range" id="element-icon-shadow-x" min="-50" max="50" value="0">
-                                    <span class="range-value" id="element-icon-shadow-x-value">0px</span>
+                                    <div class="trailing-input-symbol-wrapper">
+                                        <input type="text" class="range-value" id="element-icon-shadow-x-value" min="-50" max="50" value="0"></input>
+                                        <span class="trailing-input-symbol">px</span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="control-group">
                                 <label class="control-label">Offset Y</label>
                                 <div class="control-row">
                                     <input type="range" id="element-icon-shadow-y" min="-50" max="50" value="10">
-                                    <span class="range-value" id="element-icon-shadow-y-value">10px</span>
+                                    <div class="trailing-input-symbol-wrapper">
+                                        <input type="text" class="range-value" id="element-icon-shadow-y-value" min="-50" max="50" value="10"></input>
+                                        <span class="trailing-input-symbol">px</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1288,7 +1381,10 @@
                                 <label class="control-label">Frame Scale</label>
                                 <div class="control-row">
                                     <input type="range" id="element-frame-scale" min="50" max="200" value="100">
-                                    <span class="range-value" id="element-frame-scale-value">100%</span>
+                                    <div class="trailing-input-symbol-wrapper">
+                                        <input type="text" class="range-value" id="element-frame-scale-value" min="50" max="200" value="100"></input>
+                                        <span class="trailing-input-symbol">%</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1324,28 +1420,40 @@
                         <label class="control-label">Crop X</label>
                         <div class="control-row">
                             <input type="range" id="popout-crop-x" min="0" max="90" value="25" step="1">
-                            <span class="range-value" id="popout-crop-x-value">25%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-crop-x-value" min="0" max="90" value="25" step="1"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Crop Y</label>
                         <div class="control-row">
                             <input type="range" id="popout-crop-y" min="0" max="90" value="25" step="1">
-                            <span class="range-value" id="popout-crop-y-value">25%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-crop-y-value" min="0" max="90" value="25" step="1"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Crop Width</label>
                         <div class="control-row">
                             <input type="range" id="popout-crop-width" min="5" max="100" value="30" step="1">
-                            <span class="range-value" id="popout-crop-width-value">30%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-crop-width-value" min="5" max="100" value="30" step="1"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Crop Height</label>
                         <div class="control-row">
                             <input type="range" id="popout-crop-height" min="5" max="100" value="30" step="1">
-                            <span class="range-value" id="popout-crop-height-value">30%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-crop-height-value" min="5" max="100" value="30" step="1"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1356,42 +1464,60 @@
                         <label class="control-label">Position X</label>
                         <div class="control-row">
                             <input type="range" id="popout-x" min="0" max="100" value="70">
-                            <span class="range-value" id="popout-x-value">70%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-x-value" min="0" max="100" value="70"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Position Y</label>
                         <div class="control-row">
                             <input type="range" id="popout-y" min="0" max="100" value="30">
-                            <span class="range-value" id="popout-y-value">30%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-y-value" min="0" max="100" value="30"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Size</label>
                         <div class="control-row">
                             <input type="range" id="popout-width" min="5" max="130" value="30">
-                            <span class="range-value" id="popout-width-value">30%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-width-value" min="5" max="130" value="30"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation</label>
                         <div class="control-row">
                             <input type="range" id="popout-rotation" min="-180" max="180" value="0">
-                            <span class="range-value" id="popout-rotation-value">0°</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-rotation-value" min="-180" max="180" value="0"></input>
+                                <span class="trailing-input-symbol">°</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Opacity</label>
                         <div class="control-row">
                             <input type="range" id="popout-opacity" min="0" max="100" value="100">
-                            <span class="range-value" id="popout-opacity-value">100%</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-opacity-value" min="0" max="100" value="100"></input>
+                                <span class="trailing-input-symbol">%</span>
+                            </div>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Corner Radius</label>
                         <div class="control-row">
                             <input type="range" id="popout-corner-radius" min="0" max="50" value="12">
-                            <span class="range-value" id="popout-corner-radius-value">12px</span>
+                            <div class="trailing-input-symbol-wrapper">
+                                <input type="text" class="range-value" id="popout-corner-radius-value" min="0" max="50" value="12"></input>
+                                <span class="trailing-input-symbol">px</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1413,28 +1539,40 @@
                             <label class="control-label">Blur</label>
                             <div class="control-row">
                                 <input type="range" id="popout-shadow-blur" min="0" max="100" value="30">
-                                <span class="range-value" id="popout-shadow-blur-value">30px</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="popout-shadow-blur-value" min="0" max="100" value="30"></input>
+                                    <span class="trailing-input-symbol">px</span>
+                                </div>
                             </div>
                         </div>
                         <div class="control-group">
                             <label class="control-label">Opacity</label>
                             <div class="control-row">
                                 <input type="range" id="popout-shadow-opacity" min="0" max="100" value="40">
-                                <span class="range-value" id="popout-shadow-opacity-value">40%</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="popout-shadow-opacity-value" min="0" max="100" value="40"></input>
+                                    <span class="trailing-input-symbol">%</span>
+                                </div>
                             </div>
                         </div>
                         <div class="control-group">
                             <label class="control-label">Offset X</label>
                             <div class="control-row">
                                 <input type="range" id="popout-shadow-x" min="-50" max="50" value="0">
-                                <span class="range-value" id="popout-shadow-x-value">0px</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="popout-shadow-x-value" min="-50" max="50" value="0"></input>
+                                    <span class="trailing-input-symbol">px</span>
+                                </div>
                             </div>
                         </div>
                         <div class="control-group">
                             <label class="control-label">Offset Y</label>
                             <div class="control-row">
                                 <input type="range" id="popout-shadow-y" min="-50" max="50" value="15">
-                                <span class="range-value" id="popout-shadow-y-value">15px</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="popout-shadow-y-value" min="-50" max="50" value="15"></input>
+                                    <span class="trailing-input-symbol">px</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1457,14 +1595,20 @@
                             <label class="control-label">Width</label>
                             <div class="control-row">
                                 <input type="range" id="popout-border-width" min="0" max="20" value="3">
-                                <span class="range-value" id="popout-border-width-value">3px</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="popout-border-width-value" min="0" max="20" value="3"></input>
+                                    <span class="trailing-input-symbol">px</span>
+                                </div>
                             </div>
                         </div>
                         <div class="control-group">
                             <label class="control-label">Opacity</label>
                             <div class="control-row">
                                 <input type="range" id="popout-border-opacity" min="0" max="100" value="100">
-                                <span class="range-value" id="popout-border-opacity-value">100%</span>
+                                <div class="trailing-input-symbol-wrapper">
+                                    <input type="text" class="range-value" id="popout-border-opacity-value" min="0" max="100" value="100"></input>
+                                    <span class="trailing-input-symbol">%</span>
+                                </div>
                             </div>
                         </div>
                     </div>
