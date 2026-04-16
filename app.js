@@ -2177,50 +2177,50 @@ function syncUIWithState() {
     // Image background
     document.getElementById('bg-image-fit').value = bg.imageFit;
     document.getElementById('bg-blur').value = bg.imageBlur;
-    document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
+    document.getElementById('bg-blur-value').value = formatValue(bg.imageBlur)
     document.getElementById('bg-overlay-color').value = bg.overlayColor;
     document.getElementById('bg-overlay-hex').value = bg.overlayColor;
     document.getElementById('bg-overlay-opacity').value = bg.overlayOpacity;
-    document.getElementById('bg-overlay-opacity-value').textContent = formatValue(bg.overlayOpacity) + '%';
+    document.getElementById('bg-overlay-opacity-value').value = formatValue(bg.overlayOpacity)
 
     // Noise
     document.getElementById('noise-toggle').classList.toggle('active', bg.noise);
     document.getElementById('noise-intensity').value = bg.noiseIntensity;
-    document.getElementById('noise-intensity-value').textContent = formatValue(bg.noiseIntensity) + '%';
+    document.getElementById('noise-intensity-value').value = formatValue(bg.noiseIntensity)
 
     // Screenshot settings
     document.getElementById('screenshot-scale').value = ss.scale;
-    document.getElementById('screenshot-scale-value').textContent = formatValue(ss.scale) + '%';
+    document.getElementById('screenshot-scale-value').value = formatValue(ss.scale)
     document.getElementById('screenshot-y').value = ss.y;
-    document.getElementById('screenshot-y-value').textContent = formatValue(ss.y) + '%';
+    document.getElementById('screenshot-y-value').value = formatValue(ss.y)
     document.getElementById('screenshot-x').value = ss.x;
-    document.getElementById('screenshot-x-value').textContent = formatValue(ss.x) + '%';
+    document.getElementById('screenshot-x-value').value = formatValue(ss.x)
     document.getElementById('corner-radius').value = ss.cornerRadius;
-    document.getElementById('corner-radius-value').textContent = formatValue(ss.cornerRadius) + 'px';
+    document.getElementById('corner-radius-value').value = formatValue(ss.cornerRadius)
     document.getElementById('screenshot-rotation').value = ss.rotation;
-    document.getElementById('screenshot-rotation-value').textContent = formatValue(ss.rotation) + '°';
+    document.getElementById('screenshot-rotation-value').value = formatValue(ss.rotation)
 
     // Shadow
     document.getElementById('shadow-toggle').classList.toggle('active', ss.shadow.enabled);
     document.getElementById('shadow-color').value = ss.shadow.color;
     document.getElementById('shadow-color-hex').value = ss.shadow.color;
     document.getElementById('shadow-blur').value = ss.shadow.blur;
-    document.getElementById('shadow-blur-value').textContent = formatValue(ss.shadow.blur) + 'px';
+    document.getElementById('shadow-blur-value').value = formatValue(ss.shadow.blur)
     document.getElementById('shadow-opacity').value = ss.shadow.opacity;
-    document.getElementById('shadow-opacity-value').textContent = formatValue(ss.shadow.opacity) + '%';
+    document.getElementById('shadow-opacity-value').value = formatValue(ss.shadow.opacity)
     document.getElementById('shadow-x').value = ss.shadow.x;
-    document.getElementById('shadow-x-value').textContent = formatValue(ss.shadow.x) + 'px';
+    document.getElementById('shadow-x-value').value = formatValue(ss.shadow.x)
     document.getElementById('shadow-y').value = ss.shadow.y;
-    document.getElementById('shadow-y-value').textContent = formatValue(ss.shadow.y) + 'px';
+    document.getElementById('shadow-y-value').value = formatValue(ss.shadow.y)
 
     // Frame/Border
     document.getElementById('frame-toggle').classList.toggle('active', ss.frame.enabled);
     document.getElementById('frame-color').value = ss.frame.color;
     document.getElementById('frame-color-hex').value = ss.frame.color;
     document.getElementById('frame-width').value = ss.frame.width;
-    document.getElementById('frame-width-value').textContent = formatValue(ss.frame.width) + 'px';
+    document.getElementById('frame-width-value').value = formatValue(ss.frame.width)
     document.getElementById('frame-opacity').value = ss.frame.opacity;
-    document.getElementById('frame-opacity-value').textContent = formatValue(ss.frame.opacity) + '%';
+    document.getElementById('frame-opacity-value').value = formatValue(ss.frame.opacity)
 
     // Text
     const headlineLang = txt.currentHeadlineLang || 'en';
@@ -2246,16 +2246,16 @@ function syncUIWithState() {
         btn.classList.toggle('active', btn.dataset.position === layoutSettings.position);
     });
     document.getElementById('text-offset-y').value = layoutSettings.offsetY;
-    document.getElementById('text-offset-y-value').textContent = formatValue(layoutSettings.offsetY) + '%';
+    document.getElementById('text-offset-y-value').value = formatValue(layoutSettings.offsetY)
     document.getElementById('line-height').value = layoutSettings.lineHeight;
-    document.getElementById('line-height-value').textContent = formatValue(layoutSettings.lineHeight) + '%';
+    document.getElementById('line-height-value').value = formatValue(layoutSettings.lineHeight)
     const currentSubheadline = txt.subheadlines ? (txt.subheadlines[subheadlineLang] || '') : (txt.subheadline || '');
     document.getElementById('subheadline-text').value = currentSubheadline;
     document.getElementById('subheadline-font').value = txt.subheadlineFont || txt.headlineFont;
     document.getElementById('subheadline-size').value = subheadlineLayout.subheadlineSize;
     document.getElementById('subheadline-color').value = txt.subheadlineColor;
     document.getElementById('subheadline-opacity').value = txt.subheadlineOpacity;
-    document.getElementById('subheadline-opacity-value').textContent = formatValue(txt.subheadlineOpacity) + '%';
+    document.getElementById('subheadline-opacity-value').value = formatValue(txt.subheadlineOpacity)
     document.getElementById('subheadline-weight').value = txt.subheadlineWeight || '400';
     // Sync subheadline style buttons
     document.querySelectorAll('#subheadline-style button').forEach(btn => {
@@ -2290,11 +2290,11 @@ function syncUIWithState() {
     updateFrameColorSwatches(device3D, ss.frameColor);
     document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
     document.getElementById('rotation-3d-x').value = rotation3D.x;
-    document.getElementById('rotation-3d-x-value').textContent = formatValue(rotation3D.x) + '°';
+    document.getElementById('rotation-3d-x-value').value = formatValue(rotation3D.x)
     document.getElementById('rotation-3d-y').value = rotation3D.y;
-    document.getElementById('rotation-3d-y-value').textContent = formatValue(rotation3D.y) + '°';
+    document.getElementById('rotation-3d-y-value').value = formatValue(rotation3D.y)
     document.getElementById('rotation-3d-z').value = rotation3D.z;
-    document.getElementById('rotation-3d-z-value').textContent = formatValue(rotation3D.z) + '°';
+    document.getElementById('rotation-3d-z-value').value = formatValue(rotation3D.z)
 
     // Hide 2D-only settings in 3D mode, show 3D tip
     document.getElementById('2d-only-settings').style.display = use3D ? 'none' : 'block';
@@ -2428,15 +2428,15 @@ function updateElementProperties() {
 
     document.getElementById('element-layer').value = el.layer;
     document.getElementById('element-x').value = el.x;
-    document.getElementById('element-x-value').textContent = formatValue(el.x) + '%';
+    document.getElementById('element-x-value').value = formatValue(el.x)
     document.getElementById('element-y').value = el.y;
-    document.getElementById('element-y-value').textContent = formatValue(el.y) + '%';
+    document.getElementById('element-y-value').value = formatValue(el.y)
     document.getElementById('element-width').value = el.width;
-    document.getElementById('element-width-value').textContent = formatValue(el.width) + '%';
+    document.getElementById('element-width-value').value = formatValue(el.width)
     document.getElementById('element-rotation').value = el.rotation;
-    document.getElementById('element-rotation-value').textContent = formatValue(el.rotation) + '°';
+    document.getElementById('element-rotation-value').value = formatValue(el.rotation)
     document.getElementById('element-opacity').value = el.opacity;
-    document.getElementById('element-opacity-value').textContent = formatValue(el.opacity) + '%';
+    document.getElementById('element-opacity-value').value = formatValue(el.opacity)
 
     // Type-specific properties
     const textProps = document.getElementById('element-text-properties');
@@ -2462,14 +2462,14 @@ function updateElementProperties() {
             document.getElementById('element-frame-color').value = el.frameColor;
             document.getElementById('element-frame-color-hex').value = el.frameColor;
             document.getElementById('element-frame-scale').value = el.frameScale;
-            document.getElementById('element-frame-scale-value').textContent = formatValue(el.frameScale) + '%';
+            document.getElementById('element-frame-scale-value').value = formatValue(el.frameScale)
         }
     } else if (el.type === 'icon' && iconProps) {
         iconProps.style.display = '';
         document.getElementById('element-icon-color').value = el.iconColor || '#ffffff';
         document.getElementById('element-icon-color-hex').value = el.iconColor || '#ffffff';
         document.getElementById('element-icon-stroke-width').value = el.iconStrokeWidth || 2;
-        document.getElementById('element-icon-stroke-width-value').textContent = el.iconStrokeWidth || 2;
+        document.getElementById('element-icon-stroke-width-value').value = el.iconStrokeWidth || 2;
         // Shadow
         const shadow = el.iconShadow || { enabled: false, color: '#000000', blur: 20, opacity: 40, x: 0, y: 10 };
         const shadowToggle = document.getElementById('element-icon-shadow-toggle');
@@ -2481,13 +2481,13 @@ function updateElementProperties() {
         document.getElementById('element-icon-shadow-color').value = shadow.color;
         document.getElementById('element-icon-shadow-color-hex').value = shadow.color;
         document.getElementById('element-icon-shadow-blur').value = shadow.blur;
-        document.getElementById('element-icon-shadow-blur-value').textContent = shadow.blur + 'px';
+        document.getElementById('element-icon-shadow-blur-value').value = shadow.blur
         document.getElementById('element-icon-shadow-opacity').value = shadow.opacity;
-        document.getElementById('element-icon-shadow-opacity-value').textContent = shadow.opacity + '%';
+        document.getElementById('element-icon-shadow-opacity-value').value = shadow.opacity
         document.getElementById('element-icon-shadow-x').value = shadow.x;
-        document.getElementById('element-icon-shadow-x-value').textContent = shadow.x + 'px';
+        document.getElementById('element-icon-shadow-x-value').value = shadow.x
         document.getElementById('element-icon-shadow-y').value = shadow.y;
-        document.getElementById('element-icon-shadow-y-value').textContent = shadow.y + 'px';
+        document.getElementById('element-icon-shadow-y-value').value = shadow.y
     }
 }
 
@@ -3158,27 +3158,27 @@ function updatePopoutProperties() {
 
     // Crop region
     document.getElementById('popout-crop-x').value = p.cropX;
-    document.getElementById('popout-crop-x-value').textContent = formatValue(p.cropX) + '%';
+    document.getElementById('popout-crop-x-value').value = formatValue(p.cropX)
     document.getElementById('popout-crop-y').value = p.cropY;
-    document.getElementById('popout-crop-y-value').textContent = formatValue(p.cropY) + '%';
+    document.getElementById('popout-crop-y-value').value = formatValue(p.cropY)
     document.getElementById('popout-crop-width').value = p.cropWidth;
-    document.getElementById('popout-crop-width-value').textContent = formatValue(p.cropWidth) + '%';
+    document.getElementById('popout-crop-width-value').value = formatValue(p.cropWidth)
     document.getElementById('popout-crop-height').value = p.cropHeight;
-    document.getElementById('popout-crop-height-value').textContent = formatValue(p.cropHeight) + '%';
+    document.getElementById('popout-crop-height-value').value = formatValue(p.cropHeight)
 
     // Display
     document.getElementById('popout-x').value = p.x;
-    document.getElementById('popout-x-value').textContent = formatValue(p.x) + '%';
+    document.getElementById('popout-x-value').value = formatValue(p.x)
     document.getElementById('popout-y').value = p.y;
-    document.getElementById('popout-y-value').textContent = formatValue(p.y) + '%';
+    document.getElementById('popout-y-value').value = formatValue(p.y)
     document.getElementById('popout-width').value = p.width;
-    document.getElementById('popout-width-value').textContent = formatValue(p.width) + '%';
+    document.getElementById('popout-width-value').value = formatValue(p.width)
     document.getElementById('popout-rotation').value = p.rotation;
-    document.getElementById('popout-rotation-value').textContent = formatValue(p.rotation) + '°';
+    document.getElementById('popout-rotation-value').value = formatValue(p.rotation)
     document.getElementById('popout-opacity').value = p.opacity;
-    document.getElementById('popout-opacity-value').textContent = formatValue(p.opacity) + '%';
+    document.getElementById('popout-opacity-value').value = formatValue(p.opacity)
     document.getElementById('popout-corner-radius').value = p.cornerRadius;
-    document.getElementById('popout-corner-radius-value').textContent = formatValue(p.cornerRadius) + 'px';
+    document.getElementById('popout-corner-radius-value').value = formatValue(p.cornerRadius)
 
     // Shadow
     const shadow = p.shadow || { enabled: false, color: '#000000', blur: 30, opacity: 40, x: 0, y: 15 };
@@ -3189,13 +3189,13 @@ function updatePopoutProperties() {
     document.getElementById('popout-shadow-color').value = shadow.color;
     document.getElementById('popout-shadow-color-hex').value = shadow.color;
     document.getElementById('popout-shadow-blur').value = shadow.blur;
-    document.getElementById('popout-shadow-blur-value').textContent = formatValue(shadow.blur) + 'px';
+    document.getElementById('popout-shadow-blur-value').value = formatValue(shadow.blur)
     document.getElementById('popout-shadow-opacity').value = shadow.opacity;
-    document.getElementById('popout-shadow-opacity-value').textContent = formatValue(shadow.opacity) + '%';
+    document.getElementById('popout-shadow-opacity-value').value = formatValue(shadow.opacity)
     document.getElementById('popout-shadow-x').value = shadow.x;
-    document.getElementById('popout-shadow-x-value').textContent = formatValue(shadow.x) + 'px';
+    document.getElementById('popout-shadow-x-value').value = formatValue(shadow.x)
     document.getElementById('popout-shadow-y').value = shadow.y;
-    document.getElementById('popout-shadow-y-value').textContent = formatValue(shadow.y) + 'px';
+    document.getElementById('popout-shadow-y-value').textvalueContent = formatValue(shadow.y)
 
     // Border
     const border = p.border || { enabled: false, color: '#ffffff', width: 3, opacity: 100 };
@@ -3206,9 +3206,9 @@ function updatePopoutProperties() {
     document.getElementById('popout-border-color').value = border.color;
     document.getElementById('popout-border-color-hex').value = border.color;
     document.getElementById('popout-border-width').value = border.width;
-    document.getElementById('popout-border-width-value').textContent = formatValue(border.width) + 'px';
+    document.getElementById('popout-border-width-value').value = formatValue(border.width)
     document.getElementById('popout-border-opacity').value = border.opacity;
-    document.getElementById('popout-border-opacity-value').textContent = formatValue(border.opacity) + '%';
+    document.getElementById('popout-border-opacity-value').value = formatValue(border.opacity)
 
     // Update crop preview
     updateCropPreview();
@@ -4235,7 +4235,12 @@ function setupEventListeners() {
 
     document.getElementById('bg-blur').addEventListener('input', (e) => {
         setBackground('imageBlur', parseInt(e.target.value));
-        document.getElementById('bg-blur-value').textContent = formatValue(e.target.value) + 'px';
+        document.getElementById('bg-blur-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('bg-blur-value').addEventListener('input', (e) => {
+        setBackground('imageBlur', parseInt(e.target.value));
+        document.getElementById('bg-blur').value = formatValue(e.target.value)
         updateCanvas();
     });
 
@@ -4247,7 +4252,12 @@ function setupEventListeners() {
 
     document.getElementById('bg-overlay-opacity').addEventListener('input', (e) => {
         setBackground('overlayOpacity', parseInt(e.target.value));
-        document.getElementById('bg-overlay-opacity-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('bg-overlay-opacity-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('bg-overlay-opacity-value').addEventListener('input', (e) => {
+        setBackground('overlayOpacity', parseInt(e.target.value));
+        document.getElementById('bg-overlay-opacity').value = formatValue(e.target.value)
         updateCanvas();
     });
 
@@ -4269,38 +4279,68 @@ function setupEventListeners() {
 
     document.getElementById('noise-intensity').addEventListener('input', (e) => {
         setBackground('noiseIntensity', parseInt(e.target.value));
-        document.getElementById('noise-intensity-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('noise-intensity-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('noise-intensity-value').addEventListener('input', (e) => {
+        setBackground('noiseIntensity', parseInt(e.target.value));
+        document.getElementById('noise-intensity').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     // Screenshot settings
     document.getElementById('screenshot-scale').addEventListener('input', (e) => {
         setScreenshotSetting('scale', parseInt(e.target.value));
-        document.getElementById('screenshot-scale-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('screenshot-scale-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('screenshot-scale-value').addEventListener('input', (e) => {
+        setScreenshotSetting('scale', parseInt(e.target.value));
+        document.getElementById('screenshot-scale').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('screenshot-y').addEventListener('input', (e) => {
         setScreenshotSetting('y', parseInt(e.target.value));
-        document.getElementById('screenshot-y-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('screenshot-y-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('screenshot-y-value').addEventListener('input', (e) => {
+        setScreenshotSetting('y', parseInt(e.target.value));
+        document.getElementById('screenshot-y').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('screenshot-x').addEventListener('input', (e) => {
         setScreenshotSetting('x', parseInt(e.target.value));
-        document.getElementById('screenshot-x-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('screenshot-x-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('screenshot-x-value').addEventListener('input', (e) => {
+        setScreenshotSetting('x', parseInt(e.target.value));
+        document.getElementById('screenshot-x').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('corner-radius').addEventListener('input', (e) => {
         setScreenshotSetting('cornerRadius', parseInt(e.target.value));
-        document.getElementById('corner-radius-value').textContent = formatValue(e.target.value) + 'px';
+        document.getElementById('corner-radius-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('corner-radius-value').addEventListener('input', (e) => {
+        setScreenshotSetting('cornerRadius', parseInt(e.target.value));
+        document.getElementById('corner-radius').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('screenshot-rotation').addEventListener('input', (e) => {
         setScreenshotSetting('rotation', parseInt(e.target.value));
-        document.getElementById('screenshot-rotation-value').textContent = formatValue(e.target.value) + '°';
+        document.getElementById('screenshot-rotation-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('screenshot-rotation-value').addEventListener('input', (e) => {
+        setScreenshotSetting('rotation', parseInt(e.target.value));
+        document.getElementById('screenshot-rotation').value = formatValue(e.target.value)
         updateCanvas();
     });
 
@@ -4328,25 +4368,45 @@ function setupEventListeners() {
 
     document.getElementById('shadow-blur').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.blur', parseInt(e.target.value));
-        document.getElementById('shadow-blur-value').textContent = formatValue(e.target.value) + 'px';
+        document.getElementById('shadow-blur-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('shadow-blur-value').addEventListener('input', (e) => {
+        setScreenshotSetting('shadow.blur', parseInt(e.target.value));
+        document.getElementById('shadow-blur').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('shadow-opacity').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.opacity', parseInt(e.target.value));
-        document.getElementById('shadow-opacity-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('shadow-opacity-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('shadow-opacity-value').addEventListener('input', (e) => {
+        setScreenshotSetting('shadow.opacity', parseInt(e.target.value));
+        document.getElementById('shadow-opacity').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('shadow-x').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.x', parseInt(e.target.value));
-        document.getElementById('shadow-x-value').textContent = formatValue(e.target.value) + 'px';
+        document.getElementById('shadow-x-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('shadow-x-value').addEventListener('input', (e) => {
+        setScreenshotSetting('shadow.x', parseInt(e.target.value));
+        document.getElementById('shadow-x').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('shadow-y').addEventListener('input', (e) => {
         setScreenshotSetting('shadow.y', parseInt(e.target.value));
-        document.getElementById('shadow-y-value').textContent = formatValue(e.target.value) + 'px';
+        document.getElementById('shadow-y-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('shadow-y-value').addEventListener('input', (e) => {
+        setScreenshotSetting('shadow.y', parseInt(e.target.value));
+        document.getElementById('shadow-y').value = formatValue(e.target.value)
         updateCanvas();
     });
 
@@ -4382,13 +4442,23 @@ function setupEventListeners() {
 
     document.getElementById('frame-width').addEventListener('input', (e) => {
         setScreenshotSetting('frame.width', parseInt(e.target.value));
-        document.getElementById('frame-width-value').textContent = formatValue(e.target.value) + 'px';
+        document.getElementById('frame-width-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('frame-width-value').addEventListener('input', (e) => {
+        setScreenshotSetting('frame.width', parseInt(e.target.value));
+        document.getElementById('frame-width').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('frame-opacity').addEventListener('input', (e) => {
         setScreenshotSetting('frame.opacity', parseInt(e.target.value));
-        document.getElementById('frame-opacity-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('frame-opacity-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('frame-opacity-value').addEventListener('input', (e) => {
+        setScreenshotSetting('frame.opacity', parseInt(e.target.value));
+        document.getElementById('frame-opacity').value = formatValue(e.target.value)
         updateCanvas();
     });
 
@@ -4498,13 +4568,23 @@ function setupEventListeners() {
 
     document.getElementById('text-offset-y').addEventListener('input', (e) => {
         setTextLanguageValue('offsetY', parseInt(e.target.value));
-        document.getElementById('text-offset-y-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('text-offset-y-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('text-offset-y-value').addEventListener('input', (e) => {
+        setTextLanguageValue('offsetY', parseInt(e.target.value));
+        document.getElementById('text-offset-y').value = formatValue(e.target.value)
         updateCanvas();
     });
 
     document.getElementById('line-height').addEventListener('input', (e) => {
         setTextLanguageValue('lineHeight', parseInt(e.target.value));
-        document.getElementById('line-height-value').textContent = formatValue(e.target.value) + '%';
+        document.getElementById('line-height-value').value = formatValue(e.target.value)
+        updateCanvas();
+    });
+    document.getElementById('line-height-value').addEventListener('input', (e) => {
+        setTextLanguageValue('lineHeight', parseInt(e.target.value));
+        document.getElementById('line-height').value = formatValue(e.target.value)
         updateCanvas();
     });
 
@@ -4530,7 +4610,13 @@ function setupEventListeners() {
     document.getElementById('subheadline-opacity').addEventListener('input', (e) => {
         const value = parseInt(e.target.value) || 70;
         setTextValue('subheadlineOpacity', value);
-        document.getElementById('subheadline-opacity-value').textContent = formatValue(value) + '%';
+        document.getElementById('subheadline-opacity-value').value = formatValue(value)
+        updateCanvas();
+    });
+    document.getElementById('subheadline-opacity-value').addEventListener('input', (e) => {
+        const value = parseInt(e.target.value) || 70;
+        setTextValue('subheadlineOpacity', value);
+        document.getElementById('subheadline-opacity').value = formatValue(value)
         updateCanvas();
     });
 
@@ -4627,7 +4713,17 @@ function setupEventListeners() {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
         ss.rotation3D.x = parseInt(e.target.value);
-        document.getElementById('rotation-3d-x-value').textContent = formatValue(e.target.value) + '°';
+        document.getElementById('rotation-3d-x-value').value = formatValue(e.target.value)
+        if (typeof setThreeJSRotation === 'function') {
+            setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
+        }
+        updateCanvas(); // Keep export canvas in sync
+    });
+    document.getElementById('rotation-3d-x-value').addEventListener('input', (e) => {
+        const ss = getScreenshotSettings();
+        if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
+        ss.rotation3D.x = parseInt(e.target.value);
+        document.getElementById('rotation-3d-x').value = formatValue(e.target.value)
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -4638,7 +4734,17 @@ function setupEventListeners() {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
         ss.rotation3D.y = parseInt(e.target.value);
-        document.getElementById('rotation-3d-y-value').textContent = formatValue(e.target.value) + '°';
+        document.getElementById('rotation-3d-y-value').value = formatValue(e.target.value)
+        if (typeof setThreeJSRotation === 'function') {
+            setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
+        }
+        updateCanvas(); // Keep export canvas in sync
+    });
+    document.getElementById('rotation-3d-y-value').addEventListener('input', (e) => {
+        const ss = getScreenshotSettings();
+        if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
+        ss.rotation3D.y = parseInt(e.target.value);
+        document.getElementById('rotation-3d-y').value = formatValue(e.target.value)
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -4649,7 +4755,17 @@ function setupEventListeners() {
         const ss = getScreenshotSettings();
         if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
         ss.rotation3D.z = parseInt(e.target.value);
-        document.getElementById('rotation-3d-z-value').textContent = formatValue(e.target.value) + '°';
+        document.getElementById('rotation-3d-z-value').value = formatValue(e.target.value)
+        if (typeof setThreeJSRotation === 'function') {
+            setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
+        }
+        updateCanvas(); // Keep export canvas in sync
+    });
+    document.getElementById('rotation-3d-z-value').addEventListener('input', (e) => {
+        const ss = getScreenshotSettings();
+        if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
+        ss.rotation3D.z = parseInt(e.target.value);
+        document.getElementById('rotation-3d-z').value = formatValue(e.target.value)
         if (typeof setThreeJSRotation === 'function') {
             setThreeJSRotation(ss.rotation3D.x, ss.rotation3D.y, ss.rotation3D.z);
         }
@@ -5902,15 +6018,15 @@ function updateTextUI(text) {
         btn.classList.toggle('active', btn.dataset.position === layoutSettings.position);
     });
     document.getElementById('text-offset-y').value = layoutSettings.offsetY;
-    document.getElementById('text-offset-y-value').textContent = formatValue(layoutSettings.offsetY) + '%';
+    document.getElementById('text-offset-y-value').value = formatValue(layoutSettings.offsetY)
     document.getElementById('line-height').value = layoutSettings.lineHeight;
-    document.getElementById('line-height-value').textContent = formatValue(layoutSettings.lineHeight) + '%';
+    document.getElementById('line-height-value').value = formatValue(layoutSettings.lineHeight)
     document.getElementById('subheadline-text').value = subheadlineText;
     document.getElementById('subheadline-font').value = text.subheadlineFont || text.headlineFont;
     document.getElementById('subheadline-size').value = subheadlineLayout.subheadlineSize;
     document.getElementById('subheadline-color').value = text.subheadlineColor;
     document.getElementById('subheadline-opacity').value = text.subheadlineOpacity;
-    document.getElementById('subheadline-opacity-value').textContent = formatValue(text.subheadlineOpacity) + '%';
+    document.getElementById('subheadline-opacity-value').value = formatValue(text.subheadlineOpacity)
     document.getElementById('subheadline-weight').value = text.subheadlineWeight || '400';
     // Sync subheadline style buttons
     document.querySelectorAll('#subheadline-style button').forEach(btn => {
@@ -5943,13 +6059,13 @@ function applyPositionPreset(preset) {
 
     // Update UI controls
     document.getElementById('screenshot-scale').value = p.scale;
-    document.getElementById('screenshot-scale-value').textContent = formatValue(p.scale) + '%';
+    document.getElementById('screenshot-scale-value').value = formatValue(p.scale)
     document.getElementById('screenshot-x').value = p.x;
-    document.getElementById('screenshot-x-value').textContent = formatValue(p.x) + '%';
+    document.getElementById('screenshot-x-value').value = formatValue(p.x)
     document.getElementById('screenshot-y').value = p.y;
-    document.getElementById('screenshot-y-value').textContent = formatValue(p.y) + '%';
+    document.getElementById('screenshot-y-value').value = formatValue(p.y)
     document.getElementById('screenshot-rotation').value = p.rotation;
-    document.getElementById('screenshot-rotation-value').textContent = formatValue(p.rotation) + '°';
+    document.getElementById('screenshot-rotation-value').texvaluetContent = formatValue(p.rotation)
 
     updateCanvas();
 }
