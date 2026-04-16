@@ -2167,7 +2167,7 @@ function syncUIWithState() {
 
     // Gradient
     document.getElementById('gradient-angle').value = bg.gradient.angle;
-    document.getElementById('gradient-angle-value').textContent = formatValue(bg.gradient.angle) + '°';
+    document.getElementById('gradient-angle-value').value = formatValue(bg.gradient.angle);
     updateGradientStopsUI();
 
     // Solid color
@@ -4146,7 +4146,7 @@ function setupEventListeners() {
                 const angle = parseInt(angleMatch[1]);
                 setBackground('gradient.angle', angle);
                 document.getElementById('gradient-angle').value = angle;
-                document.getElementById('gradient-angle-value').textContent = formatValue(angle) + '°';
+                document.getElementById('gradient-angle-value').value = formatValue(angle);
             }
 
             const stops = [];
@@ -4165,7 +4165,15 @@ function setupEventListeners() {
     // Gradient angle
     document.getElementById('gradient-angle').addEventListener('input', (e) => {
         setBackground('gradient.angle', parseInt(e.target.value));
-        document.getElementById('gradient-angle-value').textContent = formatValue(e.target.value) + '°';
+        document.getElementById('gradient-angle-value').value = formatValue(e.target.value);
+        // Deselect preset when manually changing angle
+        document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
+        updateCanvas();
+    });
+    document.getElementById('gradient-angle-value').addEventListener('input', (e) => {
+        setBackground('gradient.angle', parseInt(e.target.value));
+        document.getElementById('gradient-angle-value').value = formatValue(e.target.value);
+        document.getElementById('gradient-angle').value = formatValue(e.target.value);
         // Deselect preset when manually changing angle
         document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
         updateCanvas();
