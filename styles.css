@@ -575,7 +575,7 @@ html.tauri-app .right-sidebar {
     width: 10ch;
     text-align: right;
     font-size: 13px;
-    color: #000;
+    color: var(--text-primary);
 }
 
 .trailing-input-symbol{
@@ -601,6 +601,10 @@ html.tauri-app .right-sidebar {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.slider-reset-btn svg{
+    stroke: red;
 }
 
 .control-row:hover .slider-reset-btn {
