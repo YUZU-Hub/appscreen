@@ -580,8 +580,10 @@ html.tauri-app .right-sidebar {
 
 .trailing-input-symbol{
     position: absolute;
-    top: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     right: 6px;
+    font-size: 0.75rem;
 }
 
 .slider-reset-btn {
@@ -615,7 +617,7 @@ input[type="number"],
 select,
 textarea {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px 20px 10px 12px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
