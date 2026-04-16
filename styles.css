@@ -567,9 +567,21 @@ html.tauri-app .right-sidebar {
     flex: 1;
 }
 
+.trailing-input-symbol-wrapper{
+    position: relative;
+}
+
 .control-row .range-value {
-    min-width: 45px;
+    width: 10ch;
     text-align: right;
+    font-size: 13px;
+    color: #000;
+}
+
+.trailing-input-symbol{
+    position: absolute;
+    top: 8px;
+    right: 6px;
 }
 
 .slider-reset-btn {
@@ -649,7 +661,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .range-value {
-    min-width: 40px;
+    width: 10ch;
     text-align: right;
     font-size: 13px;
     color: var(--text-secondary);
