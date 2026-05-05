@@ -1254,7 +1254,7 @@ const deviceDimensions = {
 
 // DOM elements
 const canvas = document.getElementById('preview-canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });
 const canvasLeft = document.getElementById('preview-canvas-left');
 const ctxLeft = canvasLeft.getContext('2d');
 const canvasRight = document.getElementById('preview-canvas-right');
@@ -4036,6 +4036,14 @@ function setupEventListeners() {
         });
     });
 
+    // Export format selector buttons
+    document.querySelectorAll('#export-format-selector button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#export-format-selector button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
     // Provider radio buttons
     document.querySelectorAll('input[name="ai-provider"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
@@ -5833,6 +5841,12 @@ function openSettingsModal() {
         btn.classList.toggle('active', btn.dataset.theme === savedTheme);
     });
 
+    // Load saved export format preference
+    const savedFormat = getExportFormat();
+    document.querySelectorAll('#export-format-selector button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.format === savedFormat);
+    });
+
     document.getElementById('settings-modal').classList.add('visible');
 }
 
@@ -5848,6 +5862,11 @@ function saveSettings() {
     const themePreference = activeThemeBtn ? activeThemeBtn.dataset.theme : 'auto';
     localStorage.setItem('themePreference', themePreference);
     applyTheme(themePreference);
+
+    // Save export format preference
+    const activeFormatBtn = document.querySelector('#export-format-selector button.active');
+    const exportFormat = activeFormatBtn ? activeFormatBtn.dataset.format : 'jpeg';
+    localStorage.setItem('exportFormat', exportFormat);
 
     // Save selected provider
     const selectedProvider = document.querySelector('input[name="ai-provider"]:checked').value;
@@ -8078,6 +8097,19 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function getExportFormat() {
+    const stored = localStorage.getItem('exportFormat');
+    return stored === 'png' ? 'png' : 'jpeg';
+}
+
+function getExportEncoding() {
+    const format = getExportFormat();
+    if (format === 'png') {
+        return { mime: 'image/png', ext: 'png', quality: undefined };
+    }
+    return { mime: 'image/jpeg', ext: 'jpg', quality: 1.0 };
+}
+
 async function exportCurrent() {
     if (state.screenshots.length === 0) {
         await showAppAlert('Please upload a screenshot first', 'info');
@@ -8087,9 +8119,10 @@ async function exportCurrent() {
     // Ensure canvas is up-to-date (especially important for 3D mode)
     updateCanvas();
 
+    const { mime, ext, quality } = getExportEncoding();
     const link = document.createElement('a');
-    link.download = `screenshot-${state.selectedIndex + 1}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.download = `screenshot-${state.selectedIndex + 1}.${ext}`;
+    link.href = quality !== undefined ? canvas.toDataURL(mime, quality) : canvas.toDataURL(mime);
     link.click();
 }
 
@@ -8171,10 +8204,11 @@ async function exportAllForLanguage(lang) {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Get canvas data as base64, strip the data URL prefix
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+        const { mime, ext, quality } = getExportEncoding();
+        const dataUrl = quality !== undefined ? canvas.toDataURL(mime, quality) : canvas.toDataURL(mime);
+        const base64Data = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
-        zip.file(`screenshot-${i + 1}.png`, base64Data, { base64: true });
+        zip.file(`screenshot-${i + 1}.${ext}`, base64Data, { base64: true });
     }
 
     // Restore original settings
@@ -8243,11 +8277,12 @@ async function exportAllLanguages() {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Get canvas data as base64, strip the data URL prefix
-            const dataUrl = canvas.toDataURL('image/png');
-            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+            const { mime, ext, quality } = getExportEncoding();
+            const dataUrl = quality !== undefined ? canvas.toDataURL(mime, quality) : canvas.toDataURL(mime);
+            const base64Data = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
             // Use language code as folder name
-            zip.file(`${lang}/screenshot-${i + 1}.png`, base64Data, { base64: true });
+            zip.file(`${lang}/screenshot-${i + 1}.${ext}`, base64Data, { base64: true });
         }
     }
 
