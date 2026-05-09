@@ -582,7 +582,15 @@ function setTextSetting(key, value) {
 function setCurrentScreenshotAsDefault() {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        state.defaults.background = JSON.parse(JSON.stringify(screenshot.background));
+        state.defaults.background = JSON.parse(JSON.stringify({ ...screenshot.background, image: undefined }));
+        // Reconstruct background Image from data URL
+        if (state.defaults.background.imageSrc) {
+            const bgImg = new Image();
+            bgImg.onload = () => { state.defaults.background.image = bgImg; };
+            bgImg.src = state.defaults.background.imageSrc;
+        } else {
+            state.defaults.background.image = null;
+        }
         state.defaults.screenshot = JSON.parse(JSON.stringify(screenshot.screenshot));
         state.defaults.text = JSON.parse(JSON.stringify(screenshot.text));
     }
@@ -1486,12 +1494,9 @@ function initSync() {
 }
 
 // Save state to IndexedDB for current project
-function saveState() {
-    if (!db) return;
-
-    // Convert screenshots to base64 for storage, including per-screenshot settings and localized images
+// Build a serializable version of the current state (no HTMLImageElement objects)
+function serializeState() {
     const screenshotsToSave = state.screenshots.map(s => {
-        // Save localized images (without Image objects, just src/name)
         const localizedImages = {};
         if (s.localizedImages) {
             Object.keys(s.localizedImages).forEach(lang => {
@@ -1510,7 +1515,11 @@ function saveState() {
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
-            background: s.background,
+            background: {
+                ...s.background,
+                image: undefined, // Strip HTMLImageElement (not serializable)
+                imageSrc: s.background.imageSrc || (s.background.image?.src) || null
+            },
             screenshot: s.screenshot,
             text: s.text,
             elements: (s.elements || []).map(el => ({
@@ -1522,9 +1531,9 @@ function saveState() {
         };
     });
 
-    const stateToSave = {
+    return {
         id: currentProjectId,
-        formatVersion: 2, // Version 2: new 3D positioning formula
+        formatVersion: 2,
         screenshots: screenshotsToSave,
         selectedIndex: state.selectedIndex,
         outputDevice: state.outputDevice,
@@ -1532,8 +1541,21 @@ function saveState() {
         customHeight: state.customHeight,
         currentLanguage: state.currentLanguage,
         projectLanguages: state.projectLanguages,
-        defaults: state.defaults
+        defaults: {
+            ...state.defaults,
+            background: {
+                ...state.defaults.background,
+                image: undefined,
+                imageSrc: state.defaults.background.imageSrc || (state.defaults.background.image?.src) || null
+            }
+        }
     };
+}
+
+function saveState() {
+    if (!db) return;
+
+    const stateToSave = serializeState();
 
     // Update screenshot count in project metadata
     const project = projects.find(p => p.id === currentProjectId);
@@ -1658,18 +1680,28 @@ function loadState() {
                                 if (needs3DMigration) {
                                     migrate3DPosition(screenshotSettings);
                                 }
+                                const bgData = s.background || JSON.parse(JSON.stringify(migratedBackground));
                                 state.screenshots[index] = {
                                     image: null,
                                     name: s.name || 'Blank Screen',
                                     deviceType: s.deviceType,
                                     localizedImages: {},
-                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                    background: bgData,
                                     screenshot: screenshotSettings,
                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                     elements: reconstructElementImages(s.elements),
                                     popouts: s.popouts || [],
                                     overrides: s.overrides || {}
                                 };
+                                // Reconstruct background Image from saved data URL
+                                if (bgData.imageSrc) {
+                                    const bgImg = new Image();
+                                    bgImg.onload = () => {
+                                        bgData.image = bgImg;
+                                        updateCanvas();
+                                    };
+                                    bgImg.src = bgData.imageSrc;
+                                }
                                 loadedCount++;
                                 checkAllLoaded();
                             } else if (hasLocalizedImages) {
@@ -1697,18 +1729,28 @@ function loadState() {
                                                 if (needs3DMigration) {
                                                     migrate3DPosition(screenshotSettings);
                                                 }
+                                                const bgData = s.background || JSON.parse(JSON.stringify(migratedBackground));
                                                 state.screenshots[index] = {
                                                     image: localizedImages[firstLang]?.image, // Legacy compat
                                                     name: s.name,
                                                     deviceType: s.deviceType,
                                                     localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                                    background: bgData,
                                                     screenshot: screenshotSettings,
                                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                                     elements: reconstructElementImages(s.elements),
                                                     popouts: s.popouts || [],
                                                     overrides: s.overrides || {}
                                                 };
+                                                // Reconstruct background Image from saved data URL
+                                                if (bgData.imageSrc) {
+                                                    const bgImg = new Image();
+                                                    bgImg.onload = () => {
+                                                        bgData.image = bgImg;
+                                                        updateCanvas();
+                                                    };
+                                                    bgImg.src = bgData.imageSrc;
+                                                }
                                                 loadedCount++;
                                                 checkAllLoaded();
                                             }
@@ -1742,18 +1784,28 @@ function loadState() {
                                     if (needs3DMigration) {
                                         migrate3DPosition(screenshotSettings);
                                     }
+                                    const bgData = s.background || JSON.parse(JSON.stringify(migratedBackground));
                                     state.screenshots[index] = {
                                         image: img,
                                         name: s.name,
                                         deviceType: s.deviceType,
                                         localizedImages: localizedImages,
-                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        background: bgData,
                                         screenshot: screenshotSettings,
                                         text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                         elements: reconstructElementImages(s.elements),
                                         popouts: s.popouts || [],
                                         overrides: s.overrides || {}
                                     };
+                                    // Reconstruct background Image from saved data URL
+                                    if (bgData.imageSrc) {
+                                        const bgImg = new Image();
+                                        bgImg.onload = () => {
+                                            bgData.image = bgImg;
+                                            updateCanvas();
+                                        };
+                                        bgImg.src = bgData.imageSrc;
+                                    }
                                     loadedCount++;
                                     checkAllLoaded();
                                 };
@@ -1795,6 +1847,14 @@ function loadState() {
                         state.defaults = parsed.defaults;
                         // Ensure elements array exists (may be missing from older saves)
                         if (!state.defaults.elements) state.defaults.elements = [];
+                        // Reconstruct background Image in defaults if saved
+                        if (state.defaults.background?.imageSrc) {
+                            const defBgImg = new Image();
+                            defBgImg.onload = () => {
+                                state.defaults.background.image = defBgImg;
+                            };
+                            defBgImg.src = state.defaults.background.imageSrc;
+                        }
                     } else {
                         state.defaults.background = migratedBackground;
                         state.defaults.screenshot = migratedScreenshot;
@@ -2035,6 +2095,83 @@ async function duplicateProject(sourceProjectId, customName) {
     });
 }
 
+function exportProject() {
+    const stateToSave = serializeState();
+    const project = projects.find(p => p.id === currentProjectId);
+    const exportData = {
+        ...stateToSave,
+        exportVersion: 1,
+        projectName: project?.name || 'Untitled Project',
+        exportDate: new Date().toISOString()
+    };
+    const json = JSON.stringify(exportData);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (project?.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '_') + '.appscreen';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importProject() {
+    const input = document.getElementById('project-import-input');
+    if (input) input.click();
+}
+
+async function handleProjectImport(file) {
+    if (!db) {
+        await showAppAlert('Database not ready. Please try again.', 'error');
+        return;
+    }
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // Validate structure
+        if (!data.screenshots || !Array.isArray(data.screenshots)) {
+            await showAppAlert('Invalid project file: missing screenshots data', 'error');
+            return;
+        }
+
+        // Save current project first
+        saveState();
+
+        // Create new project
+        const newId = 'project_' + Date.now();
+        const projectName = data.projectName || file.name.replace(/\.appscreen$|\.json$/, '') || 'Imported Project';
+
+        // Clean the data for IndexedDB storage
+        data.id = newId;
+        delete data.exportVersion;
+        delete data.projectName;
+        delete data.exportDate;
+
+        // Store in IndexedDB
+        projects.push({ id: newId, name: projectName, screenshotCount: data.screenshots?.length || 0 });
+        saveProjectsMeta();
+
+        const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
+        const store = transaction.objectStore(PROJECTS_STORE);
+        store.put(data);
+
+        transaction.oncomplete = async () => {
+            await switchProject(newId);
+            updateProjectSelector();
+            await showAppAlert(`Project "${projectName}" imported successfully`, 'success');
+        };
+
+        transaction.onerror = async () => {
+            await showAppAlert('Failed to import project', 'error');
+        };
+    } catch (e) {
+        console.error('Import error:', e);
+        await showAppAlert('Failed to read project file: ' + e.message, 'error');
+    }
+}
+
 function duplicateScreenshot(index) {
     const original = state.screenshots[index];
     if (!original) return;
@@ -2042,11 +2179,22 @@ function duplicateScreenshot(index) {
     const clone = JSON.parse(JSON.stringify({
         name: original.name,
         deviceType: original.deviceType,
-        background: original.background,
+        background: { ...original.background, image: undefined },
         screenshot: original.screenshot,
         text: original.text,
         overrides: original.overrides
     }));
+    // Reconstruct background Image from data URL
+    if (clone.background.imageSrc) {
+        const bgImg = new Image();
+        bgImg.onload = () => {
+            clone.background.image = bgImg;
+            updateCanvas();
+        };
+        bgImg.src = clone.background.imageSrc;
+    } else {
+        clone.background.image = null;
+    }
 
     const nameParts = clone.name.split('.');
     if (nameParts.length > 1) {
@@ -2178,6 +2326,15 @@ function syncUIWithState() {
     document.getElementById('bg-image-fit').value = bg.imageFit;
     document.getElementById('bg-blur').value = bg.imageBlur;
     document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
+    const bgPreview = document.getElementById('bg-image-preview');
+    if (bgPreview) {
+        if (bg.imageSrc) {
+            bgPreview.src = bg.imageSrc;
+            bgPreview.style.display = 'block';
+        } else {
+            bgPreview.style.display = 'none';
+        }
+    }
     document.getElementById('bg-overlay-color').value = bg.overlayColor;
     document.getElementById('bg-overlay-hex').value = bg.overlayColor;
     document.getElementById('bg-overlay-opacity').value = bg.overlayOpacity;
@@ -3740,6 +3897,16 @@ function setupEventListeners() {
         document.getElementById('delete-project-modal').classList.add('visible');
     });
 
+    // Export/Import project
+    document.getElementById('export-project-btn').addEventListener('click', exportProject);
+    document.getElementById('import-project-btn').addEventListener('click', importProject);
+    document.getElementById('project-import-input').addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            handleProjectImport(e.target.files[0]);
+            e.target.value = ''; // Reset for re-import
+        }
+    });
+
     // Project modal buttons
     document.getElementById('project-modal-cancel').addEventListener('click', () => {
         document.getElementById('project-modal').classList.remove('visible');
@@ -4269,6 +4436,7 @@ function setupEventListeners() {
                 const img = new Image();
                 img.onload = () => {
                     setBackground('image', img);
+                    setBackground('imageSrc', event.target.result);
                     document.getElementById('bg-image-preview').src = event.target.result;
                     document.getElementById('bg-image-preview').style.display = 'block';
                     updateCanvas();
@@ -6197,7 +6365,17 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         name: name || 'Blank Screen',
         deviceType: deviceType,
         localizedImages: localizedImages,
-        background: JSON.parse(JSON.stringify(state.defaults.background)),
+        background: (() => {
+            const bg = JSON.parse(JSON.stringify({ ...state.defaults.background, image: undefined }));
+            if (bg.imageSrc) {
+                const bgImg = new Image();
+                bgImg.onload = () => { bg.image = bgImg; updateCanvas(); };
+                bgImg.src = bg.imageSrc;
+            } else {
+                bg.image = null;
+            }
+            return bg;
+        })(),
         screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
         text: JSON.parse(JSON.stringify(textDefaults)),
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),

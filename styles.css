@@ -1195,6 +1195,17 @@ input[type="range"]::-webkit-slider-thumb {
     width: 100%;
 }
 
+.project-io-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.project-io-row .export-btn {
+    flex: 1;
+    font-size: 11px;
+}
+
 /* Modal styles */
 .modal-overlay {
     position: fixed;
@@ -2449,6 +2460,7 @@ input[type="range"]::-webkit-slider-thumb {
     border-color: #ff453a;
     color: #ff453a;
 }
+
 
 /* Sidebar header with settings */
 .sidebar-header {
