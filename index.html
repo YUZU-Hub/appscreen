@@ -1009,6 +1009,58 @@
                     </div>
                 </div>
                 </div><!-- end subheadline-options -->
+
+                <div class="divider"></div>
+
+                <div class="control-group">
+                    <div class="toggle-row collapsible collapsed" data-target="text-shadow-options">
+                        <span class="toggle-label">
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                            Text Shadow
+                        </span>
+                        <div class="toggle" id="text-shadow-toggle"></div>
+                    </div>
+                </div>
+
+                <div id="text-shadow-options" style="display: none;">
+                    <div class="control-group">
+                        <label class="control-label">Shadow Color</label>
+                        <div class="color-input-wrapper">
+                            <input type="color" id="text-shadow-color" value="#000000">
+                            <input type="text" id="text-shadow-color-hex" value="#000000">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Blur</label>
+                        <div class="control-row">
+                            <input type="range" id="text-shadow-blur" min="0" max="50" value="10">
+                            <span class="range-value" id="text-shadow-blur-value">10px</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Opacity</label>
+                        <div class="control-row">
+                            <input type="range" id="text-shadow-opacity" min="0" max="100" value="50">
+                            <span class="range-value" id="text-shadow-opacity-value">50%</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Distance X</label>
+                        <div class="control-row">
+                            <input type="range" id="text-shadow-x" min="-30" max="30" value="0">
+                            <span class="range-value" id="text-shadow-x-value">0px</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Distance Y</label>
+                        <div class="control-row">
+                            <input type="range" id="text-shadow-y" min="-30" max="30" value="4">
+                            <span class="range-value" id="text-shadow-y-value">4px</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Elements Tab -->
