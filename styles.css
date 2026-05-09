@@ -567,9 +567,23 @@ html.tauri-app .right-sidebar {
     flex: 1;
 }
 
+.trailing-input-symbol-wrapper{
+    position: relative;
+}
+
 .control-row .range-value {
-    min-width: 45px;
+    width: 10ch;
     text-align: right;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.trailing-input-symbol{
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    right: 6px;
+    font-size: 0.75rem;
 }
 
 .slider-reset-btn {
@@ -589,6 +603,10 @@ html.tauri-app .right-sidebar {
     justify-content: center;
 }
 
+.slider-reset-btn svg{
+    stroke: red;
+}
+
 .control-row:hover .slider-reset-btn {
     opacity: 0.5;
 }
@@ -603,7 +621,7 @@ input[type="number"],
 select,
 textarea {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px 20px 10px 12px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -649,7 +667,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .range-value {
-    min-width: 40px;
+    width: 10ch;
     text-align: right;
     font-size: 13px;
     color: var(--text-secondary);
