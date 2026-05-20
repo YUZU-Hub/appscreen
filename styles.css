@@ -3112,3 +3112,110 @@ input[type="range"]::-webkit-slider-thumb {
     font-size: 12px;
     color: var(--text-secondary);
 }
+/* Overlay Management */
+.add-overlay-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+}
+
+.add-overlay-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0, 122, 255, 0.05);
+}
+
+.add-overlay-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.overlays-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.overlay-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.overlay-item:hover {
+    border-color: var(--border-hover);
+}
+
+.overlay-item.active {
+    border-color: var(--accent);
+    background: rgba(0, 122, 255, 0.05);
+}
+
+.overlay-item-thumb {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    object-fit: cover;
+    background: var(--bg-body);
+    margin-right: 12px;
+    border: 1px solid var(--border);
+}
+
+.overlay-item-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.overlay-item-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.overlay-action-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.overlay-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.overlay-action-btn.delete:hover {
+    color: var(--error);
+    background: rgba(255, 59, 48, 0.1);
+}
+
+.overlay-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
