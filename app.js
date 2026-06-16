@@ -104,6 +104,43 @@ let selectedElementId = null;
 let selectedPopoutId = null;
 let draggingElement = null;
 
+// Performance: batch canvas renders via rAF and debounce IndexedDB saves
+let _rafHandle = null;
+let _saveTimer = null;
+
+// Side-preview cache: adjacent screenshots don't change while editing the selected one,
+// so we cache their rendered bitmaps and skip re-rendering unless they become active
+// or a global setting (language, device) changes.
+const _sidePreviewCache = new Map(); // screenshotIndex -> { canvas, key }
+function _sidePreviewCacheKey(dims) {
+    return `${state.currentLanguage}:${dims.width}:${dims.height}`;
+}
+function invalidateSidePreviewCache(index) {
+    if (index === undefined) _sidePreviewCache.clear();
+    else _sidePreviewCache.delete(index);
+}
+
+function updateCanvas() {
+    if (_rafHandle) cancelAnimationFrame(_rafHandle);
+    _rafHandle = requestAnimationFrame(() => {
+        _rafHandle = null;
+        _renderCanvas();
+    });
+}
+
+function updateCanvasNow() {
+    if (_rafHandle) {
+        cancelAnimationFrame(_rafHandle);
+        _rafHandle = null;
+    }
+    _renderCanvas();
+}
+
+function debouncedSaveState() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(saveState, 500);
+}
+
 // Preload laurel SVG images for element frames
 const laurelImages = {};
 ['laurel-simple-left', 'laurel-detailed-left'].forEach(name => {
@@ -175,6 +212,9 @@ function getEffectiveLayout(text, lang) {
 }
 
 function normalizeTextSettings(text) {
+    // Skip expensive deep-clone if this object was already normalized
+    if (text && text._normalized) return text;
+
     const merged = JSON.parse(JSON.stringify(baseTextDefaults));
     if (text) {
         Object.assign(merged, text);
@@ -199,6 +239,7 @@ function normalizeTextSettings(text) {
         getTextLanguageSettings(merged, lang);
     });
 
+    merged._normalized = true; // mark so subsequent calls skip the deep-clone
     return merged;
 }
 
@@ -399,8 +440,8 @@ async function getLucideImage(name, color, strokeWidth) {
     const blobURL = URL.createObjectURL(blob);
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
+        img.onload = () => { URL.revokeObjectURL(blobURL); resolve(img); };
+        img.onerror = (e) => { URL.revokeObjectURL(blobURL); reject(e); };
         img.src = blobURL;
     });
 }
@@ -1505,6 +1546,7 @@ function saveState() {
             });
         }
 
+        const { _normalized: _n, ...textToSave } = s.text || {};
         return {
             src: s.image?.src || '', // Legacy compatibility
             name: s.name,
@@ -1512,7 +1554,7 @@ function saveState() {
             localizedImages: localizedImages,
             background: s.background,
             screenshot: s.screenshot,
-            text: s.text,
+            text: textToSave,
             elements: (s.elements || []).map(el => ({
                 ...el,
                 image: undefined // Don't serialize Image objects
@@ -1940,6 +1982,7 @@ async function switchProject(projectId) {
     currentProjectId = projectId;
     saveProjectsMeta();
 
+    invalidateSidePreviewCache(); // completely different screenshots
     // Reset and load new project
     resetStateToDefaults();
     await loadState();
@@ -4098,6 +4141,7 @@ function setupEventListeners() {
                 customInputs.classList.remove('visible');
                 outputDropdown.classList.remove('open');
             }
+            invalidateSidePreviewCache(); // canvas dimensions change with device
             updateCanvas();
         });
     });
@@ -4321,6 +4365,7 @@ function setupEventListeners() {
     document.getElementById('noise-intensity').addEventListener('input', (e) => {
         setBackground('noiseIntensity', parseInt(e.target.value));
         document.getElementById('noise-intensity-value').textContent = formatValue(e.target.value) + '%';
+        _noiseCache.clear(); // force regeneration at new intensity
         updateCanvas();
     });
 
@@ -4744,7 +4789,7 @@ function switchGlobalLanguage(lang) {
         screenshot.text.currentSubheadlineLang = lang;
     });
 
-    // Update UI
+    invalidateSidePreviewCache(); // all screenshots may have different text per language
     updateLanguageButton();
     syncUIWithState();
     updateCanvas();
@@ -6615,7 +6660,7 @@ function transferStyle(sourceIndex, targetIndex) {
     // Reset transfer mode
     state.transferTarget = null;
 
-    // Update UI
+    invalidateSidePreviewCache(targetIndex); // target screenshot's appearance changed
     updateScreenshotList();
     syncUIWithState();
     updateGradientStopsUI();
@@ -6676,7 +6721,7 @@ function applyStyleToAll() {
 
     applyStyleSourceIndex = null;
 
-    // Update UI
+    invalidateSidePreviewCache(); // all non-source screenshots changed
     updateScreenshotList();
     syncUIWithState();
     updateGradientStopsUI();
@@ -6797,11 +6842,14 @@ function getCanvasDimensions() {
     return deviceDimensions[state.outputDevice];
 }
 
-function updateCanvas() {
-    saveState(); // Persist state on every update
+function _renderCanvas() {
+    debouncedSaveState();
     const dims = getCanvasDimensions();
-    canvas.width = dims.width;
-    canvas.height = dims.height;
+    // Only reassign canvas dimensions when they change — avoids GPU buffer reallocation every frame
+    if (canvas.width !== dims.width || canvas.height !== dims.height) {
+        canvas.width = dims.width;
+        canvas.height = dims.height;
+    }
 
     // Scale for preview
     const maxPreviewWidth = 400;
@@ -6809,6 +6857,9 @@ function updateCanvas() {
     const scale = Math.min(maxPreviewWidth / dims.width, maxPreviewHeight / dims.height);
     canvas.style.width = (dims.width * scale) + 'px';
     canvas.style.height = (dims.height * scale) + 'px';
+
+    // The selected screenshot is being edited — its cached side preview is stale
+    _sidePreviewCache.delete(state.selectedIndex);
 
     // Draw background
     drawBackground();
@@ -7023,9 +7074,9 @@ function slideToScreenshot(newIndex, direction) {
         // Skip side preview re-render since we already pre-rendered them
         skipSidePreviewRender = true;
 
-        // Now do a full updateCanvas for main preview, far sides, etc.
-        // Side previews won't flicker because we already drew to them
-        updateCanvas();
+        // Now do a full synchronous render for main preview, far sides, etc.
+        // Flags must hold during this render so use updateCanvasNow()
+        updateCanvasNow();
 
         // Reset flags
         skipSidePreviewRender = false;
@@ -7049,14 +7100,39 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     // Get localized image for current language
     const img = getScreenshotImage(screenshot);
 
-    // Set canvas size (this also clears the canvas)
-    targetCanvas.width = dims.width;
-    targetCanvas.height = dims.height;
-    targetCanvas.style.width = (dims.width * previewScale) + 'px';
-    targetCanvas.style.height = (dims.height * previewScale) + 'px';
+    const renderW = Math.round(dims.width * previewScale);
+    const renderH = Math.round(dims.height * previewScale);
 
-    // Clear canvas explicitly
-    targetCtx.clearRect(0, 0, dims.width, dims.height);
+    // Use cached render for non-selected screenshots — they don't change while the user
+    // edits the active one. Cache is keyed on (language, canvas dims).
+    const cacheKey = _sidePreviewCacheKey(dims);
+    if (index !== state.selectedIndex) {
+        const cached = _sidePreviewCache.get(index);
+        if (cached && cached.key === cacheKey) {
+            if (targetCanvas.width !== renderW || targetCanvas.height !== renderH) {
+                targetCanvas.width = renderW;
+                targetCanvas.height = renderH;
+                targetCanvas.style.width = renderW + 'px';
+                targetCanvas.style.height = renderH + 'px';
+            }
+            targetCtx.drawImage(cached.canvas, 0, 0);
+            return;
+        }
+    }
+
+    // Render at display resolution — canvas pixels match display pixels (~100x fewer than export res).
+    // We apply a context scale transform so all draw functions use full-resolution coordinates
+    // unchanged (font sizes, shadow values, positions all stay correct).
+    if (targetCanvas.width !== renderW || targetCanvas.height !== renderH) {
+        targetCanvas.width = renderW;
+        targetCanvas.height = renderH;
+        targetCanvas.style.width = renderW + 'px';
+        targetCanvas.style.height = renderH + 'px';
+    }
+
+    targetCtx.clearRect(0, 0, renderW, renderH);
+    targetCtx.save();
+    targetCtx.scale(previewScale, previewScale);
 
     // Draw background for this screenshot
     const bg = screenshot.background;
@@ -7078,8 +7154,10 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
 
     if (img) {
         if (use3D && typeof renderThreeJSForScreenshot === 'function' && phoneModelLoaded) {
-            // Render 3D phone model for this specific screenshot
-            renderThreeJSForScreenshot(targetCanvas, dims.width, dims.height, index);
+            // 3D renderer manages its own canvas; restore scale before handing off
+            targetCtx.restore();
+            renderThreeJSForScreenshot(targetCanvas, renderW, renderH, index);
+            return;
         } else {
             // Draw 2D screenshot using localized image
             drawScreenshotToContext(targetCtx, dims, img, settings);
@@ -7099,6 +7177,17 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
 
     // Elements above text
     drawElementsToContext(targetCtx, dims, elements, 'above-text');
+
+    targetCtx.restore();
+
+    // Cache this render for future frames (only for non-selected screenshots)
+    if (index !== state.selectedIndex) {
+        const cacheCanvas = document.createElement('canvas');
+        cacheCanvas.width = renderW;
+        cacheCanvas.height = renderH;
+        cacheCanvas.getContext('2d').drawImage(targetCanvas, 0, 0);
+        _sidePreviewCache.set(index, { canvas: cacheCanvas, key: cacheKey });
+    }
 }
 
 function drawBackgroundToContext(context, dims, bg) {
@@ -7167,19 +7256,40 @@ function drawBackgroundToContext(context, dims, bg) {
     }
 }
 
-function drawNoiseToContext(context, dims, intensity) {
-    const imageData = context.getImageData(0, 0, dims.width, dims.height);
+// Noise canvas cache: keyed on "WxH" string, invalidated when intensity changes
+const _noiseCache = new Map(); // key -> { canvas, intensity }
+
+function _getNoiseCanvas(dims, intensity) {
+    const key = `${dims.width}x${dims.height}`;
+    const cached = _noiseCache.get(key);
+    if (cached && cached.intensity === intensity) return cached.canvas;
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = dims.width;
+    offscreen.height = dims.height;
+    const octx = offscreen.getContext('2d');
+    const imageData = octx.createImageData(dims.width, dims.height);
     const data = imageData.data;
-    const noiseAmount = intensity / 100;
-
     for (let i = 0; i < data.length; i += 4) {
-        const noise = (Math.random() - 0.5) * 255 * noiseAmount;
-        data[i] = Math.max(0, Math.min(255, data[i] + noise));
-        data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
-        data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+        const v = (Math.random() * 256) | 0;
+        data[i] = v;
+        data[i + 1] = v;
+        data[i + 2] = v;
+        data[i + 3] = 255;
     }
+    octx.putImageData(imageData, 0, 0);
+    _noiseCache.set(key, { canvas: offscreen, intensity });
+    return offscreen;
+}
 
-    context.putImageData(imageData, 0, 0);
+function drawNoiseToContext(context, dims, intensity) {
+    if (!intensity) return;
+    const noiseCanvas = _getNoiseCanvas(dims, intensity);
+    context.save();
+    context.globalAlpha = (intensity / 100) * 0.45;
+    context.globalCompositeOperation = 'overlay';
+    context.drawImage(noiseCanvas, 0, 0);
+    context.restore();
 }
 
 function drawScreenshotToContext(context, dims, img, settings) {
@@ -8010,18 +8120,8 @@ function drawText() {
 
 function drawNoise() {
     const dims = getCanvasDimensions();
-    const imageData = ctx.getImageData(0, 0, dims.width, dims.height);
-    const data = imageData.data;
-    const intensity = getBackground().noiseIntensity / 100 * 50;
-
-    for (let i = 0; i < data.length; i += 4) {
-        const noise = (Math.random() - 0.5) * intensity;
-        data[i] = Math.min(255, Math.max(0, data[i] + noise));
-        data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-        data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
-    }
-
-    ctx.putImageData(imageData, 0, 0);
+    const intensity = getBackground().noiseIntensity;
+    drawNoiseToContext(ctx, dims, intensity);
 }
 
 function roundRect(ctx, x, y, width, height, radius) {
@@ -8084,8 +8184,8 @@ async function exportCurrent() {
         return;
     }
 
-    // Ensure canvas is up-to-date (especially important for 3D mode)
-    updateCanvas();
+    // Ensure canvas is up-to-date synchronously before reading toDataURL
+    updateCanvasNow();
 
     const link = document.createElement('a');
     link.download = `screenshot-${state.selectedIndex + 1}.png`;
