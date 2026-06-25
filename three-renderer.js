@@ -38,6 +38,19 @@ const deviceConfigs = {
         cornerRadiusFactor: 0.16,
         modelRotation: { x: 0, y: 0, z: 0 }  // No correction needed
     },
+    ipad: {
+        procedural: true,
+        aspectRatio: 2048 / 2732,
+        screenHeightFactor: 0.88,
+        screenOffset: { x: 0, y: 0, z: 0.034 },
+        positionOffsetFactor: 0.72,
+        cornerRadiusFactor: 0.055,
+        modelRotation: { x: 0, y: 0, z: 0 },
+        bezelX: 0.055,
+        bezelY: 0.075,
+        depth: 0.044,
+        cornerRadius: 0.13
+    },
     samsung: {
         modelPath: 'models/samsung-galaxy-s25-ultra.glb',
         aspectRatio: 1440 / 3120,
@@ -70,6 +83,18 @@ var frameColorPresets = {
         { id: 'red', label: 'Product Red', swatch: '#c1272d',
           materials: { backpanel: '#c1272d', metalframe: '#8a1c20', gray: '#1a0a0a' } },
     ],
+    ipad: [
+        { id: 'space-gray', label: 'Space Gray', swatch: '#5f6062',
+          materials: { frame: '#5f6062', back_glass: '#4f5052', bezel: '#080808', camera: '#111111' } },
+        { id: 'silver', label: 'Silver', swatch: '#d8d8d3',
+          materials: { frame: '#d8d8d3', back_glass: '#c8c8c3', bezel: '#101010', camera: '#111111' } },
+        { id: 'starlight', label: 'Starlight', swatch: '#e7decf',
+          materials: { frame: '#e7decf', back_glass: '#d9cfbf', bezel: '#101010', camera: '#111111' } },
+        { id: 'blue', label: 'Blue', swatch: '#9eb3c9',
+          materials: { frame: '#9eb3c9', back_glass: '#8da4bd', bezel: '#090909', camera: '#111111' } },
+        { id: 'purple', label: 'Purple', swatch: '#b6abc9',
+          materials: { frame: '#b6abc9', back_glass: '#a99cbe', bezel: '#090909', camera: '#111111' } },
+    ],
     samsung: [
         { id: 'gray', label: 'Titanium Gray', swatch: '#8a8a8a',
           materials: { back_glass: '#4c4c4c', frame: '#cdcdcd', antenna: '#707070' } },
@@ -90,6 +115,219 @@ var frameColorPresets = {
 
 // Store original material colors for the current model
 let originalMaterialColors = {};
+
+function createNamedMaterial(name, color, options = {}) {
+    const material = new THREE.MeshStandardMaterial({
+        color: color,
+        metalness: options.metalness ?? 0.35,
+        roughness: options.roughness ?? 0.42,
+        side: options.side ?? THREE.FrontSide
+    });
+    material.name = name;
+    return material;
+}
+
+function createRoundedRectShape(width, height, radius) {
+    const shape = new THREE.Shape();
+    const x = -width / 2;
+    const y = -height / 2;
+    const r = Math.min(radius, width / 2, height / 2);
+
+    shape.moveTo(x + r, y);
+    shape.lineTo(x + width - r, y);
+    shape.quadraticCurveTo(x + width, y, x + width, y + r);
+    shape.lineTo(x + width, y + height - r);
+    shape.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    shape.lineTo(x + r, y + height);
+    shape.quadraticCurveTo(x, y + height, x, y + height - r);
+    shape.lineTo(x, y + r);
+    shape.quadraticCurveTo(x, y, x + r, y);
+
+    return shape;
+}
+
+function createRoundedRectMesh(width, height, radius, material, z = 0) {
+    const geometry = new THREE.ShapeGeometry(createRoundedRectShape(width, height, radius));
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.z = z;
+    return mesh;
+}
+
+function createProceduralDeviceModel(config) {
+    const group = new THREE.Group();
+    group.name = 'procedural-ipad';
+
+    const screenHeight = 4.3 * config.screenHeightFactor;
+    const screenWidth = screenHeight * config.aspectRatio;
+    const bodyWidth = screenWidth + (config.bezelX || 0.18) * 2;
+    const bodyHeight = screenHeight + (config.bezelY || 0.24) * 2;
+    const bodyDepth = config.depth || 0.16;
+    const outerRadius = config.cornerRadius || 0.18;
+    const innerRadius = Math.max(0.08, outerRadius - 0.04);
+
+    const frameMaterial = createNamedMaterial('frame', '#5f6062', { metalness: 0.75, roughness: 0.28 });
+    const backMaterial = createNamedMaterial('back_glass', '#4f5052', { metalness: 0.45, roughness: 0.38, side: THREE.DoubleSide });
+    const bezelMaterial = createNamedMaterial('bezel', '#070707', { metalness: 0.03, roughness: 0.72, side: THREE.DoubleSide });
+    const cameraMaterial = createNamedMaterial('camera', '#111111', { metalness: 0.1, roughness: 0.2 });
+
+    let bodyGeometry;
+    if (THREE.ExtrudeGeometry) {
+        bodyGeometry = new THREE.ExtrudeGeometry(createRoundedRectShape(bodyWidth, bodyHeight, outerRadius), {
+            depth: bodyDepth,
+            bevelEnabled: true,
+            bevelThickness: 0.008,
+            bevelSize: 0.012,
+            bevelSegments: 8,
+            curveSegments: 16
+        });
+    } else {
+        bodyGeometry = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
+    }
+
+    const body = new THREE.Mesh(bodyGeometry, frameMaterial);
+    body.name = 'ipad-frame';
+    body.position.z = -bodyDepth / 2;
+    group.add(body);
+
+    const frontBezel = createRoundedRectMesh(
+        bodyWidth - 0.026,
+        bodyHeight - 0.026,
+        innerRadius,
+        bezelMaterial,
+        bodyDepth / 2 + 0.004
+    );
+    frontBezel.name = 'ipad-front-bezel';
+    group.add(frontBezel);
+
+    const backPanel = createRoundedRectMesh(
+        bodyWidth - 0.08,
+        bodyHeight - 0.08,
+        innerRadius,
+        backMaterial,
+        -bodyDepth / 2 - 0.006
+    );
+    backPanel.name = 'ipad-back-panel';
+    group.add(backPanel);
+
+    const camera = new THREE.Mesh(new THREE.CircleGeometry(0.018, 32), cameraMaterial);
+    camera.name = 'ipad-camera';
+    camera.position.set(0, screenHeight / 2 + (config.bezelY || 0.075) * 0.5, bodyDepth / 2 + 0.008);
+    group.add(camera);
+
+    return group;
+}
+
+function finishCurrentModelLoad(model, deviceType, shouldUpdateCanvas = true) {
+    phoneModelLoading = false;
+    phoneModel = model;
+
+    const config = deviceConfigs[deviceType] || deviceConfigs.iphone;
+
+    // Center and scale the model
+    const box = new THREE.Box3().setFromObject(phoneModel);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    phoneModel.position.sub(center);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    baseModelScale = 3.75 / maxDim;
+    phoneModel.scale.setScalar(baseModelScale);
+
+    const screenOffset = config.screenOffset;
+    phonePivot = new THREE.Group();
+
+    phoneModel.position.set(
+        -screenOffset.x * baseModelScale,
+        -screenOffset.y * baseModelScale,
+        -screenOffset.z * baseModelScale
+    );
+
+    phonePivot.add(phoneModel);
+    threeScene.add(phonePivot);
+
+    createScreenOverlay();
+    phoneModelLoaded = true;
+
+    if (typeof state !== 'undefined') {
+        updateThreeJSBackground();
+        const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
+        const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
+        setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
+
+        if (ss?.frameColor) {
+            setPhoneFrameColor(ss.frameColor, currentDeviceModel);
+        }
+
+        if (state.screenshots.length > 0) {
+            updateScreenTexture();
+        }
+
+        if (typeof updateCanvas === 'function' && shouldUpdateCanvas) {
+            updateCanvas();
+        }
+    }
+
+    console.log(deviceType + ' model loaded successfully');
+}
+
+function buildCachedModel(deviceType) {
+    const config = deviceConfigs[deviceType];
+    const model = config.procedural ? createProceduralDeviceModel(config) : null;
+    if (!model) return null;
+
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    model.position.sub(center);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const modelBaseScale = 3.75 / maxDim;
+    model.scale.setScalar(modelBaseScale);
+
+    const screenOffset = config.screenOffset;
+    const pivot = new THREE.Group();
+
+    model.position.set(
+        -screenOffset.x * modelBaseScale,
+        -screenOffset.y * modelBaseScale,
+        -screenOffset.z * modelBaseScale
+    );
+
+    pivot.add(model);
+
+    const aspectRatio = config.aspectRatio;
+    const planeHeight = 4.3 * config.screenHeightFactor;
+    const planeWidth = planeHeight * aspectRatio;
+
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0x111111,
+        side: THREE.DoubleSide
+    });
+
+    const screenPlane = new THREE.Mesh(geometry, material);
+    screenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
+
+    const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
+    screenPlane.rotation.set(
+        -modelRot.x * Math.PI / 180,
+        -modelRot.y * Math.PI / 180,
+        -modelRot.z * Math.PI / 180
+    );
+
+    model.add(screenPlane);
+
+    return {
+        model: model,
+        pivot: pivot,
+        screenPlane: screenPlane,
+        baseScale: modelBaseScale,
+        loaded: true,
+        loading: false
+    };
+}
 
 // Apply a frame color preset to the phone model
 function setPhoneFrameColor(presetId, deviceType) {
@@ -220,31 +458,21 @@ function loadPhoneModel() {
     phoneModelLoading = true;
 
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
+
+    if (config.procedural) {
+        finishCurrentModelLoad(createProceduralDeviceModel(config), currentDeviceModel);
+        return;
+    }
+
     const loader = new THREE.GLTFLoader();
 
     loader.load(
         config.modelPath,
         (gltf) => {
-            phoneModelLoading = false;
-            phoneModel = gltf.scene;
-
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(phoneModel);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-
-            // Center the model
-            phoneModel.position.sub(center);
-
-            // Scale to fit view (3.75 = 2.5 * 1.5 to match 2D scale at 100%)
-            const maxDim = Math.max(size.x, size.y, size.z);
-            baseModelScale = 3.75 / maxDim;
-            phoneModel.scale.setScalar(baseModelScale);
-
             // Log all meshes to help identify the screen
             console.log('Phone model meshes:');
             let blackMeshes = [];
-            phoneModel.traverse((child) => {
+            gltf.scene.traverse((child) => {
                 if (child.isMesh) {
                     console.log('  Mesh:', child.name, '| Material:', child.material?.name);
 
@@ -268,7 +496,7 @@ function loadPhoneModel() {
             // Find the front glass - that's where the screen actually is
             // Don't use black meshes, those are small elements like notch/dynamic island
             let glassMeshes = [];
-            phoneModel.traverse((child) => {
+            gltf.scene.traverse((child) => {
                 if (child.isMesh) {
                     const matName = (child.material?.name || '').toLowerCase();
                     if (matName === 'glass') {
@@ -290,51 +518,7 @@ function loadPhoneModel() {
                 console.log('  -> Using largest glass mesh as screen:', screenMesh.name);
             }
 
-            // Create a pivot group for rotation around screen center
-            const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-            const screenOffset = config.screenOffset;
-
-            phonePivot = new THREE.Group();
-
-            // Offset the phone model so the screen center is at the pivot's origin
-            phoneModel.position.set(
-                -screenOffset.x * baseModelScale,
-                -screenOffset.y * baseModelScale,
-                -screenOffset.z * baseModelScale
-            );
-
-            phonePivot.add(phoneModel);
-            threeScene.add(phonePivot);
-
-            // Create a custom screen plane overlay since the model's UV mapping may be incorrect
-            createScreenOverlay();
-
-            phoneModelLoaded = true;
-
-            // Apply initial settings from state
-            if (typeof state !== 'undefined') {
-                updateThreeJSBackground();
-                const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
-                const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
-                setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
-
-                // Apply frame color
-                if (ss?.frameColor) {
-                    setPhoneFrameColor(ss.frameColor, currentDeviceModel);
-                }
-
-                // Apply screenshot texture
-                if (state.screenshots.length > 0) {
-                    updateScreenTexture();
-                }
-
-                // Refresh canvas now that model is loaded (needed for side previews too)
-                if (typeof updateCanvas === 'function') {
-                    updateCanvas();
-                }
-            }
-
-            console.log('Phone model loaded successfully');
+            finishCurrentModelLoad(gltf.scene, currentDeviceModel);
         },
         (progress) => {
             const percent = Math.round(progress.loaded / progress.total * 100);
@@ -390,66 +574,18 @@ function switchPhoneModel(deviceType) {
 
     // Load new model using the config
     const config = deviceConfigs[currentDeviceModel];
+
+    if (config.procedural) {
+        finishCurrentModelLoad(createProceduralDeviceModel(config), currentDeviceModel, !window.suppressSwitchModelUpdate);
+        return;
+    }
+
     const loader = new THREE.GLTFLoader();
 
     loader.load(
         config.modelPath,
         (gltf) => {
-            phoneModel = gltf.scene;
-
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(phoneModel);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-
-            phoneModel.position.sub(center);
-
-            const maxDim = Math.max(size.x, size.y, size.z);
-            baseModelScale = 3.75 / maxDim;
-            phoneModel.scale.setScalar(baseModelScale);
-
-            // Create a pivot group for rotation around screen center
-            const screenOffset = config.screenOffset;
-            phonePivot = new THREE.Group();
-
-            // Offset the phone model so the screen center is at the pivot's origin
-            phoneModel.position.set(
-                -screenOffset.x * baseModelScale,
-                -screenOffset.y * baseModelScale,
-                -screenOffset.z * baseModelScale
-            );
-
-            phonePivot.add(phoneModel);
-            threeScene.add(phonePivot);
-
-            // Create screen overlay for this device
-            createScreenOverlay();
-
-            phoneModelLoaded = true;
-
-            // Apply settings
-            if (typeof state !== 'undefined') {
-                updateThreeJSBackground();
-                const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
-                const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
-                setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
-
-                // Apply frame color
-                if (ss?.frameColor) {
-                    setPhoneFrameColor(ss.frameColor, currentDeviceModel);
-                }
-
-                if (state.screenshots.length > 0) {
-                    updateScreenTexture();
-                }
-
-                // Only call updateCanvas if not suppressed (e.g., during slide transitions)
-                if (typeof updateCanvas === 'function' && !window.suppressSwitchModelUpdate) {
-                    updateCanvas();
-                }
-            }
-
-            console.log(deviceType + ' model loaded successfully');
+            finishCurrentModelLoad(gltf.scene, currentDeviceModel, !window.suppressSwitchModelUpdate);
         },
         (progress) => {
             const percent = Math.round(progress.loaded / progress.total * 100);
@@ -474,6 +610,14 @@ function loadCachedPhoneModel(deviceType) {
     }
 
     const config = deviceConfigs[deviceType];
+
+    if (config.procedural) {
+        const cached = buildCachedModel(deviceType);
+        phoneModelCache[deviceType] = cached;
+        console.log('Cached ' + deviceType + ' model for side previews');
+        return Promise.resolve(cached);
+    }
+
     const loader = new THREE.GLTFLoader();
 
     phoneModelCache[deviceType] = { loading: true, loaded: false };
@@ -608,33 +752,51 @@ function createScreenOverlay() {
     console.log('Plane size:', planeWidth.toFixed(4), 'x', planeHeight.toFixed(4));
 }
 
-// Create a rounded corner version of the screenshot
-function createRoundedScreenImage(image, cornerRadius) {
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext('2d');
+function createDeviceScreenImage(image, config) {
+    const targetAspect = config.aspectRatio || (image.width / image.height);
+    const imageAspect = image.width / image.height;
 
-    // Draw rounded rectangle path
-    const w = canvas.width;
-    const h = canvas.height;
-    const r = cornerRadius;
+    let canvasWidth = image.width;
+    let canvasHeight = image.height;
+
+    if (Math.abs(imageAspect - targetAspect) > 0.02) {
+        if (imageAspect < targetAspect) {
+            canvasHeight = image.height;
+            canvasWidth = Math.round(canvasHeight * targetAspect);
+        } else {
+            canvasWidth = image.width;
+            canvasHeight = Math.round(canvasWidth / targetAspect);
+        }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext('2d');
+    const radius = Math.round(canvas.width * config.cornerRadiusFactor);
 
     ctx.beginPath();
-    ctx.moveTo(r, 0);
-    ctx.lineTo(w - r, 0);
-    ctx.quadraticCurveTo(w, 0, w, r);
-    ctx.lineTo(w, h - r);
-    ctx.quadraticCurveTo(w, h, w - r, h);
-    ctx.lineTo(r, h);
-    ctx.quadraticCurveTo(0, h, 0, h - r);
-    ctx.lineTo(0, r);
-    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.moveTo(radius, 0);
+    ctx.lineTo(canvas.width - radius, 0);
+    ctx.quadraticCurveTo(canvas.width, 0, canvas.width, radius);
+    ctx.lineTo(canvas.width, canvas.height - radius);
+    ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - radius, canvas.height);
+    ctx.lineTo(radius, canvas.height);
+    ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - radius);
+    ctx.lineTo(0, radius);
+    ctx.quadraticCurveTo(0, 0, radius, 0);
     ctx.closePath();
-
-    // Clip to rounded rectangle and draw image
     ctx.clip();
-    ctx.drawImage(image, 0, 0);
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+    const dw = image.width * scale;
+    const dh = image.height * scale;
+    const dx = (canvas.width - dw) / 2;
+    const dy = (canvas.height - dh) / 2;
+    ctx.drawImage(image, dx, dy, dw, dh);
 
     return canvas;
 }
@@ -656,10 +818,8 @@ function updateScreenTexture() {
         screenTexture.dispose();
     }
 
-    // Create rounded corner version of the image using device-specific corner radius
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-    const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
-    const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
+    const roundedImage = createDeviceScreenImage(screenshotImage, config);
 
     screenTexture = new THREE.Texture(roundedImage);
     screenTexture.needsUpdate = true;
@@ -870,8 +1030,7 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         : screenshot?.image;
     const oldMaterial = screenPlaneToUse ? screenPlaneToUse.material : null;
     if (screenshotImage && screenPlaneToUse) {
-        const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
-        const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
+        const roundedImage = createDeviceScreenImage(screenshotImage, config);
         const newTexture = new THREE.Texture(roundedImage);
         newTexture.needsUpdate = true;
         newTexture.encoding = THREE.sRGBEncoding;
