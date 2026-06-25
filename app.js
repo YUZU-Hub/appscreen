@@ -21,7 +21,9 @@ const state = {
             },
             solid: '#1a1a2e',
             image: null,
+            imageSrc: null,
             imageFit: 'cover',
+            imageSpan: false,
             imageBlur: 0,
             overlayColor: '#000000',
             overlayOpacity: 0,
@@ -99,6 +101,74 @@ const state = {
 
 const baseTextDefaults = JSON.parse(JSON.stringify(state.defaults.text));
 
+function normalizeBackgroundSettings(background) {
+    const bg = background || {};
+    return {
+        type: bg.type || 'gradient',
+        gradient: {
+            angle: bg.gradient?.angle ?? 135,
+            stops: Array.isArray(bg.gradient?.stops) && bg.gradient.stops.length
+                ? bg.gradient.stops.map(stop => ({ ...stop }))
+                : [
+                    { color: '#667eea', position: 0 },
+                    { color: '#764ba2', position: 100 }
+                ]
+        },
+        solid: bg.solid || '#1a1a2e',
+        image: bg.image || null,
+        imageSrc: bg.imageSrc || bg.image?.src || null,
+        imageFit: bg.imageFit || 'cover',
+        imageSpan: !!bg.imageSpan,
+        imageBlur: bg.imageBlur || 0,
+        overlayColor: bg.overlayColor || '#000000',
+        overlayOpacity: bg.overlayOpacity || 0,
+        noise: !!bg.noise,
+        noiseIntensity: bg.noiseIntensity || 10
+    };
+}
+
+function cloneBackgroundSettings(background) {
+    const bg = normalizeBackgroundSettings(background);
+    return {
+        ...JSON.parse(JSON.stringify({ ...bg, image: null })),
+        image: bg.image || null,
+        imageSrc: bg.imageSrc || bg.image?.src || null
+    };
+}
+
+function serializeBackgroundSettings(background) {
+    const bg = normalizeBackgroundSettings(background);
+    return {
+        ...bg,
+        image: null,
+        imageSrc: bg.imageSrc || bg.image?.src || null
+    };
+}
+
+function restoreBackgroundSettings(background) {
+    const bg = normalizeBackgroundSettings(background);
+
+    if (!bg.image && bg.imageSrc) {
+        const img = new Image();
+        img.onload = () => updateCanvas();
+        img.src = bg.imageSrc;
+        bg.image = img;
+    }
+
+    return bg;
+}
+
+const SPANNED_BACKGROUND_SYNC_KEYS = new Set([
+    'image',
+    'imageSrc',
+    'imageFit',
+    'imageBlur',
+    'overlayColor',
+    'overlayOpacity',
+    'noise',
+    'noiseIntensity'
+]);
+
 // Runtime-only state (not persisted)
 let selectedElementId = null;
 let selectedPopoutId = null;
@@ -120,7 +190,12 @@ function getCurrentScreenshot() {
 
 function getBackground() {
     const screenshot = getCurrentScreenshot();
-    return screenshot ? screenshot.background : state.defaults.background;
+    if (screenshot) {
+        screenshot.background = normalizeBackgroundSettings(screenshot.background);
+        return screenshot.background;
+    }
+    state.defaults.background = normalizeBackgroundSettings(state.defaults.background);
+    return state.defaults.background;
 }
 
 function getScreenshotSettings() {
@@ -540,19 +615,96 @@ function formatValue(num) {
     return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(1);
 }
 
+function setBackgroundValue(background, key, value) {
+    if (key.includes('.')) {
+        const parts = key.split('.');
+        let obj = background;
+        for (let i = 0; i < parts.length - 1; i++) {
+            obj = obj[parts[i]];
+        }
+        obj[parts[parts.length - 1]] = value;
+    } else {
+        background[key] = value;
+    }
+}
+
+function syncSpannedBackgroundSetting(key, value, sourceBackground) {
+    const rootKey = key.split('.')[0];
+    if (!sourceBackground.imageSpan || !SPANNED_BACKGROUND_SYNC_KEYS.has(rootKey)) return;
+
+    state.screenshots.forEach(screenshot => {
+        if (!screenshot.background || screenshot.background === sourceBackground) return;
+        screenshot.background = normalizeBackgroundSettings(screenshot.background);
+        if (!screenshot.background.imageSpan) return;
+        setBackgroundValue(screenshot.background, key, value);
+    });
+}
+
 function setBackground(key, value) {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        if (key.includes('.')) {
-            const parts = key.split('.');
-            let obj = screenshot.background;
-            for (let i = 0; i < parts.length - 1; i++) {
-                obj = obj[parts[i]];
+        screenshot.background = normalizeBackgroundSettings(screenshot.background);
+        setBackgroundValue(screenshot.background, key, value);
+        syncSpannedBackgroundSetting(key, value, screenshot.background);
+    }
+}
+
+function isWideBackgroundImage(img) {
+    if (!img || state.screenshots.length < 2) return false;
+
+    const dims = getCanvasDimensions();
+    const screenRatio = dims.width / dims.height;
+    const imageRatio = img.width / img.height;
+    return imageRatio > Math.max(screenRatio * 1.6, 1);
+}
+
+function applyBackgroundImage(img, src) {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+
+    screenshot.background = normalizeBackgroundSettings(screenshot.background);
+    const shouldSpan = screenshot.background.imageSpan || isWideBackgroundImage(img);
+
+    if (shouldSpan) {
+        const sharedBackground = cloneBackgroundSettings(screenshot.background);
+        sharedBackground.type = 'image';
+        sharedBackground.image = img;
+        sharedBackground.imageSrc = src || img.src || null;
+        sharedBackground.imageSpan = true;
+
+        state.screenshots.forEach(item => {
+            item.background = cloneBackgroundSettings(sharedBackground);
+        });
+    } else {
+        screenshot.background.type = 'image';
+        screenshot.background.image = img;
+        screenshot.background.imageSrc = src || img.src || null;
+        screenshot.background.imageSpan = false;
+    }
+}
+
+function setBackgroundImageSpan(enabled) {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+
+    screenshot.background = normalizeBackgroundSettings(screenshot.background);
+    screenshot.background.imageSpan = enabled;
+
+    if (enabled && screenshot.background.image) {
+        applyBackgroundImage(
+            screenshot.background.image,
+            screenshot.background.imageSrc || screenshot.background.image.src
+        );
+    } else if (!enabled) {
+        const currentImage = screenshot.background.image;
+        const currentImageSrc = screenshot.background.imageSrc || currentImage?.src || null;
+        state.screenshots.forEach(item => {
+            item.background = normalizeBackgroundSettings(item.background);
+            const itemImageSrc = item.background.imageSrc || item.background.image?.src || null;
+            if (item.background.image === currentImage || itemImageSrc === currentImageSrc) {
+                item.background.imageSpan = false;
             }
-            obj[parts[parts.length - 1]] = value;
-        } else {
-            screenshot.background[key] = value;
-        }
+        });
     }
 }
 
@@ -582,7 +734,7 @@ function setTextSetting(key, value) {
 function setCurrentScreenshotAsDefault() {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        state.defaults.background = JSON.parse(JSON.stringify(screenshot.background));
+        state.defaults.background = cloneBackgroundSettings(screenshot.background);
         state.defaults.screenshot = JSON.parse(JSON.stringify(screenshot.screenshot));
         state.defaults.text = JSON.parse(JSON.stringify(screenshot.text));
     }
@@ -1510,7 +1662,7 @@ function saveState() {
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
-            background: s.background,
+            background: serializeBackgroundSettings(s.background),
             screenshot: s.screenshot,
             text: s.text,
             elements: (s.elements || []).map(el => ({
@@ -1522,6 +1674,11 @@ function saveState() {
         };
     });
 
+    const defaultsToSave = {
+        ...state.defaults,
+        background: serializeBackgroundSettings(state.defaults.background)
+    };
+
     const stateToSave = {
         id: currentProjectId,
         formatVersion: 2, // Version 2: new 3D positioning formula
@@ -1532,7 +1689,7 @@ function saveState() {
         customHeight: state.customHeight,
         currentLanguage: state.currentLanguage,
         projectLanguages: state.projectLanguages,
-        defaults: state.defaults
+        defaults: defaultsToSave
     };
 
     // Update screenshot count in project metadata
@@ -1628,7 +1785,9 @@ function loadState() {
                                 gradient: parsed.background.gradient || state.defaults.background.gradient,
                                 solid: parsed.background.solid || state.defaults.background.solid,
                                 image: null,
+                                imageSrc: parsed.background.imageSrc || null,
                                 imageFit: parsed.background.imageFit || 'cover',
+                                imageSpan: parsed.background.imageSpan || false,
                                 imageBlur: parsed.background.imageBlur || 0,
                                 overlayColor: parsed.background.overlayColor || '#000000',
                                 overlayOpacity: parsed.background.overlayOpacity || 0,
@@ -1663,7 +1822,7 @@ function loadState() {
                                     name: s.name || 'Blank Screen',
                                     deviceType: s.deviceType,
                                     localizedImages: {},
-                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                    background: restoreBackgroundSettings(s.background || migratedBackground),
                                     screenshot: screenshotSettings,
                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                     elements: reconstructElementImages(s.elements),
@@ -1702,7 +1861,7 @@ function loadState() {
                                                     name: s.name,
                                                     deviceType: s.deviceType,
                                                     localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                                    background: restoreBackgroundSettings(s.background || migratedBackground),
                                                     screenshot: screenshotSettings,
                                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                                     elements: reconstructElementImages(s.elements),
@@ -1747,7 +1906,7 @@ function loadState() {
                                         name: s.name,
                                         deviceType: s.deviceType,
                                         localizedImages: localizedImages,
-                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        background: restoreBackgroundSettings(s.background || migratedBackground),
                                         screenshot: screenshotSettings,
                                         text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                         elements: reconstructElementImages(s.elements),
@@ -1793,10 +1952,11 @@ function loadState() {
                     // Load defaults (new format) or use migrated settings
                     if (parsed.defaults) {
                         state.defaults = parsed.defaults;
+                        state.defaults.background = restoreBackgroundSettings(state.defaults.background);
                         // Ensure elements array exists (may be missing from older saves)
                         if (!state.defaults.elements) state.defaults.elements = [];
                     } else {
-                        state.defaults.background = migratedBackground;
+                        state.defaults.background = restoreBackgroundSettings(migratedBackground);
                         state.defaults.screenshot = migratedScreenshot;
                         state.defaults.text = migratedText;
                     }
@@ -1861,7 +2021,9 @@ function resetStateToDefaults() {
             },
             solid: '#1a1a2e',
             image: null,
+            imageSrc: null,
             imageFit: 'cover',
+            imageSpan: false,
             imageBlur: 0,
             overlayColor: '#000000',
             overlayOpacity: 0,
@@ -2042,11 +2204,11 @@ function duplicateScreenshot(index) {
     const clone = JSON.parse(JSON.stringify({
         name: original.name,
         deviceType: original.deviceType,
-        background: original.background,
         screenshot: original.screenshot,
         text: original.text,
         overrides: original.overrides
     }));
+    clone.background = cloneBackgroundSettings(original.background);
 
     const nameParts = clone.name.split('.');
     if (nameParts.length > 1) {
@@ -2175,7 +2337,19 @@ function syncUIWithState() {
     document.getElementById('solid-color-hex').value = bg.solid;
 
     // Image background
+    const bgImagePreview = document.getElementById('bg-image-preview');
+    const bgImageSrc = bg.imageSrc || bg.image?.src || null;
+    if (bgImagePreview) {
+        if (bgImageSrc) {
+            bgImagePreview.src = bgImageSrc;
+            bgImagePreview.style.display = 'block';
+        } else {
+            bgImagePreview.removeAttribute('src');
+            bgImagePreview.style.display = 'none';
+        }
+    }
     document.getElementById('bg-image-fit').value = bg.imageFit;
+    document.getElementById('bg-image-span').classList.toggle('active', !!bg.imageSpan);
     document.getElementById('bg-blur').value = bg.imageBlur;
     document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
     document.getElementById('bg-overlay-color').value = bg.overlayColor;
@@ -4268,9 +4442,10 @@ function setupEventListeners() {
             reader.onload = (event) => {
                 const img = new Image();
                 img.onload = () => {
-                    setBackground('image', img);
+                    applyBackgroundImage(img, event.target.result);
                     document.getElementById('bg-image-preview').src = event.target.result;
                     document.getElementById('bg-image-preview').style.display = 'block';
+                    syncUIWithState();
                     updateCanvas();
                 };
                 img.src = event.target.result;
@@ -4281,6 +4456,13 @@ function setupEventListeners() {
 
     document.getElementById('bg-image-fit').addEventListener('change', (e) => {
         setBackground('imageFit', e.target.value);
+        updateCanvas();
+    });
+
+    document.getElementById('bg-image-span').addEventListener('click', function () {
+        this.classList.toggle('active');
+        setBackgroundImageSpan(this.classList.contains('active'));
+        syncUIWithState();
         updateCanvas();
     });
 
@@ -6190,6 +6372,8 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
 
     const textDefaults = normalizeTextSettings(state.defaults.text);
     state.defaults.text = textDefaults;
+    const activeBackground = getCurrentScreenshot()?.background;
+    const backgroundDefaults = activeBackground?.imageSpan ? activeBackground : state.defaults.background;
 
     // Each screenshot gets its own copy of all settings from defaults
     state.screenshots.push({
@@ -6197,7 +6381,7 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         name: name || 'Blank Screen',
         deviceType: deviceType,
         localizedImages: localizedImages,
-        background: JSON.parse(JSON.stringify(state.defaults.background)),
+        background: cloneBackgroundSettings(backgroundDefaults),
         screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
         text: JSON.parse(JSON.stringify(textDefaults)),
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),
@@ -6580,12 +6764,8 @@ function transferStyle(sourceIndex, targetIndex) {
         return;
     }
 
-    // Deep copy background settings
-    target.background = JSON.parse(JSON.stringify(source.background));
-    // Handle background image separately (not JSON serializable)
-    if (source.background.image) {
-        target.background.image = source.background.image;
-    }
+    // Deep copy background settings while preserving live background images
+    target.background = cloneBackgroundSettings(source.background);
 
     // Deep copy screenshot settings
     target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
@@ -6643,12 +6823,8 @@ function applyStyleToAll() {
     state.screenshots.forEach((target, index) => {
         if (index === applyStyleSourceIndex) return; // Skip source
 
-        // Deep copy background settings
-        target.background = JSON.parse(JSON.stringify(source.background));
-        // Handle background image separately (not JSON serializable)
-        if (source.background.image) {
-            target.background.image = source.background.image;
-        }
+        // Deep copy background settings while preserving live background images
+        target.background = cloneBackgroundSettings(source.background);
 
         // Deep copy screenshot settings
         target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
@@ -7060,7 +7236,7 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
 
     // Draw background for this screenshot
     const bg = screenshot.background;
-    drawBackgroundToContext(targetCtx, dims, bg);
+    drawBackgroundToContext(targetCtx, dims, bg, index, state.screenshots.length);
 
     // Draw noise if enabled
     if (bg.noise) {
@@ -7101,7 +7277,9 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     drawElementsToContext(targetCtx, dims, elements, 'above-text');
 }
 
-function drawBackgroundToContext(context, dims, bg) {
+function drawBackgroundToContext(context, dims, bg, screenIndex = 0, screenCount = 1) {
+    bg = normalizeBackgroundSettings(bg);
+
     if (bg.type === 'gradient') {
         const angle = bg.gradient.angle * Math.PI / 180;
         const x1 = dims.width / 2 - Math.cos(angle) * dims.width;
@@ -7120,50 +7298,69 @@ function drawBackgroundToContext(context, dims, bg) {
         context.fillStyle = bg.solid;
         context.fillRect(0, 0, dims.width, dims.height);
     } else if (bg.type === 'image' && bg.image) {
-        const img = bg.image;
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
-        let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
+        drawBackgroundImageToContext(context, dims, bg, screenIndex, screenCount);
+    }
+}
 
-        if (bg.imageFit === 'cover') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
+function drawBackgroundImageToContext(context, dims, bg, screenIndex = 0, screenCount = 1) {
+    const img = bg.image;
+    if (!img || !img.complete || !(img.naturalWidth || img.width)) return;
 
-            if (imgRatio > canvasRatio) {
-                sw = img.height * canvasRatio;
-                sx = (img.width - sw) / 2;
-            } else {
-                sh = img.width / canvasRatio;
-                sy = (img.height - sh) / 2;
-            }
-        } else if (bg.imageFit === 'contain') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
+    const spanCount = bg.imageSpan ? Math.max(1, screenCount || state.screenshots.length || 1) : 1;
+    const spanIndex = bg.imageSpan ? Math.max(0, Math.min(screenIndex, spanCount - 1)) : 0;
+    const targetWidth = dims.width * spanCount;
+    const targetHeight = dims.height;
+    const imgRatio = img.width / img.height;
+    const targetRatio = targetWidth / targetHeight;
 
-            if (imgRatio > canvasRatio) {
-                dh = dims.width / imgRatio;
-                dy = (dims.height - dh) / 2;
-            } else {
-                dw = dims.height * imgRatio;
-                dx = (dims.width - dw) / 2;
-            }
+    let dx = 0;
+    let dy = 0;
+    let dw = targetWidth;
+    let dh = targetHeight;
 
-            context.fillStyle = '#000';
-            context.fillRect(0, 0, dims.width, dims.height);
+    if (bg.imageFit === 'cover') {
+        if (imgRatio > targetRatio) {
+            dh = targetHeight;
+            dw = dh * imgRatio;
+            dx = (targetWidth - dw) / 2;
+        } else {
+            dw = targetWidth;
+            dh = dw / imgRatio;
+            dy = (targetHeight - dh) / 2;
+        }
+    } else if (bg.imageFit === 'contain') {
+        if (imgRatio > targetRatio) {
+            dw = targetWidth;
+            dh = dw / imgRatio;
+            dy = (targetHeight - dh) / 2;
+        } else {
+            dh = targetHeight;
+            dw = dh * imgRatio;
+            dx = (targetWidth - dw) / 2;
         }
 
-        if (bg.imageBlur > 0) {
-            context.filter = `blur(${bg.imageBlur}px)`;
-        }
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, dims.width, dims.height);
+    }
 
-        context.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-        context.filter = 'none';
+    context.save();
+    context.beginPath();
+    context.rect(0, 0, dims.width, dims.height);
+    context.clip();
+    context.translate(-spanIndex * dims.width, 0);
 
-        if (bg.overlayOpacity > 0) {
-            context.fillStyle = bg.overlayColor;
-            context.globalAlpha = bg.overlayOpacity / 100;
-            context.fillRect(0, 0, dims.width, dims.height);
-            context.globalAlpha = 1;
-        }
+    if (bg.imageBlur > 0) {
+        context.filter = `blur(${bg.imageBlur}px)`;
+    }
+
+    context.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+    context.restore();
+
+    if (bg.overlayOpacity > 0) {
+        context.fillStyle = bg.overlayColor;
+        context.globalAlpha = bg.overlayOpacity / 100;
+        context.fillRect(0, 0, dims.width, dims.height);
+        context.globalAlpha = 1;
     }
 }
 
@@ -7693,71 +7890,7 @@ function drawStar(context, cx, cy, size, color) {
 function drawBackground() {
     const dims = getCanvasDimensions();
     const bg = getBackground();
-
-    if (bg.type === 'gradient') {
-        const angle = bg.gradient.angle * Math.PI / 180;
-        const x1 = dims.width / 2 - Math.cos(angle) * dims.width;
-        const y1 = dims.height / 2 - Math.sin(angle) * dims.height;
-        const x2 = dims.width / 2 + Math.cos(angle) * dims.width;
-        const y2 = dims.height / 2 + Math.sin(angle) * dims.height;
-
-        const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
-        bg.gradient.stops.forEach(stop => {
-            gradient.addColorStop(stop.position / 100, stop.color);
-        });
-
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, dims.width, dims.height);
-    } else if (bg.type === 'solid') {
-        ctx.fillStyle = bg.solid;
-        ctx.fillRect(0, 0, dims.width, dims.height);
-    } else if (bg.type === 'image' && bg.image) {
-        const img = bg.image;
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
-        let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
-
-        if (bg.imageFit === 'cover') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
-
-            if (imgRatio > canvasRatio) {
-                sw = img.height * canvasRatio;
-                sx = (img.width - sw) / 2;
-            } else {
-                sh = img.width / canvasRatio;
-                sy = (img.height - sh) / 2;
-            }
-        } else if (bg.imageFit === 'contain') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
-
-            if (imgRatio > canvasRatio) {
-                dh = dims.width / imgRatio;
-                dy = (dims.height - dh) / 2;
-            } else {
-                dw = dims.height * imgRatio;
-                dx = (dims.width - dw) / 2;
-            }
-
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, dims.width, dims.height);
-        }
-
-        if (bg.imageBlur > 0) {
-            ctx.filter = `blur(${bg.imageBlur}px)`;
-        }
-
-        ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-        ctx.filter = 'none';
-
-        // Overlay
-        if (bg.overlayOpacity > 0) {
-            ctx.fillStyle = bg.overlayColor;
-            ctx.globalAlpha = bg.overlayOpacity / 100;
-            ctx.fillRect(0, 0, dims.width, dims.height);
-            ctx.globalAlpha = 1;
-        }
-    }
+    drawBackgroundToContext(ctx, dims, bg, state.selectedIndex, state.screenshots.length);
 }
 
 function drawScreenshot() {
