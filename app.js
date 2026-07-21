@@ -5351,16 +5351,10 @@ function transferStyle(sourceIndex, targetIndex) {
         target.background.image = source.background.image;
     }
 
-    // Deep copy screenshot settings
+    // Deep copy screenshot settings, preserving target overlays
+    const targetOverlays = target.screenshot.overlays;
     target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
-    // Handle overlays separately (restore Image objects lost during JSON cloning)
-    if (source.screenshot.overlays && target.screenshot.overlays) {
-        source.screenshot.overlays.forEach((ol, idx) => {
-            if (ol.image && target.screenshot.overlays[idx]) {
-                target.screenshot.overlays[idx].image = ol.image;
-            }
-        });
-    }
+    target.screenshot.overlays = targetOverlays;
 
     // Copy text styling but preserve actual text content
     const targetHeadlines = target.text.headlines;
@@ -5408,16 +5402,10 @@ function applyStyleToAll() {
             target.background.image = source.background.image;
         }
 
-        // Deep copy screenshot settings
+        // Deep copy screenshot settings, preserving target overlays
+        const targetOverlays = target.screenshot.overlays;
         target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
-        // Handle overlays separately (restore Image objects lost during JSON cloning)
-        if (source.screenshot.overlays && target.screenshot.overlays) {
-            source.screenshot.overlays.forEach((ol, idx) => {
-                if (ol.image && target.screenshot.overlays[idx]) {
-                    target.screenshot.overlays[idx].image = ol.image;
-                }
-            });
-        }
+        target.screenshot.overlays = targetOverlays;
 
         // Copy text styling but preserve actual text content
         const targetHeadlines = target.text.headlines;
