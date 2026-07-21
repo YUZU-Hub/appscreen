@@ -1,0 +1,167 @@
+{
+  ".opencode/package.json": {
+    "mtime": 1780746376.6177504,
+    "ast_hash": "49c15018fc6072b63ee6048b7105fbcb",
+    "semantic_hash": ""
+  },
+  "app.js": {
+    "mtime": 1784638970.3099656,
+    "ast_hash": "e799e387bfcd611d14cde1f0af861802",
+    "semantic_hash": ""
+  },
+  "electron/main.js": {
+    "mtime": 1768814347.6406088,
+    "ast_hash": "9facfc0205425604fb36261c9e03e62d",
+    "semantic_hash": ""
+  },
+  "electron/preload-preferences.js": {
+    "mtime": 1768814347.6408684,
+    "ast_hash": "80557d5dda9857e1eb110580e12ee5ae",
+    "semantic_hash": ""
+  },
+  "electron/preload.js": {
+    "mtime": 1768814347.640954,
+    "ast_hash": "8ce3ef38d8b0eb920d71e6cdb9df8f7a",
+    "semantic_hash": ""
+  },
+  "language-utils.js": {
+    "mtime": 1768814347.6506126,
+    "ast_hash": "48be13be65240c1b141055ff2ef1553e",
+    "semantic_hash": ""
+  },
+  "llm.js": {
+    "mtime": 1768814347.650725,
+    "ast_hash": "fc504df433a2573d48b28e6554ecf6d7",
+    "semantic_hash": ""
+  },
+  "magical-titles.js": {
+    "mtime": 1768814347.6508386,
+    "ast_hash": "ec3fee94c11dfd1bae9e3a820673c49c",
+    "semantic_hash": ""
+  },
+  "package.json": {
+    "mtime": 1768814347.6603742,
+    "ast_hash": "1956e2432a5e371d5b143326e1e4c112",
+    "semantic_hash": ""
+  },
+  "three-renderer.js": {
+    "mtime": 1768814347.665283,
+    "ast_hash": "f304ca51975c4044ad1952707d04478f",
+    "semantic_hash": ""
+  },
+  ".agents/rules/graphify.md": {
+    "mtime": 1784664713.0774515,
+    "ast_hash": "f1e53ecc9194573d3c28fc116c743a2e",
+    "semantic_hash": ""
+  },
+  ".agents/workflows/graphify.md": {
+    "mtime": 1784664713.0776765,
+    "ast_hash": "0bc020d491fca99550c1ea3de0a5f862",
+    "semantic_hash": ""
+  },
+  ".github/FUNDING.yml": {
+    "mtime": 1768814347.6385972,
+    "ast_hash": "77849c47f2f8be8c19e20b2814b5278f",
+    "semantic_hash": ""
+  },
+  ".github/workflows/docker-publish.yml": {
+    "mtime": 1768814347.6387599,
+    "ast_hash": "c8755144b80716ae7047a779b24f3452",
+    "semantic_hash": ""
+  },
+  ".github/workflows/electron-build.yml": {
+    "mtime": 1768814347.6388512,
+    "ast_hash": "1da669a87a7cb0c47a70a57fba496893",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.analyze.md": {
+    "mtime": 1784638937.304029,
+    "ast_hash": "1db648184d67573b23e23a20d22fcb55",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.checklist.md": {
+    "mtime": 1784638937.304487,
+    "ast_hash": "250efcfd07d75291200beb3309e16739",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.clarify.md": {
+    "mtime": 1784638937.3049402,
+    "ast_hash": "128e21311bea77ee29478e2625f1af1c",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.constitution.md": {
+    "mtime": 1784638937.3057477,
+    "ast_hash": "1a93a34e4a8f45928a02046282b5bdb7",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.implement.md": {
+    "mtime": 1784638937.3065357,
+    "ast_hash": "c4b9062906955f6d1ed73b1a47276ed4",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.plan.md": {
+    "mtime": 1784638937.3067718,
+    "ast_hash": "775754c50e854d041846b885eed5122a",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.specify.md": {
+    "mtime": 1784638937.3070905,
+    "ast_hash": "6b9d80b408d06b9dc322f5b0621e306f",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.tasks.md": {
+    "mtime": 1784638937.3077667,
+    "ast_hash": "feccf0ebbff126f72f60d5f46d4c9394",
+    "semantic_hash": ""
+  },
+  ".opencode/command/speckit.taskstoissues.md": {
+    "mtime": 1784638937.3079941,
+    "ast_hash": "0cb6a1734ef1054358b0dd2762dc1e09",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1784638937.3134272,
+    "ast_hash": "48f55066c1ff488cc3e5e635904dc362",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1784638937.3138306,
+    "ast_hash": "01d98ef6510c7501bfe53bfcde009c01",
+    "semantic_hash": ""
+  },
+  "docker-compose.build.yml": {
+    "mtime": 1768814347.6403666,
+    "ast_hash": "73973ff157b0954a1c5f4d0ca81567e1",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1768814347.6404417,
+    "ast_hash": "27818ce2423f06f7f06ac16bff43b01e",
+    "semantic_hash": ""
+  },
+  "electron/preferences.html": {
+    "mtime": 1768814347.6407394,
+    "ast_hash": "cc87c792028d98cea6f5f0517a92450a",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1784638970.310328,
+    "ast_hash": "133b85c8a12de3e5dabedcd96b09d2b7",
+    "semantic_hash": ""
+  },
+  "img/icon.png": {
+    "mtime": 1768814347.642396,
+    "ast_hash": "1836a39de07d67d686a94c950cd0ee41",
+    "semantic_hash": ""
+  },
+  "img/info.svg": {
+    "mtime": 1768814347.6425145,
+    "ast_hash": "a68da3a6498a137b8defc4884b9d3efe",
+    "semantic_hash": ""
+  },
+  "img/screenshot-generator.png": {
+    "mtime": 1768814347.649902,
+    "ast_hash": "56bd00d1db73075d224078102f7182fb",
+    "semantic_hash": ""
+  }
+}

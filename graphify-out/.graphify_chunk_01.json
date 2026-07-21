@@ -1,0 +1,319 @@
+{
+  "nodes": [
+    {
+      "id": "_agents_rules_graphify_graphify_rule",
+      "label": "Graphify Codebase Rule",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.agents/rules/graphify.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_agents_rules_graphify_graphify_query_rule",
+      "label": "Graphify Query Rule",
+      "file_type": "concept",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.agents/rules/graphify.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_agents_workflows_graphify_graphify_workflow",
+      "label": "Graphify Workflow",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.agents/workflows/graphify.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_github_funding_funding_config",
+      "label": "GitHub Funding Configuration",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.github/FUNDING.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_github_workflows_docker_publish_docker_publish_workflow",
+      "label": "Build and Publish Docker Image Workflow",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.github/workflows/docker-publish.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_github_workflows_electron_build_electron_build_workflow",
+      "label": "Build Electron App Workflow",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.github/workflows/electron-build.yml",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_analyze_speckit_analyze_command",
+      "label": "SpecKit Analyze Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.analyze.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_checklist_speckit_checklist_command",
+      "label": "SpecKit Checklist Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.checklist.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_clarify_speckit_clarify_command",
+      "label": "SpecKit Clarify Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.clarify.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_constitution_speckit_constitution_command",
+      "label": "SpecKit Constitution Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.constitution.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_implement_speckit_implement_command",
+      "label": "SpecKit Implement Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.implement.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_plan_speckit_plan_command",
+      "label": "SpecKit Plan Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.plan.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_specify_speckit_specify_command",
+      "label": "SpecKit Specify Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.specify.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "label": "SpecKit Tasks Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.tasks.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "_opencode_command_speckit_taskstoissues_speckit_taskstoissues_command",
+      "label": "SpecKit Tasks to Issues Command",
+      "file_type": "document",
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.taskstoissues.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "_agents_workflows_graphify_graphify_workflow",
+      "target": "_agents_rules_graphify_graphify_rule",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.agents/workflows/graphify.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_agents_rules_graphify_graphify_rule",
+      "target": "_agents_rules_graphify_graphify_query_rule",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.agents/rules/graphify.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_specify_speckit_specify_command",
+      "target": "_opencode_command_speckit_plan_speckit_plan_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.specify.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_specify_speckit_specify_command",
+      "target": "_opencode_command_speckit_clarify_speckit_clarify_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.specify.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_clarify_speckit_clarify_command",
+      "target": "_opencode_command_speckit_plan_speckit_plan_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.clarify.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_constitution_speckit_constitution_command",
+      "target": "_opencode_command_speckit_specify_speckit_specify_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.constitution.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_plan_speckit_plan_command",
+      "target": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.plan.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_plan_speckit_plan_command",
+      "target": "_opencode_command_speckit_checklist_speckit_checklist_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.plan.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "target": "_opencode_command_speckit_analyze_speckit_analyze_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.tasks.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "target": "_opencode_command_speckit_implement_speckit_implement_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.tasks.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_analyze_speckit_analyze_command",
+      "target": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.analyze.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_implement_speckit_implement_command",
+      "target": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.implement.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "_opencode_command_speckit_taskstoissues_speckit_taskstoissues_command",
+      "target": "_opencode_command_speckit_tasks_speckit_tasks_command",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.taskstoissues.md",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "speckit_workflow_suite",
+      "label": "SpecKit Workflow Suite",
+      "nodes": [
+        "_opencode_command_speckit_specify_speckit_specify_command",
+        "_opencode_command_speckit_plan_speckit_plan_command",
+        "_opencode_command_speckit_tasks_speckit_tasks_command",
+        "_opencode_command_speckit_implement_speckit_implement_command"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "/Users/brahim/Personal/myProjects/ProfessionalProjects/IndieProjects/Helpers/AppScreenshotsGenerator/ScreenshotsGenerator/.opencode/command/speckit.specify.md"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}
