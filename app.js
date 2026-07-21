@@ -8,6 +8,7 @@ const state = {
     projectLanguages: ['en'], // Languages available in this project
     customWidth: 1290,
     customHeight: 2796,
+    selectedOverlayIndex: -1, // Currently selected overlay for editing
     // Default settings applied to new screenshots
     defaults: {
         background: {
@@ -51,7 +52,8 @@ const state = {
                 color: '#1d1d1f',
                 width: 12,
                 opacity: 100
-            }
+            },
+            overlays: []
         },
         text: {
             headlineEnabled: true,
@@ -117,8 +119,17 @@ function setBackground(key, value) {
         if (key.includes('.')) {
             const parts = key.split('.');
             let obj = screenshot.background;
+            let defaultObj = state.defaults.background;
             for (let i = 0; i < parts.length - 1; i++) {
+                if (!obj[parts[i]]) {
+                    if (defaultObj && defaultObj[parts[i]]) {
+                        obj[parts[i]] = JSON.parse(JSON.stringify(defaultObj[parts[i]]));
+                    } else {
+                        obj[parts[i]] = {};
+                    }
+                }
                 obj = obj[parts[i]];
+                defaultObj = defaultObj ? defaultObj[parts[i]] : null;
             }
             obj[parts[parts.length - 1]] = value;
         } else {
@@ -133,8 +144,17 @@ function setScreenshotSetting(key, value) {
         if (key.includes('.')) {
             const parts = key.split('.');
             let obj = screenshot.screenshot;
+            let defaultObj = state.defaults.screenshot;
             for (let i = 0; i < parts.length - 1; i++) {
+                if (!obj[parts[i]]) {
+                    if (defaultObj && defaultObj[parts[i]]) {
+                        obj[parts[i]] = JSON.parse(JSON.stringify(defaultObj[parts[i]]));
+                    } else {
+                        obj[parts[i]] = {};
+                    }
+                }
                 obj = obj[parts[i]];
+                defaultObj = defaultObj ? defaultObj[parts[i]] : null;
             }
             obj[parts[parts.length - 1]] = value;
         } else {
@@ -146,8 +166,170 @@ function setScreenshotSetting(key, value) {
 function setTextSetting(key, value) {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        screenshot.text[key] = value;
+        if (key.includes('.')) {
+            const parts = key.split('.');
+            let obj = screenshot.text;
+            let defaultObj = state.defaults.text;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (!obj[parts[i]]) {
+                    if (defaultObj && defaultObj[parts[i]]) {
+                        obj[parts[i]] = JSON.parse(JSON.stringify(defaultObj[parts[i]]));
+                    } else {
+                        obj[parts[i]] = {};
+                    }
+                }
+                obj = obj[parts[i]];
+                defaultObj = defaultObj ? defaultObj[parts[i]] : null;
+            }
+            obj[parts[parts.length - 1]] = value;
+        } else {
+            screenshot.text[key] = value;
+        }
     }
+}
+
+function setOverlaySetting(key, value) {
+    const screenshot = getCurrentScreenshot();
+    if (screenshot && state.selectedOverlayIndex !== -1) {
+        const overlays = screenshot.screenshot.overlays || [];
+        const ol = overlays[state.selectedOverlayIndex];
+        if (ol) {
+            if (key.includes('.')) {
+                const parts = key.split('.');
+                let obj = ol;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (!obj[parts[i]]) obj[parts[i]] = {};
+                    obj = obj[parts[i]];
+                }
+                obj[parts[parts.length - 1]] = value;
+            } else {
+                ol[key] = value;
+            }
+        }
+    }
+}
+
+function addOverlay() {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+
+    if (!screenshot.screenshot.overlays) {
+        screenshot.screenshot.overlays = [];
+    }
+
+    const newOverlay = {
+        enabled: true,
+        image: null,
+        scale: 40,
+        x: 50,
+        y: 50,
+        rotation: 0,
+        cornerRadius: 12,
+        shadow: {
+            enabled: true,
+            color: '#000000',
+            blur: 30,
+            opacity: 40,
+            x: 0,
+            y: 15
+        }
+    };
+
+    screenshot.screenshot.overlays.push(newOverlay);
+    state.selectedOverlayIndex = screenshot.screenshot.overlays.length - 1;
+    updateOverlaysList();
+    syncUIWithState();
+    updateCanvas();
+}
+
+function deleteOverlay(index) {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+
+    if (screenshot.screenshot.overlays) {
+        screenshot.screenshot.overlays.splice(index, 1);
+        if (state.selectedOverlayIndex === index) {
+            state.selectedOverlayIndex = -1;
+        } else if (state.selectedOverlayIndex > index) {
+            state.selectedOverlayIndex--;
+        }
+        updateOverlaysList();
+        syncUIWithState();
+        updateCanvas();
+    }
+}
+
+function updateOverlaysList() {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+
+    // Migrate old singular overlay if it exists
+    if (screenshot.screenshot.overlay) {
+        if (!screenshot.screenshot.overlays) screenshot.screenshot.overlays = [];
+        screenshot.screenshot.overlays.push(screenshot.screenshot.overlay);
+        delete screenshot.screenshot.overlay;
+    }
+
+    if (!screenshot.screenshot.overlays) {
+        screenshot.screenshot.overlays = [];
+    }
+
+    const overlays = screenshot.screenshot.overlays;
+    const list = document.getElementById('overlays-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    overlays.forEach((ol, index) => {
+        const item = document.createElement('div');
+        item.className = 'overlay-item' + (state.selectedOverlayIndex === index ? ' active' : '');
+
+        // Recovery logic: if we have imageSrc but no proper image object, reload it
+        if ((ol.imageSrc || ol.src) && (!ol.image || !(ol.image instanceof HTMLImageElement)) && !ol._loading) {
+            ol._loading = true;
+            const src = ol.imageSrc || ol.src;
+            const img = new Image();
+            img.onload = () => {
+                ol.image = img;
+                ol._loading = false;
+                updateCanvas();
+                updateOverlaysList();
+            };
+            img.onerror = () => {
+                ol._loading = false;
+            };
+            img.src = src;
+        }
+
+        const imgSrc = (ol.image && ol.image.src) ? ol.image.src : (ol.imageSrc || '');
+        const thumb = imgSrc ? `<img src="${imgSrc}" class="overlay-item-thumb">` : `<div class="overlay-item-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--text-secondary);font-size:10px;">None</div>`;
+
+        item.innerHTML = `
+            ${thumb}
+            <span class="overlay-item-name">${ol.name || 'Overlay ' + (index + 1)}</span>
+            <div class="overlay-item-actions">
+                <button class="overlay-action-btn delete" title="Delete Overlay">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+
+        item.querySelector('.delete').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteOverlay(index);
+        });
+
+        item.addEventListener('click', () => {
+            state.selectedOverlayIndex = index;
+            updateOverlaysList();
+            syncUIWithState();
+        });
+
+        list.appendChild(item);
+    });
 }
 
 function setCurrentScreenshotAsDefault() {
@@ -1049,13 +1231,30 @@ function saveState() {
             });
         }
 
+        // Prepare screenshot settings for saving
+        const screenshotSettings = JSON.parse(JSON.stringify(s.screenshot || state.defaults.screenshot));
+
+        // Handle multiple overlays: save image sources and remove Image objects
+        if (screenshotSettings.overlays) {
+            screenshotSettings.overlays.forEach((ol, idx) => {
+                const originalOl = (s.screenshot && s.screenshot.overlays) ? s.screenshot.overlays[idx] : null;
+                if (originalOl && originalOl.image && originalOl.image.src) {
+                    ol.imageSrc = originalOl.image.src;
+                }
+                delete ol.image;
+            });
+        }
+
+        // Clean up legacy singular overlay if it somehow still exists in settings
+        delete screenshotSettings.overlay;
+
         return {
             src: s.image?.src || '', // Legacy compatibility
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
             background: s.background,
-            screenshot: s.screenshot,
+            screenshot: screenshotSettings,
             text: s.text,
             overrides: s.overrides
         };
@@ -1194,7 +1393,7 @@ function loadState() {
                                                 if (needs3DMigration) {
                                                     migrate3DPosition(screenshotSettings);
                                                 }
-                                                state.screenshots[index] = {
+                                                const screenshotData = {
                                                     image: localizedImages[firstLang]?.image, // Legacy compat
                                                     name: s.name,
                                                     deviceType: s.deviceType,
@@ -1204,8 +1403,45 @@ function loadState() {
                                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                                     overrides: s.overrides || {}
                                                 };
-                                                loadedCount++;
-                                                checkAllLoaded();
+
+                                                // Handle multiple overlays migration
+                                                const overlays = screenshotSettings.overlays || [];
+                                                if (screenshotSettings.overlay) {
+                                                    overlays.push(screenshotSettings.overlay);
+                                                    delete screenshotSettings.overlay;
+                                                }
+                                                screenshotSettings.overlays = overlays;
+
+                                                const overlaysWithImages = overlays.filter(o => o.imageSrc || o.src);
+                                                if (overlaysWithImages.length > 0) {
+                                                    let overlayLoadedCount = 0;
+                                                    overlaysWithImages.forEach(ol => {
+                                                        const src = ol.imageSrc || ol.src;
+                                                        const overlayImg = new Image();
+                                                        overlayImg.onload = () => {
+                                                            ol.image = overlayImg;
+                                                            overlayLoadedCount++;
+                                                            if (overlayLoadedCount === overlaysWithImages.length) {
+                                                                state.screenshots[index] = screenshotData;
+                                                                loadedCount++;
+                                                                checkAllLoaded();
+                                                            }
+                                                        };
+                                                        overlayImg.onerror = () => {
+                                                            overlayLoadedCount++;
+                                                            if (overlayLoadedCount === overlaysWithImages.length) {
+                                                                state.screenshots[index] = screenshotData;
+                                                                loadedCount++;
+                                                                checkAllLoaded();
+                                                            }
+                                                        };
+                                                        overlayImg.src = src;
+                                                    });
+                                                } else {
+                                                    state.screenshots[index] = screenshotData;
+                                                    loadedCount++;
+                                                    checkAllLoaded();
+                                                }
                                             }
                                         };
                                         langImg.src = langData.src;
@@ -1237,7 +1473,7 @@ function loadState() {
                                     if (needs3DMigration) {
                                         migrate3DPosition(screenshotSettings);
                                     }
-                                    state.screenshots[index] = {
+                                    const screenshotData = {
                                         image: img,
                                         name: s.name,
                                         deviceType: s.deviceType,
@@ -1247,8 +1483,45 @@ function loadState() {
                                         text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                         overrides: s.overrides || {}
                                     };
-                                    loadedCount++;
-                                    checkAllLoaded();
+
+                                    // Handle multiple overlays migration
+                                    const overlays = screenshotSettings.overlays || [];
+                                    if (screenshotSettings.overlay) {
+                                        overlays.push(screenshotSettings.overlay);
+                                        delete screenshotSettings.overlay;
+                                    }
+                                    screenshotSettings.overlays = overlays;
+
+                                    const overlaysWithImages = overlays.filter(o => o.imageSrc || o.src);
+                                    if (overlaysWithImages.length > 0) {
+                                        let overlayLoadedCount = 0;
+                                        overlaysWithImages.forEach(ol => {
+                                            const src = ol.imageSrc || ol.src;
+                                            const overlayImg = new Image();
+                                            overlayImg.onload = () => {
+                                                ol.image = overlayImg;
+                                                overlayLoadedCount++;
+                                                if (overlayLoadedCount === overlaysWithImages.length) {
+                                                    state.screenshots[index] = screenshotData;
+                                                    loadedCount++;
+                                                    checkAllLoaded();
+                                                }
+                                            };
+                                            overlayImg.onerror = () => {
+                                                overlayLoadedCount++;
+                                                if (overlayLoadedCount === overlaysWithImages.length) {
+                                                    state.screenshots[index] = screenshotData;
+                                                    loadedCount++;
+                                                    checkAllLoaded();
+                                                }
+                                            };
+                                            overlayImg.src = src;
+                                        });
+                                    } else {
+                                        state.screenshots[index] = screenshotData;
+                                        loadedCount++;
+                                        checkAllLoaded();
+                                    }
                                 };
                                 img.src = s.src;
                             }
@@ -1285,7 +1558,16 @@ function loadState() {
 
                     // Load defaults (new format) or use migrated settings
                     if (parsed.defaults) {
-                        state.defaults = parsed.defaults;
+                        // Merge defaults to ensure new properties are not lost
+                        if (parsed.defaults.background) {
+                            state.defaults.background = { ...state.defaults.background, ...parsed.defaults.background };
+                        }
+                        if (parsed.defaults.screenshot) {
+                            state.defaults.screenshot = { ...state.defaults.screenshot, ...parsed.defaults.screenshot };
+                        }
+                        if (parsed.defaults.text) {
+                            state.defaults.text = { ...state.defaults.text, ...parsed.defaults.text };
+                        }
                     } else {
                         state.defaults.background = migratedBackground;
                         state.defaults.screenshot = migratedScreenshot;
@@ -1379,7 +1661,8 @@ function resetStateToDefaults() {
                 color: '#1d1d1f',
                 width: 12,
                 opacity: 100
-            }
+            },
+            overlays: []
         },
         text: {
             headlines: { en: '' },
@@ -1906,11 +2189,9 @@ function syncUIWithState() {
     document.getElementById('noise-intensity').value = bg.noiseIntensity;
     document.getElementById('noise-intensity-value').textContent = formatValue(bg.noiseIntensity) + '%';
 
-    // Screenshot settings
     document.getElementById('screenshot-scale').value = ss.scale;
     document.getElementById('screenshot-scale-value').textContent = formatValue(ss.scale) + '%';
-    document.getElementById('screenshot-y').value = ss.y;
-    document.getElementById('screenshot-y-value').textContent = formatValue(ss.y) + '%';
+
     document.getElementById('screenshot-x').value = ss.x;
     document.getElementById('screenshot-x-value').textContent = formatValue(ss.x) + '%';
     document.getElementById('corner-radius').value = ss.cornerRadius;
@@ -1918,7 +2199,7 @@ function syncUIWithState() {
     document.getElementById('screenshot-rotation').value = ss.rotation;
     document.getElementById('screenshot-rotation-value').textContent = formatValue(ss.rotation) + '°';
 
-    // Shadow
+    // Main Screenshot Shadow
     document.getElementById('shadow-toggle').classList.toggle('active', ss.shadow.enabled);
     document.getElementById('shadow-color').value = ss.shadow.color;
     document.getElementById('shadow-color-hex').value = ss.shadow.color;
@@ -1931,7 +2212,7 @@ function syncUIWithState() {
     document.getElementById('shadow-y').value = ss.shadow.y;
     document.getElementById('shadow-y-value').textContent = formatValue(ss.shadow.y) + 'px';
 
-    // Frame/Border
+    // Main Screenshot Frame/Border
     document.getElementById('frame-toggle').classList.toggle('active', ss.frame.enabled);
     document.getElementById('frame-color').value = ss.frame.color;
     document.getElementById('frame-color-hex').value = ss.frame.color;
@@ -1940,15 +2221,14 @@ function syncUIWithState() {
     document.getElementById('frame-opacity').value = ss.frame.opacity;
     document.getElementById('frame-opacity-value').textContent = formatValue(ss.frame.opacity) + '%';
 
-    // Text
+    // Text Settings
     const currentHeadline = txt.headlines ? (txt.headlines[txt.currentHeadlineLang || 'en'] || '') : (txt.headline || '');
     document.getElementById('headline-text').value = currentHeadline;
     document.getElementById('headline-font').value = txt.headlineFont;
-    updateFontPickerPreview();
+    if (typeof updateFontPickerPreview === 'function') updateFontPickerPreview();
     document.getElementById('headline-size').value = txt.headlineSize;
     document.getElementById('headline-color').value = txt.headlineColor;
     document.getElementById('headline-weight').value = txt.headlineWeight;
-    // Sync text style buttons
     document.querySelectorAll('#headline-style button').forEach(btn => {
         const style = btn.dataset.style;
         const key = 'headline' + style.charAt(0).toUpperCase() + style.slice(1);
@@ -1969,22 +2249,72 @@ function syncUIWithState() {
     document.getElementById('subheadline-opacity').value = txt.subheadlineOpacity;
     document.getElementById('subheadline-opacity-value').textContent = formatValue(txt.subheadlineOpacity) + '%';
     document.getElementById('subheadline-weight').value = txt.subheadlineWeight || '400';
-    // Sync subheadline style buttons
     document.querySelectorAll('#subheadline-style button').forEach(btn => {
         const style = btn.dataset.style;
         const key = 'subheadline' + style.charAt(0).toUpperCase() + style.slice(1);
         btn.classList.toggle('active', txt[key] || false);
     });
 
-    // Headline/Subheadline toggles
-    const headlineEnabled = txt.headlineEnabled !== false; // default true for backwards compatibility
+    const headlineEnabled = txt.headlineEnabled !== false;
     const subheadlineEnabled = txt.subheadlineEnabled || false;
     document.getElementById('headline-toggle').classList.toggle('active', headlineEnabled);
     document.getElementById('subheadline-toggle').classList.toggle('active', subheadlineEnabled);
 
-    // Language UIs
     updateHeadlineLanguageUI();
     updateSubheadlineLanguageUI();
+
+    // Overlays
+    updateOverlaysList();
+    const currentOverlay = (ss.overlays && state.selectedOverlayIndex !== -1) ? ss.overlays[state.selectedOverlayIndex] : null;
+    const overlayControls = document.getElementById('overlay-specific-controls');
+
+    if (currentOverlay) {
+        overlayControls.style.display = 'block';
+        document.getElementById('overlay-toggle').classList.toggle('active', currentOverlay.enabled);
+        document.getElementById('overlay-scale').value = currentOverlay.scale;
+        document.getElementById('overlay-scale-value').textContent = formatValue(currentOverlay.scale) + '%';
+        document.getElementById('overlay-y').value = currentOverlay.y;
+        document.getElementById('overlay-y-value').textContent = formatValue(currentOverlay.y) + '%';
+        document.getElementById('overlay-x').value = currentOverlay.x;
+        document.getElementById('overlay-x-value').textContent = formatValue(currentOverlay.x) + '%';
+        document.getElementById('overlay-rotation').value = currentOverlay.rotation;
+        document.getElementById('overlay-rotation-value').textContent = formatValue(currentOverlay.rotation) + '°';
+        document.getElementById('overlay-corner-radius').value = currentOverlay.cornerRadius;
+        document.getElementById('overlay-corner-radius-value').textContent = formatValue(currentOverlay.cornerRadius) + 'px';
+
+        // Overlay Shadow
+        if (!currentOverlay.shadow) {
+            currentOverlay.shadow = {
+                enabled: true,
+                color: '#000000',
+                blur: 30,
+                opacity: 40,
+                x: 0,
+                y: 15
+            };
+        }
+        document.getElementById('overlay-shadow-toggle').classList.toggle('active', currentOverlay.shadow.enabled);
+        document.getElementById('overlay-shadow-color').value = currentOverlay.shadow.color;
+        document.getElementById('overlay-shadow-color-hex').value = currentOverlay.shadow.color;
+        document.getElementById('overlay-shadow-blur').value = currentOverlay.shadow.blur;
+        document.getElementById('overlay-shadow-blur-value').textContent = formatValue(currentOverlay.shadow.blur) + 'px';
+        document.getElementById('overlay-shadow-opacity').value = currentOverlay.shadow.opacity;
+        document.getElementById('overlay-shadow-opacity-value').textContent = formatValue(currentOverlay.shadow.opacity) + '%';
+        document.getElementById('overlay-shadow-x').value = currentOverlay.shadow.x;
+        document.getElementById('overlay-shadow-x-value').textContent = formatValue(currentOverlay.shadow.x) + 'px';
+        document.getElementById('overlay-shadow-y').value = currentOverlay.shadow.y;
+        document.getElementById('overlay-shadow-y-value').textContent = formatValue(currentOverlay.shadow.y) + 'px';
+
+        // Overlay Image Preview
+        if (currentOverlay.image) {
+            document.getElementById('overlay-image-preview').src = currentOverlay.image.src;
+            document.getElementById('overlay-image-preview').style.display = 'block';
+        } else {
+            document.getElementById('overlay-image-preview').style.display = 'none';
+        }
+    } else {
+        overlayControls.style.display = 'none';
+    }
 
     // 3D mode
     const use3D = ss.use3D || false;
@@ -2790,6 +3120,123 @@ function setupEventListeners() {
         setScreenshotSetting('frame.opacity', parseInt(e.target.value));
         document.getElementById('frame-opacity-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
+    });
+
+    // Overlay settings
+    // Overlay settings
+    document.getElementById('add-overlay-btn').addEventListener('click', addOverlay);
+
+    document.getElementById('overlay-toggle').addEventListener('click', function () {
+        this.classList.toggle('active');
+        setOverlaySetting('enabled', this.classList.contains('active'));
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-scale').addEventListener('input', (e) => {
+        setOverlaySetting('scale', parseInt(e.target.value));
+        document.getElementById('overlay-scale-value').textContent = formatValue(e.target.value) + '%';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-y').addEventListener('input', (e) => {
+        setOverlaySetting('y', parseInt(e.target.value));
+        document.getElementById('overlay-y-value').textContent = formatValue(e.target.value) + '%';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-x').addEventListener('input', (e) => {
+        setOverlaySetting('x', parseInt(e.target.value));
+        document.getElementById('overlay-x-value').textContent = formatValue(e.target.value) + '%';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-rotation').addEventListener('input', (e) => {
+        setOverlaySetting('rotation', parseInt(e.target.value));
+        document.getElementById('overlay-rotation-value').textContent = formatValue(e.target.value) + '°';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-corner-radius').addEventListener('input', (e) => {
+        setOverlaySetting('cornerRadius', parseInt(e.target.value));
+        document.getElementById('overlay-corner-radius-value').textContent = formatValue(e.target.value) + 'px';
+        updateCanvas();
+    });
+
+    // Overlay Shadow
+    document.getElementById('overlay-shadow-toggle').addEventListener('click', function () {
+        this.classList.toggle('active');
+        const enabled = this.classList.contains('active');
+        setOverlaySetting('shadow.enabled', enabled);
+        const row = this.closest('.toggle-row');
+        if (enabled) {
+            if (row) row.classList.remove('collapsed');
+            document.getElementById('overlay-shadow-options').style.display = 'block';
+        } else {
+            if (row) row.classList.add('collapsed');
+            document.getElementById('overlay-shadow-options').style.display = 'none';
+        }
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-shadow-color').addEventListener('input', (e) => {
+        setOverlaySetting('shadow.color', e.target.value);
+        document.getElementById('overlay-shadow-color-hex').value = e.target.value;
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-shadow-color-hex').addEventListener('input', (e) => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+            setOverlaySetting('shadow.color', e.target.value);
+            document.getElementById('overlay-shadow-color').value = e.target.value;
+            updateCanvas();
+        }
+    });
+
+    document.getElementById('overlay-shadow-blur').addEventListener('input', (e) => {
+        setOverlaySetting('shadow.blur', parseInt(e.target.value));
+        document.getElementById('overlay-shadow-blur-value').textContent = formatValue(e.target.value) + 'px';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-shadow-opacity').addEventListener('input', (e) => {
+        setOverlaySetting('shadow.opacity', parseInt(e.target.value));
+        document.getElementById('overlay-shadow-opacity-value').textContent = formatValue(e.target.value) + '%';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-shadow-x').addEventListener('input', (e) => {
+        setOverlaySetting('shadow.x', parseInt(e.target.value));
+        document.getElementById('overlay-shadow-x-value').textContent = formatValue(e.target.value) + 'px';
+        updateCanvas();
+    });
+
+    document.getElementById('overlay-shadow-y').addEventListener('input', (e) => {
+        setOverlaySetting('shadow.y', parseInt(e.target.value));
+        document.getElementById('overlay-shadow-y-value').textContent = formatValue(e.target.value) + 'px';
+        updateCanvas();
+    });
+
+    // Overlay image upload
+    const overlayImageUpload = document.getElementById('overlay-image-upload');
+    const overlayImageInput = document.getElementById('overlay-image-input');
+    overlayImageUpload.addEventListener('click', () => overlayImageInput.click());
+    overlayImageInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    setOverlaySetting('image', img);
+                    setOverlaySetting('enabled', true);
+                    setOverlaySetting('name', e.target.files[0].name);
+                    updateOverlaysList();
+                    syncUIWithState();
+                    updateCanvas();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
     });
 
     // Headline toggle
@@ -4310,6 +4757,15 @@ function duplicateScreenshot(index) {
         overrides: JSON.parse(JSON.stringify(original.overrides || {}))
     };
 
+    // Restore Image objects for overlays (lost during JSON cloning)
+    if (original.screenshot.overlays && duplicate.screenshot.overlays) {
+        original.screenshot.overlays.forEach((ol, idx) => {
+            if (ol.image && duplicate.screenshot.overlays[idx]) {
+                duplicate.screenshot.overlays[idx].image = ol.image;
+            }
+        });
+    }
+
     // Copy localized images (with image object references)
     if (original.localizedImages) {
         Object.keys(original.localizedImages).forEach(lang => {
@@ -4494,7 +4950,7 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
     }
 
     // Each screenshot gets its own copy of all settings from defaults
-    state.screenshots.push({
+    const newScreenshot = {
         image: img, // Keep for legacy compatibility
         name: name,
         deviceType: deviceType,
@@ -4504,7 +4960,18 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         text: JSON.parse(JSON.stringify(state.defaults.text)),
         // Legacy overrides for backwards compatibility
         overrides: {}
-    });
+    };
+
+    // Restore Image objects for overlays from defaults
+    if (state.defaults.screenshot.overlays && newScreenshot.screenshot.overlays) {
+        state.defaults.screenshot.overlays.forEach((ol, idx) => {
+            if (ol.image && newScreenshot.screenshot.overlays[idx]) {
+                newScreenshot.screenshot.overlays[idx].image = ol.image;
+            }
+        });
+    }
+    
+    state.screenshots.push(newScreenshot);
 
     updateScreenshotList();
     if (state.screenshots.length === 1) {
@@ -4886,6 +5353,14 @@ function transferStyle(sourceIndex, targetIndex) {
 
     // Deep copy screenshot settings
     target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
+    // Handle overlays separately (restore Image objects lost during JSON cloning)
+    if (source.screenshot.overlays && target.screenshot.overlays) {
+        source.screenshot.overlays.forEach((ol, idx) => {
+            if (ol.image && target.screenshot.overlays[idx]) {
+                target.screenshot.overlays[idx].image = ol.image;
+            }
+        });
+    }
 
     // Copy text styling but preserve actual text content
     const targetHeadlines = target.text.headlines;
@@ -4935,6 +5410,14 @@ function applyStyleToAll() {
 
         // Deep copy screenshot settings
         target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
+        // Handle overlays separately (restore Image objects lost during JSON cloning)
+        if (source.screenshot.overlays && target.screenshot.overlays) {
+            source.screenshot.overlays.forEach((ol, idx) => {
+                if (ol.image && target.screenshot.overlays[idx]) {
+                    target.screenshot.overlays[idx].image = ol.image;
+                }
+            });
+        }
 
         // Copy text styling but preserve actual text content
         const targetHeadlines = target.text.headlines;
@@ -5104,6 +5587,9 @@ function updateCanvas() {
             drawScreenshot();
         }
     }
+
+    // Draw overlays
+    drawOverlays();
 
     // Draw text
     drawText();
@@ -5337,9 +5823,74 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
         drawScreenshotToContext(targetCtx, dims, img, settings);
     }
 
+    // Draw overlays
+    drawOverlaysToContext(targetCtx, dims, screenshot);
+
     // Draw text
     const txt = screenshot.text;
     drawTextToContext(targetCtx, dims, txt);
+}
+
+function drawOverlaysToContext(context, dims, screenshot) {
+    const overlays = screenshot.screenshot.overlays || [];
+    overlays.forEach(ol => {
+        if (!ol.enabled || !ol.image || !(ol.image instanceof HTMLImageElement)) return;
+
+        const img = ol.image;
+        const scale = ol.scale / 100;
+        let imgWidth = dims.width * scale;
+        let imgHeight = (img.height / img.width) * imgWidth;
+
+        const x = (dims.width - imgWidth) * (ol.x / 100);
+        const y = (dims.height - imgHeight) * (ol.y / 100);
+        const centerX = x + imgWidth / 2;
+        const centerY = y + imgHeight / 2;
+
+        context.save();
+
+        // Apply transformations
+        context.translate(centerX, centerY);
+
+        // Apply rotation
+        if (ol.rotation !== 0) {
+            context.rotate(ol.rotation * Math.PI / 180);
+        }
+
+        context.translate(-centerX, -centerY);
+
+        // Scale corner radius with image size
+        const radius = (ol.cornerRadius || 0) * (imgWidth / 400);
+
+        // Draw shadow first
+        if (ol.shadow && ol.shadow.enabled) {
+            const shadowOpacity = ol.shadow.opacity / 100;
+            const shadowColor = hexToRgba(ol.shadow.color, shadowOpacity);
+            context.shadowColor = shadowColor;
+            context.shadowBlur = ol.shadow.blur;
+            context.shadowOffsetX = ol.shadow.x;
+            context.shadowOffsetY = ol.shadow.y;
+
+            // Draw filled rounded rect for shadow
+            context.fillStyle = '#000';
+            context.beginPath();
+            roundRect(context, x, y, imgWidth, imgHeight, radius);
+            context.fill();
+
+            // Reset shadow
+            context.shadowColor = 'transparent';
+            context.shadowBlur = 0;
+            context.shadowOffsetX = 0;
+            context.shadowOffsetY = 0;
+        }
+
+        // Clip and draw image
+        context.beginPath();
+        roundRect(context, x, y, imgWidth, imgHeight, radius);
+        context.clip();
+        context.drawImage(img, x, y, imgWidth, imgHeight);
+
+        context.restore();
+    });
 }
 
 function drawBackgroundToContext(context, dims, bg) {
@@ -5823,6 +6374,74 @@ function drawDeviceFrame(x, y, width, height) {
     roundRect(ctx, x - frameWidth / 2, y - frameWidth / 2, width + frameWidth, height + frameWidth, radius);
     ctx.stroke();
     ctx.globalAlpha = 1;
+}
+
+function drawOverlays() {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+
+    const dims = getCanvasDimensions();
+    const ss = screenshot.screenshot;
+    const overlays = ss.overlays || [];
+
+    overlays.forEach(ol => {
+        if (!ol.enabled || !ol.image || !(ol.image instanceof HTMLImageElement)) return;
+
+        const img = ol.image;
+        const scale = ol.scale / 100;
+        let imgWidth = dims.width * scale;
+        let imgHeight = (img.height / img.width) * imgWidth;
+
+        const x = (dims.width - imgWidth) * (ol.x / 100);
+        const y = (dims.height - imgHeight) * (ol.y / 100);
+        const centerX = x + imgWidth / 2;
+        const centerY = y + imgHeight / 2;
+
+        ctx.save();
+
+        // Apply transformations
+        ctx.translate(centerX, centerY);
+
+        // Apply rotation
+        if (ol.rotation !== 0) {
+            ctx.rotate(ol.rotation * Math.PI / 180);
+        }
+
+        ctx.translate(-centerX, -centerY);
+
+        // Scale corner radius with image size
+        const radius = (ol.cornerRadius || 0) * (imgWidth / 400);
+
+        // Draw shadow first
+        if (ol.shadow && ol.shadow.enabled) {
+            const shadowOpacity = ol.shadow.opacity / 100;
+            const shadowColor = hexToRgba(ol.shadow.color, shadowOpacity);
+            ctx.shadowColor = shadowColor;
+            ctx.shadowBlur = ol.shadow.blur;
+            ctx.shadowOffsetX = ol.shadow.x;
+            ctx.shadowOffsetY = ol.shadow.y;
+
+            // Draw filled rounded rect for shadow
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            roundRect(ctx, x, y, imgWidth, imgHeight, radius);
+            ctx.fill();
+
+            // Reset shadow
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        // Clip and draw image
+        ctx.beginPath();
+        roundRect(ctx, x, y, imgWidth, imgHeight, radius);
+        ctx.clip();
+        ctx.drawImage(img, x, y, imgWidth, imgHeight);
+
+        ctx.restore();
+    });
 }
 
 function drawText() {
