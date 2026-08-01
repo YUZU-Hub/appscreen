@@ -1477,12 +1477,113 @@ function initSync() {
     setupEventListeners();
     setupElementEventListeners();
     setupPopoutEventListeners();
+    setupColorHexInputs();
     setupSliderResetButtons();
     initFontPicker();
     updateGradientStopsUI();
     updateCanvas();
     // Then load saved data asynchronously
     init();
+}
+
+function normalizeHexColor(value, allowShort = true) {
+    const trimmed = value.trim();
+    const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+
+    if (allowShort && /^#[0-9a-fA-F]{3}$/.test(withHash)) {
+        return '#' + withHash.slice(1).split('').map(char => char + char).join('').toLowerCase();
+    }
+    if (/^#[0-9a-fA-F]{6}$/.test(withHash)) {
+        return withHash.toLowerCase();
+    }
+    return null;
+}
+
+function enhanceColorInput(colorInput) {
+    if (!colorInput || colorInput.dataset.hexEnhanced === 'true') return;
+
+    let hexInput = colorInput.nextElementSibling;
+    if (!hexInput || hexInput.type !== 'text') {
+        hexInput = document.createElement('input');
+        hexInput.type = 'text';
+        colorInput.insertAdjacentElement('afterend', hexInput);
+    }
+
+    if (!hexInput.hasAttribute('aria-label')) {
+        hexInput.setAttribute('aria-label', `${colorInput.title || 'Color'} hex value`);
+    }
+    hexInput.setAttribute('spellcheck', 'false');
+    hexInput.setAttribute('autocomplete', 'off');
+    hexInput.maxLength = 7;
+    hexInput.placeholder = '#RRGGBB';
+    hexInput.classList.add('color-hex-input');
+    if (colorInput.parentElement?.classList.contains('text-style-bar')) {
+        hexInput.classList.add('compact');
+    }
+
+    colorInput.dataset.hexEnhanced = 'true';
+    hexInput.value = colorInput.value.toLowerCase();
+
+    const setInvalidState = (invalid) => {
+        hexInput.classList.toggle('invalid', invalid);
+        hexInput.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+    };
+    setInvalidState(false);
+
+    colorInput.addEventListener('input', () => {
+        hexInput.value = colorInput.value.toLowerCase();
+        setInvalidState(false);
+    });
+
+    const applyHexValue = (allowShort = true, showInvalid = true) => {
+        const normalized = normalizeHexColor(hexInput.value, allowShort);
+        if (!normalized) {
+            if (showInvalid) setInvalidState(true);
+            return false;
+        }
+
+        hexInput.value = normalized;
+        setInvalidState(false);
+        if (colorInput.value !== normalized) {
+            colorInput.value = normalized;
+            colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        return true;
+    };
+
+    hexInput.addEventListener('input', () => {
+        if (!applyHexValue(false, false)) {
+            setInvalidState(!/^#?[0-9a-fA-F]{0,6}$/.test(hexInput.value.trim()));
+        }
+    });
+    hexInput.addEventListener('change', () => applyHexValue());
+    hexInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && applyHexValue()) {
+            hexInput.blur();
+        }
+    });
+    hexInput.addEventListener('blur', () => {
+        if (!applyHexValue()) {
+            hexInput.value = colorInput.value.toLowerCase();
+            setInvalidState(false);
+        }
+    });
+}
+
+function setupColorHexInputs(root = document) {
+    root.querySelectorAll('input[type="color"]').forEach(enhanceColorInput);
+}
+
+function syncColorHexInputs(root = document) {
+    setupColorHexInputs(root);
+    root.querySelectorAll('input[type="color"]').forEach(colorInput => {
+        const hexInput = colorInput.nextElementSibling;
+        if (hexInput?.classList.contains('color-hex-input') && document.activeElement !== hexInput) {
+            hexInput.value = colorInput.value.toLowerCase();
+            hexInput.classList.remove('invalid');
+            hexInput.setAttribute('aria-invalid', 'false');
+        }
+    });
 }
 
 // Save state to IndexedDB for current project
@@ -2319,6 +2420,7 @@ function syncUIWithState() {
     selectedPopoutId = null;
     updatePopoutsList();
     updatePopoutProperties();
+    syncColorHexInputs();
 }
 
 // ===== Elements Tab UI =====
@@ -2489,6 +2591,7 @@ function updateElementProperties() {
         document.getElementById('element-icon-shadow-y').value = shadow.y;
         document.getElementById('element-icon-shadow-y-value').textContent = shadow.y + 'px';
     }
+    syncColorHexInputs(propsEl);
 }
 
 function setupElementEventListeners() {
@@ -3212,6 +3315,7 @@ function updatePopoutProperties() {
 
     // Update crop preview
     updateCropPreview();
+    syncColorHexInputs(propsEl);
 }
 
 // Compute image-fit layout within the crop preview canvas (letterboxed)
@@ -6749,6 +6853,7 @@ function updateGradientStopsUI() {
         div.className = 'gradient-stop';
         div.innerHTML = `
             <input type="color" value="${stop.color}" data-stop="${index}">
+            <input type="text" class="color-hex-input" value="${stop.color}" aria-label="Gradient stop hex value" spellcheck="false" autocomplete="off" maxlength="7" placeholder="#RRGGBB">
             <input type="number" value="${stop.position}" min="0" max="100" data-stop="${index}">
             <span>%</span>
             ${index > 1 ? `<button class="screenshot-delete" data-stop="${index}">
@@ -6787,6 +6892,7 @@ function updateGradientStopsUI() {
         }
 
         container.appendChild(div);
+        setupColorHexInputs(div);
     });
 }
 
