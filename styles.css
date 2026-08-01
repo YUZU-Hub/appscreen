@@ -850,6 +850,11 @@ input[type="range"]::-webkit-slider-thumb {
     width: auto;
 }
 
+.gradient-stop .color-hex-input {
+    width: 88px;
+    flex: 0 0 88px;
+}
+
 .gradient-stop span {
     color: var(--text-secondary);
     font-size: 13px;
@@ -2250,6 +2255,29 @@ input[type="range"]::-webkit-slider-thumb {
 .color-input-wrapper input[type="text"] {
     flex: 1;
     font-family: monospace;
+}
+
+.color-hex-input {
+    width: 96px;
+    min-width: 0;
+    padding: 9px 10px;
+    font-family: monospace;
+    text-transform: lowercase;
+}
+
+.color-hex-input.compact {
+    width: 76px;
+    flex: 0 0 76px;
+    padding: 6px;
+    background: var(--bg-primary);
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+}
+
+.color-hex-input.invalid {
+    border-color: #ff453a;
+    box-shadow: 0 0 0 2px rgba(255, 69, 58, 0.2);
 }
 
 .hint-text {
