@@ -42,6 +42,7 @@ Open `http://localhost:8000` in browser. Persistence requires a running MCP serv
 - `three-renderer.js` - Three.js 3D rendering for iPhone mockups (~1,200 lines)
 - `language-utils.js` - Language detection, localized image management, and translation dialogs (~560 lines)
 - `appstore-features.js` - App Store-specific tooling: per-language overview matrix, overlap guard, CSV import/export (~1,100 lines)
+- `templates.js` - Layout templates: whole-project device + text positioning recipes and their modal (~450 lines)
 - `magical-titles.js` - AI-generated headline suggestions from screenshot images (~460 lines)
 - `llm.js` - Shared LLM provider config (Claude/OpenAI/Gemini endpoints, headers, key validation)
 - `lucide-icons.js`, `color-input.js`, `panel-resize.js`, `updater.js` - icon set, color input enhancement, resizable panels, Tauri auto-update
@@ -103,6 +104,13 @@ Open `http://localhost:8000` in browser. Persistence requires a running MCP serv
 - `transferStyle()` - copies style settings from one screenshot to another
 - `slideToScreenshot()` - animates carousel transition between screenshots
 - `updateSidePreviews()` - renders adjacent screenshots in side preview canvases
+
+**Layout templates (templates.js):**
+- `LAYOUT_TEMPLATES` - the catalogue; each entry has `steps` (cycled over the screens, so a two-step template alternates) with a declarative `zone` (text rectangle, % of canvas) and `device` ({scale, x, top}, `top` = top edge as a fraction of the canvas height)
+- `templateDeviceY()` - converts a wanted `top` into the renderer's `y` (mirrors `drawScreenshotToContext`)
+- `applyLayoutTemplate(id, {scope, skipFirst, keepBackground})` - applies to all screens or just the current one; `skipFirst` leaves screen 0 untouched (hero delivered ready-made), `keepBackground` leaves the existing background colours alone
+- `templatePreviewSVG()` - card thumbnails generated from the template's own geometry, so they can't drift from what applying it does
+- Templates write the layout into BOTH `text.*` and every `text.languageSettings[lang]` entry, so they take effect whether or not per-language layout is on, and into `panelTexts` for panorama screens
 
 **Language Utils (language-utils.js):**
 - `detectLanguageFromFilename()` - extracts language code from filename suffixes

@@ -158,6 +158,13 @@
                                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                             </svg>
                         </button>
+                        <button class="project-btn" id="templates-btn" title="Templates de mise en page : positionner l'appareil et le texte sur tous les écrans d'un coup">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="7" rx="1"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                            </svg>
+                        </button>
                         <button class="project-btn" id="copy-layout-project-btn" title="Copier la mise en page (disposition du texte + emplacement de l'appareil) depuis un autre projet">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="3" width="8" height="8" rx="1"/>
@@ -953,6 +960,10 @@
                         <div class="control-label-row text-zone-uniform-row">
                             <label class="control-label">Same size for all languages</label>
                             <div class="toggle active" id="text-zone-uniform-toggle" title="Shrink to the size that fits every language so all languages stay inside the zone and match"></div>
+                        </div>
+                        <div class="control-label-row text-zone-uniform-row">
+                            <label class="control-label">Grow to fill the zone</label>
+                            <div class="toggle" id="text-zone-fill-toggle" title="Also enlarge short text until the longest language reaches the edge of the box (instead of capping at the designed size)"></div>
                         </div>
                         <div class="control-row opacity-row">
                             <span class="mini-label">X</span>
@@ -1802,6 +1813,47 @@
         </div>
     </div>
 
+    <!-- Layout Templates Modal -->
+    <div class="modal-overlay" id="templates-modal">
+        <div class="modal templates-modal">
+            <button class="modal-close" id="templates-close" title="Fermer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+            <h3 class="modal-title">Templates de mise en page</h3>
+            <p class="modal-message">
+                Chaque template positionne l'appareil et le texte de la même façon sur tous les écrans.
+                Le texte est placé dans une zone qui s'ajuste toute seule : il grandit ou rétrécit selon sa longueur,
+                garde la même taille dans toutes les langues et ne coupe jamais un mot — même quand la traduction est
+                beaucoup plus longue que l'original.
+            </p>
+            <div class="template-gallery" id="template-gallery"></div>
+            <div class="template-options">
+                <div class="control-group">
+                    <label class="control-label" for="template-scope">Appliquer à</label>
+                    <select id="template-scope" class="control-select">
+                        <option value="all">Tous les écrans</option>
+                        <option value="current">L'écran affiché uniquement</option>
+                    </select>
+                </div>
+                <label class="copy-design-checkbox">
+                    <input type="checkbox" id="template-skip-first" checked>
+                    <span>Le 1<sup>er</sup> écran est différent (hero fourni tel quel) — ne pas y toucher</span>
+                </label>
+                <label class="copy-design-checkbox">
+                    <input type="checkbox" id="template-keep-background" checked>
+                    <span>Ne pas modifier les couleurs de fond déjà en place</span>
+                </label>
+                <p class="template-scope-hint" id="template-scope-hint"></p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="templates-cancel">Annuler</button>
+                <button class="modal-btn modal-btn-confirm" id="templates-confirm" style="background: var(--accent);">Appliquer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Apply Style to All Confirmation Modal -->
     <div class="modal-overlay" id="apply-style-modal">
         <div class="modal">
@@ -2325,6 +2377,7 @@
     <script src="three-renderer.js"></script>
     <script src="app.js"></script>
     <script src="appstore-features.js"></script>
+    <script src="templates.js"></script>
     <script src="panel-resize.js"></script>
     <script src="updater.js"></script>
     <script src="color-input.js"></script>

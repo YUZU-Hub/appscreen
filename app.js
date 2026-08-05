@@ -111,6 +111,11 @@ const state = {
             textZone: {
                 enabled: false,
                 uniform: true,
+                // Off: the font size below is a ceiling — long text shrinks to fit
+                // the zone, short text stays at its designed size, so screens keep
+                // one typographic scale. On: the text also GROWS until it reaches
+                // the edge of the box. See computeZoneFit().
+                fill: false,
                 x: 8,
                 y: 6,
                 width: 84,
@@ -294,7 +299,7 @@ function normalizeTextSettings(text) {
     // Text zone: keep a complete rectangle even for projects saved before this
     // feature shipped (or with a partial zone object).
     merged.textZone = Object.assign(
-        { enabled: false, uniform: true, x: 8, y: 6, width: 84, height: 26 },
+        { enabled: false, uniform: true, fill: false, x: 8, y: 6, width: 84, height: 26 },
         (merged.textZone && typeof merged.textZone === 'object') ? merged.textZone : {}
     );
 
@@ -7894,6 +7899,9 @@ function updateTextZoneUI() {
     const uniformToggle = document.getElementById('text-zone-uniform-toggle');
     if (uniformToggle) uniformToggle.classList.toggle('active', z.uniform !== false);
 
+    const fillToggle = document.getElementById('text-zone-fill-toggle');
+    if (fillToggle) fillToggle.classList.toggle('active', !!z.fill);
+
     const setSlider = (id, val) => {
         const s = document.getElementById(id);
         const v = document.getElementById(id + '-value');
@@ -7935,6 +7943,17 @@ function setupTextZoneControls() {
             const z = getTextZone();
             if (!z) return;
             z.uniform = (z.uniform === false); // toggle (undefined counts as on)
+            updateTextZoneUI();
+            updateCanvas();
+        });
+    }
+
+    const fillToggle = document.getElementById('text-zone-fill-toggle');
+    if (fillToggle) {
+        fillToggle.addEventListener('click', () => {
+            const z = getTextZone();
+            if (!z) return;
+            z.fill = !z.fill;
             updateTextZoneUI();
             updateCanvas();
         });
@@ -9982,9 +10001,39 @@ function computeTextFit(context, dims, txt) {
     return { scale: best, fontScale: best, overlaps: true };
 }
 
-// Largest pixel width of any single whitespace-delimited word across the headline
-// and subheadline, measured at `fontScale`. Used by the text zone to keep words
-// from being broken mid-word: the zone shrinks until the widest word fits its width.
+// Characters wrapText() may break AFTER: CJK (incl. kana and fullwidth forms) and
+// Thai are written without spaces, so a long run of them is not a "word" that has
+// to fit on one line — the wrapper breaks them per character. Treating such a run
+// as one unbreakable word would shrink the whole block to a fraction of the size
+// that actually fits, and with "same size for all languages" that one language
+// would drag every other one down with it.
+const BREAKABLE_CHAR_RE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF\u0E00-\u0E7F]/;
+
+// Widest run of characters in `str` that must stay on one line: whitespace and
+// breakable (CJK/Thai) characters end a run, and each breakable character counts
+// as a run of its own.
+function widestUnbreakableRun(context, str) {
+    let max = 0;
+    let run = '';
+    const flush = () => {
+        if (run) { max = Math.max(max, context.measureText(run).width); run = ''; }
+    };
+    for (const ch of String(str)) {
+        if (/\s/.test(ch)) { flush(); continue; }
+        if (BREAKABLE_CHAR_RE.test(ch)) {
+            flush();
+            max = Math.max(max, context.measureText(ch).width);
+            continue;
+        }
+        run += ch;
+    }
+    flush();
+    return max;
+}
+
+// Largest pixel width of any single unbreakable word across the headline and
+// subheadline, measured at `fontScale`. Used by the text zone to keep words from
+// being broken mid-word: the zone shrinks until the widest word fits its width.
 function maxWordWidth(context, txt, fontScale) {
     fontScale = fontScale || 1;
     const headlineEnabled = txt.headlineEnabled !== false;
@@ -9997,9 +10046,7 @@ function maxWordWidth(context, txt, fontScale) {
     const subheadline = subheadlineEnabled && txt.subheadlines ? (txt.subheadlines[subheadlineLang] || '') : '';
     let maxW = 0;
     const measureWords = (str) => {
-        String(str).split(/\s+/).forEach((w) => {
-            if (w) maxW = Math.max(maxW, context.measureText(w).width);
-        });
+        maxW = Math.max(maxW, widestUnbreakableRun(context, str));
     };
     if (headline) {
         context.font = `${txt.headlineItalic ? 'italic' : 'normal'} ${txt.headlineWeight} ${headlineLayout.headlineSize * fontScale}px ${txt.headlineFont}`;
@@ -10053,11 +10100,21 @@ function zoneFitForText(context, dims, txt, zone) {
 // fits EVERY project language, then applied to all of them — so the text stays
 // inside the zone and keeps a consistent size no matter the language. With uniform
 // off, each language is fitted independently (only the current one is measured).
+//
+// `fill` decides what happens when the text is SMALLER than the zone:
+//   off (default) — the configured font size is a ceiling: long text shrinks to
+//     fit, short text is left at its designed size. Screens keep a consistent
+//     typographic scale, which is what a set of store screenshots wants.
+//   on            — the text also grows until it reaches the edge of the box, so
+//     the rectangle is always exactly filled.
+// The cap applies to both branches, so a project behaves the same whether it has
+// one language or twenty.
 function computeZoneFit(context, dims, txt, zone) {
+    const cap = zone.fill ? Infinity : 1;
     const langs = (typeof state !== 'undefined' && Array.isArray(state.projectLanguages))
         ? state.projectLanguages : null;
     if (zone.uniform !== false && langs && langs.length > 1) {
-        let best = 1;
+        let best = cap;
         for (const L of langs) {
             const t = Object.assign({}, txt, {
                 currentHeadlineLang: L,
@@ -10068,7 +10125,7 @@ function computeZoneFit(context, dims, txt, zone) {
         }
         return best;
     }
-    return zoneFitForText(context, dims, txt, zone);
+    return Math.min(cap, zoneFitForText(context, dims, txt, zone));
 }
 
 function drawTextToContext(context, dims, txt) {

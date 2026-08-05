@@ -4280,3 +4280,108 @@ input[id$="-hex"].color-invalid { border-color: #ff453a; }
 .text-zone-overlay .tz-ne { top: -8px; right: -8px; cursor: nesw-resize; }
 .text-zone-overlay .tz-sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
 .text-zone-overlay .tz-se { bottom: -8px; right: -8px; cursor: nwse-resize; }
+
+/* ==========================================================================
+   Layout templates modal
+   ========================================================================== */
+.templates-modal {
+    position: relative;
+    max-width: 720px;
+    width: 92%;
+    text-align: left;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    padding: 28px;
+}
+.templates-modal .modal-title { margin-bottom: 6px; padding-right: 40px; }
+.templates-modal .modal-message { margin-bottom: 16px; font-size: 13px; }
+.templates-modal .modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+}
+
+.template-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    padding: 2px;
+    margin-bottom: 18px;
+    min-height: 0;
+}
+
+.template-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 10px 10px;
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+    text-align: center;
+}
+.template-card:hover { background: var(--bg-primary); color: var(--text-primary); }
+.template-card.active {
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    color: var(--text-primary);
+}
+
+.template-card-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 76px;
+    width: 100%;
+}
+.template-card-preview .tpl-preview { height: 100%; max-width: 100%; }
+
+.template-card .tpl-frame { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0.45; }
+.template-card .tpl-device { fill: currentColor; opacity: 0.3; }
+.template-card .tpl-zone {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 0.6;
+    stroke-dasharray: 2 1.6;
+    opacity: 0.75;
+}
+.template-card .tpl-bar { fill: currentColor; opacity: 0.9; }
+.template-card .tpl-bar-sub { opacity: 0.5; }
+
+.template-card-name { font-size: 12px; font-weight: 600; line-height: 1.2; }
+.template-card-hint {
+    font-size: 10px;
+    line-height: 1.35;
+    color: var(--text-tertiary, #8a8a8f);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.template-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+    margin-bottom: 18px;
+}
+.template-options .control-group { margin: 0; }
+.template-options .control-label { display: block; margin-bottom: 6px; }
+.template-options .copy-design-checkbox { font-size: 13px; align-items: flex-start; }
+.template-options .copy-design-checkbox.disabled { opacity: 0.45; cursor: not-allowed; }
+.template-options .copy-design-checkbox input { margin-top: 1px; flex-shrink: 0; }
+.template-options .copy-design-checkbox sup { font-size: 8px; vertical-align: super; }
+
+.template-scope-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 2px 0 0;
+}
