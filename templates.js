@@ -53,8 +53,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Texte en haut, appareil qui déborde en bas. Le classique de l’App Store.',
         palette: 'midnight',
         steps: [{
-            zone: { x: 7, y: 4, width: 86, height: 19 },
-            text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112 },
+            zone: { x: 4, y: 4, width: 92, height: 20 },
+            text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
             device: { scale: 80, x: 50, top: 0.28 }
         }]
     },
@@ -64,8 +64,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Appareil qui déborde en haut, texte posé en bas.',
         palette: 'midnight',
         steps: [{
-            zone: { x: 7, y: 76, width: 86, height: 19 },
-            text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112 },
+            zone: { x: 4, y: 75, width: 92, height: 20 },
+            text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
             device: { scale: 80, x: 50, top: -0.08 }
         }]
     },
@@ -75,8 +75,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Appareil entier, détaché du bord, texte au-dessus.',
         palette: 'violet',
         steps: [{
-            zone: { x: 7, y: 5, width: 86, height: 24 },
-            text: { headlineSize: 140, subheadlineSize: 62, lineHeight: 112 },
+            zone: { x: 4, y: 5, width: 92, height: 25 },
+            text: { headlineSize: 140, subheadlineSize: 62, lineHeight: 112, subheadlineSpacing: 40 },
             device: { scale: 64, x: 50, top: 0.34 }
         }]
     },
@@ -86,8 +86,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Appareil entier en haut, texte en bas.',
         palette: 'violet',
         steps: [{
-            zone: { x: 7, y: 70, width: 86, height: 25 },
-            text: { headlineSize: 140, subheadlineSize: 62, lineHeight: 112 },
+            zone: { x: 4, y: 69, width: 92, height: 26 },
+            text: { headlineSize: 140, subheadlineSize: 62, lineHeight: 112, subheadlineSpacing: 40 },
             device: { scale: 64, x: 50, top: 0.02 }
         }]
     },
@@ -98,13 +98,13 @@ const LAYOUT_TEMPLATES = [
         palette: 'ocean',
         steps: [
             {
-                zone: { x: 7, y: 4, width: 86, height: 19 },
-                text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 4, width: 92, height: 20 },
+                text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
                 device: { scale: 80, x: 50, top: 0.28 }
             },
             {
-                zone: { x: 7, y: 76, width: 86, height: 19 },
-                text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 75, width: 92, height: 20 },
+                text: { headlineSize: 130, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
                 device: { scale: 80, x: 50, top: -0.08 }
             }
         ]
@@ -116,13 +116,13 @@ const LAYOUT_TEMPLATES = [
         palette: 'sunset',
         steps: [
             {
-                zone: { x: 7, y: 4, width: 86, height: 20 },
-                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 4, width: 92, height: 21 },
+                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
                 device: { scale: 70, x: 50, top: 0.32, rotation: -8 }
             },
             {
-                zone: { x: 7, y: 4, width: 86, height: 20 },
-                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 4, width: 92, height: 21 },
+                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
                 device: { scale: 70, x: 50, top: 0.32, rotation: 8 }
             }
         ]
@@ -134,13 +134,13 @@ const LAYOUT_TEMPLATES = [
         palette: 'ocean',
         steps: [
             {
-                zone: { x: 7, y: 4, width: 86, height: 20 },
-                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 4, width: 92, height: 21 },
+                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
                 device: { scale: 70, x: 50, top: 0.32, perspective: 14 }
             },
             {
-                zone: { x: 7, y: 4, width: 86, height: 20 },
-                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 4, width: 92, height: 21 },
+                text: { headlineSize: 132, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 36 },
                 device: { scale: 70, x: 50, top: 0.32, perspective: -14 }
             }
         ]
@@ -152,13 +152,13 @@ const LAYOUT_TEMPLATES = [
         palette: 'sunset',
         steps: [
             {
-                zone: { x: 7, y: 5, width: 86, height: 22 },
-                text: { headlineSize: 134, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 5, width: 92, height: 23 },
+                text: { headlineSize: 134, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 38 },
                 device: { scale: 62, x: 32, top: 0.33, rotation: -6 }
             },
             {
-                zone: { x: 7, y: 5, width: 86, height: 22 },
-                text: { headlineSize: 134, subheadlineSize: 58, lineHeight: 112 },
+                zone: { x: 4, y: 5, width: 92, height: 23 },
+                text: { headlineSize: 134, subheadlineSize: 58, lineHeight: 112, subheadlineSpacing: 38 },
                 device: { scale: 62, x: 68, top: 0.33, rotation: 6 }
             }
         ]
@@ -169,8 +169,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Petit appareil, beaucoup de vide, titre court et net.',
         palette: 'mono',
         steps: [{
-            zone: { x: 10, y: 9, width: 80, height: 18 },
-            text: { headlineSize: 126, subheadlineSize: 54, lineHeight: 108 },
+            zone: { x: 6, y: 9, width: 88, height: 19 },
+            text: { headlineSize: 126, subheadlineSize: 54, lineHeight: 108, subheadlineSpacing: 34 },
             device: { scale: 52, x: 50, top: 0.40 }
         }]
     },
@@ -180,8 +180,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Appareil très grand qui sort du cadre, bandeau de titre étroit en haut.',
         palette: 'forest',
         steps: [{
-            zone: { x: 6, y: 3, width: 88, height: 16 },
-            text: { headlineSize: 118, subheadlineSize: 52, lineHeight: 108 },
+            zone: { x: 4, y: 3, width: 92, height: 17 },
+            text: { headlineSize: 118, subheadlineSize: 52, lineHeight: 108, subheadlineSpacing: 32 },
             device: { scale: 88, x: 50, top: 0.24 }
         }]
     },
@@ -191,8 +191,8 @@ const LAYOUT_TEMPLATES = [
         hint: 'Zone de texte généreuse : pensé pour les titres longs et les langues verbeuses.',
         palette: 'violet',
         steps: [{
-            zone: { x: 7, y: 6, width: 86, height: 34 },
-            text: { headlineSize: 170, subheadlineSize: 76, lineHeight: 114 },
+            zone: { x: 4, y: 6, width: 92, height: 35 },
+            text: { headlineSize: 170, subheadlineSize: 76, lineHeight: 114, subheadlineSpacing: 48 },
             device: { scale: 58, x: 50, top: 0.46 }
         }]
     },
@@ -202,13 +202,13 @@ const LAYOUT_TEMPLATES = [
         hint: 'La capture remplit l’écran, le texte se pose dessus sur un bandeau translucide.',
         palette: 'mono',
         steps: [{
-            zone: { x: 7, y: 70, width: 86, height: 22 },
+            zone: { x: 5, y: 69, width: 90, height: 23 },
             text: {
                 // Roomy line height + extra title→subtitle spacing so the
                 // per-line bands read as separate labels instead of one
                 // jagged block.
                 headlineSize: 122, subheadlineSize: 54, lineHeight: 134,
-                subheadlineSpacing: 22,
+                subheadlineSpacing: 30,
                 headlineBgColor: '#000000', headlineBgOpacity: 45,
                 subheadlineBgColor: '#000000', subheadlineBgOpacity: 35
             },
@@ -222,13 +222,13 @@ const LAYOUT_TEMPLATES = [
         palette: 'ocean',
         steps: [
             {
-                zone: { x: 5, y: 24, width: 32, height: 52 },
-                text: { position: 'top', headlineSize: 110, subheadlineSize: 50, lineHeight: 112 },
+                zone: { x: 3, y: 22, width: 33, height: 56 },
+                text: { position: 'top', headlineSize: 110, subheadlineSize: 50, lineHeight: 112, subheadlineSpacing: 30 },
                 device: { scale: 48, x: 74, top: 0.26 }
             },
             {
-                zone: { x: 63, y: 24, width: 32, height: 52 },
-                text: { position: 'top', headlineSize: 110, subheadlineSize: 50, lineHeight: 112 },
+                zone: { x: 64, y: 22, width: 33, height: 56 },
+                text: { position: 'top', headlineSize: 110, subheadlineSize: 50, lineHeight: 112, subheadlineSpacing: 30 },
                 device: { scale: 48, x: 26, top: 0.26 }
             }
         ]
