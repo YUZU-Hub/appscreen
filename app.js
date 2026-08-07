@@ -5904,7 +5904,9 @@ function setupEventListeners() {
 
     // Re-encode images already stored on the server (settings → Image compression)
     const optimizeBtn = document.getElementById('optimize-images-btn');
-    if (optimizeBtn) optimizeBtn.addEventListener('click', () => { optimizeStoredImages(); });
+    if (optimizeBtn) optimizeBtn.addEventListener('click', () => { optimizeStoredImages('current'); });
+    const optimizeAllBtn = document.getElementById('optimize-images-all-btn');
+    if (optimizeAllBtn) optimizeAllBtn.addEventListener('click', () => { optimizeStoredImages('all'); });
 
     // Theme selector buttons
     document.querySelectorAll('#theme-selector button').forEach(btn => {
@@ -7738,9 +7740,9 @@ async function refreshStorageReadout() {
 // Re-encode the images ALREADY stored on the server. Everything happens
 // server-side (the browser never downloads the originals) — it rewrites each
 // project's refs to the new blobs and the usual GC reclaims the old bytes.
-async function optimizeStoredImages() {
+async function optimizeStoredImages(scope) {
     const btn = document.getElementById('optimize-images-btn');
-    const scope = document.getElementById('optimize-images-scope')?.value || 'current';
+    const allBtn = document.getElementById('optimize-images-all-btn');
     if (!RemoteStore.enabled()) {
         setOptimizeStatus('Connect an MCP server first — it is where the images live.', 'error');
         return;
@@ -7760,6 +7762,7 @@ async function optimizeStoredImages() {
     if (!ok) return;
 
     if (btn) btn.disabled = true;
+    if (allBtn) allBtn.disabled = true;
     // The open project must be fully on the server before we ask the server to
     // rewrite it, or the push that lands afterwards would carry the old images
     // back up.
@@ -7819,6 +7822,7 @@ async function optimizeStoredImages() {
     } finally {
         hideUploadProgress();
         if (btn) btn.disabled = false;
+        if (allBtn) allBtn.disabled = false;
     }
 }
 
@@ -9450,6 +9454,17 @@ function scheduleSidePreviews() {
     _sidePreviewTimer = setTimeout(() => { _sidePreviewTimer = null; updateSidePreviews(); }, 180);
 }
 
+// How many real pixels a preview needs: its CSS size, times the display's pixel
+// ratio (capped at 2 — beyond that nobody can tell, and the buffer cost is
+// quadratic). Previews used to be rasterized at full export resolution and then
+// squeezed into a ~400px box by CSS.
+function previewRenderScale() {
+    const dims = getCanvasDimensions();
+    const cssScale = Math.min(400 / dims.width, 700 / dims.height);
+    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    return Math.min(1, cssScale * dpr);
+}
+
 function updateSidePreviews() {
     const dims = getCanvasDimensions();
     // Same scale as main preview
@@ -9488,7 +9503,7 @@ function updateSidePreviews() {
         sidePreviewLeft.style.right = `calc(50% + ${sideOffset}px)`;
         // Skip render if already pre-rendered during slide transition
         if (!skipSidePreviewRender) {
-            renderScreenshotToCanvas(prevIndex, canvasLeft, ctxLeft, getCanvasDimensions(prevIndex), previewScale);
+            renderScreenshotToCanvas(prevIndex, canvasLeft, ctxLeft, getCanvasDimensions(prevIndex), previewScale, previewRenderScale());
         }
         // Click to select previous with animation
         sidePreviewLeft.onclick = () => {
@@ -9504,7 +9519,7 @@ function updateSidePreviews() {
     if (farPrevIndex >= 0 && state.screenshots.length > 2) {
         sidePreviewFarLeft.classList.remove('hidden');
         sidePreviewFarLeft.style.right = `calc(50% + ${farSideOffset}px)`;
-        renderScreenshotToCanvas(farPrevIndex, canvasFarLeft, ctxFarLeft, getCanvasDimensions(farPrevIndex), previewScale);
+        renderScreenshotToCanvas(farPrevIndex, canvasFarLeft, ctxFarLeft, getCanvasDimensions(farPrevIndex), previewScale, previewRenderScale());
     } else {
         sidePreviewFarLeft.classList.add('hidden');
     }
@@ -9516,7 +9531,7 @@ function updateSidePreviews() {
         sidePreviewRight.style.left = `calc(50% + ${sideOffset}px)`;
         // Skip render if already pre-rendered during slide transition
         if (!skipSidePreviewRender) {
-            renderScreenshotToCanvas(nextIndex, canvasRight, ctxRight, getCanvasDimensions(nextIndex), previewScale);
+            renderScreenshotToCanvas(nextIndex, canvasRight, ctxRight, getCanvasDimensions(nextIndex), previewScale, previewRenderScale());
         }
         // Click to select next with animation
         sidePreviewRight.onclick = () => {
@@ -9532,7 +9547,7 @@ function updateSidePreviews() {
     if (farNextIndex < state.screenshots.length && state.screenshots.length > 2) {
         sidePreviewFarRight.classList.remove('hidden');
         sidePreviewFarRight.style.left = `calc(50% + ${farSideOffset}px)`;
-        renderScreenshotToCanvas(farNextIndex, canvasFarRight, ctxFarRight, getCanvasDimensions(farNextIndex), previewScale);
+        renderScreenshotToCanvas(farNextIndex, canvasFarRight, ctxFarRight, getCanvasDimensions(farNextIndex), previewScale, previewRenderScale());
     } else {
         sidePreviewFarRight.classList.add('hidden');
     }
@@ -9582,7 +9597,7 @@ function slideToScreenshot(newIndex, direction) {
             if (index < 0 || index >= state.screenshots.length) return null;
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-            renderScreenshotToCanvas(index, tempCanvas, tempCtx, getCanvasDimensions(index), previewScale);
+            renderScreenshotToCanvas(index, tempCanvas, tempCtx, getCanvasDimensions(index), previewScale, previewRenderScale());
             return { tempCanvas, targetCanvas };
         };
 
@@ -9638,7 +9653,14 @@ function slideToScreenshot(newIndex, direction) {
     });
 }
 
-function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewScale) {
+// `renderScale` sizes the canvas's PIXEL BUFFER; `previewScale` only ever sized
+// its CSS box. Leaving the buffer at full output resolution meant a 96px matrix
+// thumbnail still allocated 1320×2868×4 bytes (~15 MB) and rasterized every
+// layer at export resolution — 40 languages × 9 screens was gigabytes of canvas
+// and minutes of work for a wall of thumbnails. The context is scaled to match,
+// so everything below still draws in output coordinates and needs no changes.
+// Omit it (or pass 1) for a full-resolution render, which is what exports do.
+function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewScale, renderScale) {
     const screenshot = state.screenshots[index];
     if (!screenshot) return;
     if (typeof window !== 'undefined') window.__imgRect = { has: false };
@@ -9646,11 +9668,14 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     // Get localized image for current language
     const img = getScreenshotImage(screenshot);
 
-    // Set canvas size (this also clears the canvas)
-    targetCanvas.width = dims.width;
-    targetCanvas.height = dims.height;
+    // Set canvas size (this also clears the canvas AND resets the transform,
+    // so the scale has to be re-applied after it)
+    const rs = renderScale > 0 ? Math.min(1, renderScale) : 1;
+    targetCanvas.width = Math.max(1, Math.round(dims.width * rs));
+    targetCanvas.height = Math.max(1, Math.round(dims.height * rs));
     targetCanvas.style.width = (dims.width * previewScale) + 'px';
     targetCanvas.style.height = (dims.height * previewScale) + 'px';
+    if (rs !== 1) targetCtx.setTransform(rs, 0, 0, rs, 0, 0);
 
     // Clear canvas explicitly
     targetCtx.clearRect(0, 0, dims.width, dims.height);
@@ -9765,7 +9790,12 @@ function drawBackgroundToContext(context, dims, bg) {
 }
 
 function drawNoiseToContext(context, dims, intensity) {
-    const imageData = context.getImageData(0, 0, dims.width, dims.height);
+    // getImageData/putImageData work in DEVICE pixels and ignore the context
+    // transform, so this has to follow the canvas's real buffer — which is
+    // smaller than `dims` whenever the caller passed a renderScale.
+    const w = context.canvas ? context.canvas.width : dims.width;
+    const h = context.canvas ? context.canvas.height : dims.height;
+    const imageData = context.getImageData(0, 0, w, h);
     const data = imageData.data;
     const noiseAmount = intensity / 100;
 
