@@ -2114,6 +2114,50 @@
                 <div class="mcp-tools-list" id="mcp-tools-list"></div>
             </div>
 
+            <div class="settings-section" id="settings-images">
+                <h4 class="settings-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                    </svg>
+                    Image compression
+                </h4>
+                <p class="settings-description">Screenshots are re-encoded before they are stored, which is what decides how much disk a project takes. Applies to every image imported from now on.</p>
+
+                <label class="settings-model-label" for="settings-image-quality">Quality</label>
+                <select id="settings-image-quality" class="settings-model-select">
+                    <option value="0.92">Maximum — largest files</option>
+                    <option value="0.82">Balanced — recommended</option>
+                    <option value="0.7">Compact — smallest files</option>
+                </select>
+
+                <label class="settings-model-label" for="settings-image-maxedge" style="margin-top: 10px;">Maximum size <span style="opacity:.6">(longest edge)</span></label>
+                <select id="settings-image-maxedge" class="settings-model-select">
+                    <option value="0">Keep original size</option>
+                    <option value="4096">4096 px</option>
+                    <option value="2880">2880 px — fits every App Store size</option>
+                    <option value="2048">2048 px</option>
+                </select>
+
+                <label class="settings-model-label" for="settings-image-format" style="margin-top: 10px;">Format</label>
+                <select id="settings-image-format" class="settings-model-select">
+                    <option value="auto">WebP when supported — recommended</option>
+                    <option value="jpeg">JPEG — maximum compatibility</option>
+                </select>
+
+                <p class="settings-description" style="margin-top: 16px;">Images already stored can be re-encoded with these settings. It runs on the server, replaces each image with its smaller version, and cannot be undone.</p>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
+                    <select id="optimize-images-scope" class="settings-model-select" style="flex: 0 0 auto; width: auto;">
+                        <option value="current">This project</option>
+                        <option value="all">All projects</option>
+                    </select>
+                    <button class="modal-btn modal-btn-confirm" id="optimize-images-btn" style="background: var(--accent); flex: 0 0 auto;">Optimize stored images</button>
+                    <span class="settings-description" style="margin:0;">Stored: <span id="settings-storage-readout">—</span></span>
+                </div>
+                <div class="settings-key-status" id="optimize-images-status"></div>
+            </div>
+
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px;">
                 <span style="font-size: 13px; color: var(--text-secondary); flex-shrink: 0;">Appearance</span>
                 <div class="btn-group" id="theme-selector" style="flex: 0 0 200px;">

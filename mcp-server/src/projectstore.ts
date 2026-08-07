@@ -152,6 +152,15 @@ export async function getBlob(name: string): Promise<Buffer | null> {
     return buf;
   } catch { return null; }
 }
+/** Size on disk of a stored blob, or null when it isn't there. */
+export async function blobSize(name: string): Promise<number | null> {
+  try { return (await stat(join(BLOBS_DIR, safeBlobName(name)))).size; } catch { /* try the trash */ }
+  try { return (await stat(join(PROJECTS_DIR, ".blobs-trash", safeBlobName(name)))).size; } catch { return null; }
+}
+
+/** The "appdisk://" scheme project records use to reference stored image blobs. */
+export const BLOB_REF_PREFIX = REF_PREFIX;
+
 /** Of the given blob names, return those NOT yet on disk (so the client only uploads new ones). */
 export async function missingBlobs(names: string[]): Promise<string[]> {
   const out: string[] = [];

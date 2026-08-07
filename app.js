@@ -1633,31 +1633,143 @@ async function reapplyPendingUploads(projectId) {
     }
 }
 
-// Re-encode a (PNG/WebP) data URL to JPEG to save disk space before syncing.
-// Skips vector/animated formats and already-JPEG/non-data inputs, and keeps the
-// original if JPEG doesn't actually come out smaller. Alpha is flattened on white
-// (screenshots and background images are opaque), so we only ever compress those.
-function compressDataUrlToJpeg(dataUrl, quality = 0.85) {
+// ===== Image compression =====
+// Screenshots are the bulk of what a project stores: a 40-language project keeps
+// 40 copies of every screen, so the bytes each one costs decide whether the
+// project weighs 20 MB or 500 MB. Imported images are therefore re-encoded
+// before they enter the project — to WebP (30-50% under the same-quality JPEG)
+// and, when they carry more pixels than any output size can show, downscaled.
+//
+// Preferences live in localStorage (per browser, not per project); the same
+// values are sent to the server when re-compressing images already stored (see
+// optimizeStoredImages).
+const IMAGE_OPT_DEFAULTS = {
+    quality: 0.82,
+    // Longest edge, in pixels. 2880 covers every App Store output size
+    // (mac-2880 = 2880, iphone-6.9 = 2868), so capping here never costs
+    // definition on an export. 0 = keep whatever the file came with.
+    maxEdge: 2880,
+    format: 'auto', // 'auto' → WebP when the browser can encode it, else JPEG
+};
+
+function getImageOptSettings() {
+    const num = (v, d) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+    try {
+        return {
+            quality: Math.min(1, Math.max(0.3, num(localStorage.getItem('imageQuality'), IMAGE_OPT_DEFAULTS.quality))),
+            maxEdge: Math.max(0, num(localStorage.getItem('imageMaxEdge'), IMAGE_OPT_DEFAULTS.maxEdge)),
+            format: localStorage.getItem('imageFormat') || IMAGE_OPT_DEFAULTS.format,
+        };
+    } catch (e) { return { ...IMAGE_OPT_DEFAULTS }; }
+}
+
+// Canvas WebP encoding is not universal (older Safari silently hands back a PNG
+// instead), so probe it once and fall back to JPEG when it isn't there.
+let _canEncodeWebP = null;
+function canEncodeWebP() {
+    if (_canEncodeWebP !== null) return _canEncodeWebP;
+    try {
+        const c = document.createElement('canvas');
+        c.width = c.height = 1;
+        _canEncodeWebP = c.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+    } catch (e) { _canEncodeWebP = false; }
+    return _canEncodeWebP;
+}
+
+function targetImageMime(format) {
+    const wanted = format || getImageOptSettings().format;
+    if (wanted === 'jpeg') return 'image/jpeg';
+    return canEncodeWebP() ? 'image/webp' : 'image/jpeg';
+}
+
+// Downscale in halving steps. A single drawImage that shrinks by more than ~2x
+// samples too few source pixels and aliases badly (text in screenshots turns to
+// mush); halving repeatedly keeps it clean.
+function downscaleToCanvas(img, w, h) {
+    let srcW = img.naturalWidth || img.width;
+    let srcH = img.naturalHeight || img.height;
+    let src = img;
+    while (srcW > w * 2 && srcH > h * 2) {
+        const stepW = Math.max(w, Math.round(srcW / 2));
+        const stepH = Math.max(h, Math.round(srcH / 2));
+        const step = document.createElement('canvas');
+        step.width = stepW; step.height = stepH;
+        const sctx = step.getContext('2d');
+        sctx.imageSmoothingEnabled = true;
+        sctx.imageSmoothingQuality = 'high';
+        sctx.drawImage(src, 0, 0, stepW, stepH);
+        src = step; srcW = stepW; srcH = stepH;
+    }
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // Both target codecs are written opaque here (screenshots and background
+    // photos are), so flatten any alpha on white rather than losing it to black.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(src, 0, 0, w, h);
+    return out;
+}
+
+// Re-encode a data URL smaller: capped at `maxEdge` on the longest side and
+// written as WebP/JPEG. Vector and animated formats are passed through untouched
+// (a canvas round-trip would rasterize an SVG and drop every frame but the first
+// of a GIF), as is anything the re-encode fails to actually shrink.
+//
+// `allowRecompress` (default false) decides what happens to an image that is
+// ALREADY in a lossy format and small enough: by default it is left alone, so
+// repeated saves can't stack generation after generation of artefacts on it.
+function optimizeImageDataUrl(dataUrl, opts = {}) {
     return new Promise((resolve) => {
         if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return resolve(dataUrl);
-        if (/^data:image\/(svg|gif|jpeg)/i.test(dataUrl)) return resolve(dataUrl);
+        if (/^data:image\/(svg|gif)/i.test(dataUrl)) return resolve(dataUrl);
+        const cfg = { ...getImageOptSettings(), ...opts };
+        const mime = targetImageMime(cfg.format);
+        const isLossy = /^data:image\/(jpeg|webp)/i.test(dataUrl);
         const img = new Image();
         img.onload = () => {
             try {
-                const c = document.createElement('canvas');
-                c.width = img.naturalWidth || img.width;
-                c.height = img.naturalHeight || img.height;
-                if (!c.width || !c.height) return resolve(dataUrl);
-                const ctx = c.getContext('2d');
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, c.width, c.height);
-                ctx.drawImage(img, 0, 0);
-                const out = c.toDataURL('image/jpeg', quality);
+                const w0 = img.naturalWidth || img.width;
+                const h0 = img.naturalHeight || img.height;
+                if (!w0 || !h0) return resolve(dataUrl);
+                const longest = Math.max(w0, h0);
+                const scale = (cfg.maxEdge > 0 && longest > cfg.maxEdge) ? cfg.maxEdge / longest : 1;
+                // Nothing to gain: already compressed and already small enough.
+                if (scale === 1 && isLossy && !cfg.allowRecompress) return resolve(dataUrl);
+                const w = Math.max(1, Math.round(w0 * scale));
+                const h = Math.max(1, Math.round(h0 * scale));
+                const canvas = downscaleToCanvas(img, w, h);
+                let out = canvas.toDataURL(mime, cfg.quality);
+                if (mime === 'image/webp' && out.indexOf('data:image/webp') !== 0) {
+                    out = canvas.toDataURL('image/jpeg', cfg.quality); // encoder lied — fall back
+                }
                 resolve(out && out.length < dataUrl.length ? out : dataUrl);
             } catch (e) { resolve(dataUrl); }
         };
         img.onerror = () => resolve(dataUrl);
         img.src = dataUrl;
+    });
+}
+
+// Compress an image the user just imported, before it enters the project — so
+// the editor holds (and later uploads) the small version, not the original.
+// Returns null when nothing changed or the result can't be decoded back.
+//
+// This is the one place that re-encodes an already-lossy file: import happens
+// exactly once per file, so converting the user's JPEG into the app's storage
+// format costs a single generation (and is dropped anyway if it doesn't come out
+// smaller). Every later save leaves it alone.
+async function optimizeImportedImage(dataUrl) {
+    let out;
+    try { out = await optimizeImageDataUrl(dataUrl, { allowRecompress: true }); } catch (e) { return null; }
+    if (!out || out === dataUrl) return null;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ src: out, image: img });
+        img.onerror = () => resolve(null); // keep the original rather than lose the file
+        img.src = out;
     });
 }
 
@@ -1691,7 +1803,9 @@ const EXT_FROM_MIME = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': '
 const refCache = new Map();
 const REF_SCHEME = 'appdisk://';
 
-// Externalize a project's images for upload: compress raster images to JPEG,
+// Externalize a project's images for upload: compress raster images (see
+// optimizeImageDataUrl — a no-op for anything already compressed and small
+// enough, so images that came in through the import path aren't touched twice),
 // replace every inline data:image URL with a content-hash reference
 // ("appdisk://<sha>.<ext>"), and collect the unique image blobs to upload as
 // binary. Identical images (e.g. the same screenshot across many languages) are
@@ -1707,7 +1821,7 @@ async function externalizeForUpload(record) {
         if (typeof val === 'string' && val.startsWith('data:image/')) {
             const seenKey = (keepFormat ? 'k:' : 'c:') + val;
             if (seen.has(seenKey)) return seen.get(seenKey);
-            const compressed = keepFormat ? val : await compressDataUrlToJpeg(val);
+            const compressed = keepFormat ? val : await optimizeImageDataUrl(val);
             const { bytes, mime } = dataUrlToBytes(compressed);
             const hash = (await sha256Hex(bytes)).slice(0, 40);
             const ext = EXT_FROM_MIME[mime] || 'png';
@@ -1958,6 +2072,32 @@ const RemoteStore = {
             if (rec && typeof rec.rev === 'number') remoteRev.set(id, rec.rev);
             return rec;
         } catch (e) { return null; }
+    },
+    // Disk the project's images take on the server (deduplicated: the same
+    // screenshot shared by 40 languages counts once). null when unavailable —
+    // an older server without the endpoint answers 404.
+    async storage(id) {
+        const b = this.baseUrl(); if (!b) return null;
+        try {
+            const r = await fetch(b + '/projects/' + encodeURIComponent(id) + '/storage', { headers: this._headers(false) });
+            return r.ok ? await r.json() : null;
+        } catch (e) { return null; }
+    },
+    // Ask the server to re-encode a project's stored images (smaller codec, and
+    // no more pixels than the output size can show). Returns the stats object,
+    // or { error } — this one can take a while on a big project, so the caller
+    // shows progress rather than a spinner-less wait.
+    async optimizeImages(id, opts) {
+        const b = this.baseUrl(); if (!b) return { error: 'no server' };
+        try {
+            const r = await fetch(b + '/projects/' + encodeURIComponent(id) + '/optimize', {
+                method: 'POST', headers: this._headers(true), body: JSON.stringify(opts || {})
+            });
+            if (r.status === 404 || r.status === 405) return { error: 'unsupported' };
+            const j = await r.json().catch(() => null);
+            if (!r.ok) return { error: (j && j.error) || ('HTTP ' + r.status) };
+            return j;
+        } catch (e) { return { error: String(e && e.message || e) }; }
     },
     // Serialize all pushes so two uploads never run at once: otherwise their
     // progress writes to the single sync pill interleave and the "Envoi des
@@ -5736,6 +5876,10 @@ function setupEventListeners() {
         saveSettings();
     });
 
+    // Re-encode images already stored on the server (settings → Image compression)
+    const optimizeBtn = document.getElementById('optimize-images-btn');
+    if (optimizeBtn) optimizeBtn.addEventListener('click', () => { optimizeStoredImages(); });
+
     // Theme selector buttons
     document.querySelectorAll('#theme-selector button').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -7536,6 +7680,134 @@ function initTheme() {
 // Apply theme immediately (before async init)
 initTheme();
 
+// ===== Stored-image compression (settings modal) =====
+
+function formatBytes(n) {
+    if (!isFinite(n) || n <= 0) return '0 MB';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function setOptimizeStatus(msg, cls) {
+    const el = document.getElementById('optimize-images-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'settings-key-status' + (cls ? ' ' + cls : '');
+}
+
+// "N images · 214.3 MB" for the open project, so the setting above it has a
+// number to argue with.
+async function refreshStorageReadout() {
+    const el = document.getElementById('settings-storage-readout');
+    if (!el) return;
+    if (!RemoteStore.enabled()) { el.textContent = 'No server connected'; return; }
+    el.textContent = 'Measuring…';
+    const s = await RemoteStore.storage(currentProjectId);
+    if (!s) { el.textContent = 'Unavailable (server too old?)'; return; }
+    el.textContent = s.images + ' image' + (s.images === 1 ? '' : 's') + ' · ' + formatBytes(s.bytes)
+        + (s.missing ? ' · ' + s.missing + ' missing' : '');
+}
+
+// Re-encode the images ALREADY stored on the server. Everything happens
+// server-side (the browser never downloads the originals) — it rewrites each
+// project's refs to the new blobs and the usual GC reclaims the old bytes.
+async function optimizeStoredImages() {
+    const btn = document.getElementById('optimize-images-btn');
+    const scope = document.getElementById('optimize-images-scope')?.value || 'current';
+    if (!RemoteStore.enabled()) {
+        setOptimizeStatus('Connect an MCP server first — it is where the images live.', 'error');
+        return;
+    }
+    const cfg = readImageOptSettingsFromUI();
+    const targets = scope === 'all'
+        ? projects.map(p => p.id)
+        : [currentProjectId];
+    const label = scope === 'all'
+        ? 'all ' + targets.length + ' project' + (targets.length === 1 ? '' : 's')
+        : 'this project';
+    const ok = await showAppConfirm(
+        'Re-encode the images of ' + label + ' at ' + Math.round(cfg.quality * 100) + '% quality'
+        + (cfg.maxEdge ? ', capped at ' + cfg.maxEdge + ' px' : '')
+        + '? Images are replaced by smaller versions — this cannot be undone.',
+        'Optimize', 'Cancel');
+    if (!ok) return;
+
+    if (btn) btn.disabled = true;
+    // The open project must be fully on the server before we ask the server to
+    // rewrite it, or the push that lands afterwards would carry the old images
+    // back up.
+    showUploadProgress('Optimisation des images…', 'Enregistrement des modifications en cours…');
+    try {
+        saveState();
+        await waitForServerConfirmation(currentProjectId);
+
+        const opts = {
+            quality: Math.round(cfg.quality * 100),
+            // A browser that can't encode WebP can't decode it either, so don't
+            // let the server rewrite this user's images into a format they
+            // wouldn't be able to open.
+            format: (cfg.format === 'jpeg' || !canEncodeWebP()) ? 'jpeg' : 'webp',
+            maxEdge: cfg.maxEdge || 0,
+        };
+        let before = 0, after = 0, rewritten = 0, images = 0, failed = 0;
+        const errors = [];
+        for (let i = 0; i < targets.length; i++) {
+            const meta = projects.find(p => p.id === targets[i]);
+            showUploadProgress('Optimisation des images…',
+                (targets.length > 1 ? '(' + (i + 1) + '/' + targets.length + ') ' : '') + (meta ? meta.name : targets[i]));
+            const res = await RemoteStore.optimizeImages(targets[i], opts);
+            if (!res || res.error) {
+                errors.push((meta ? meta.name : targets[i]) + ': '
+                    + (res && res.error === 'unsupported' ? 'server too old for this feature' : (res && res.error) || 'failed'));
+                continue;
+            }
+            before += res.beforeBytes || 0;
+            after += res.afterBytes || 0;
+            rewritten += res.rewritten || 0;
+            images += res.images || 0;
+            failed += res.failed || 0;
+        }
+
+        // The server rewrote the record under us — take its version.
+        if (rewritten) await reloadProjectFromServer(currentProjectId);
+
+        const saved = Math.max(0, before - after);
+        const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
+        const errorText = errors.slice(0, 3).join(' · ') + (errors.length > 3 ? ' · +' + (errors.length - 3) + ' more' : '');
+        if (errors.length && !rewritten) {
+            setOptimizeStatus(errorText, 'error');
+        } else {
+            setOptimizeStatus(
+                rewritten
+                    ? '✓ ' + rewritten + '/' + images + ' image' + (images === 1 ? '' : 's') + ' re-encoded — '
+                      + formatBytes(before) + ' → ' + formatBytes(after) + ' (−' + pct + '%)'
+                      + (failed ? ' · ' + failed + ' skipped (unreadable)' : '')
+                      + (errors.length ? ' · ' + errorText : '')
+                    : 'Already optimal — nothing to re-encode.',
+                errors.length ? 'error' : 'success');
+        }
+        await refreshStorageReadout();
+    } catch (e) {
+        setOptimizeStatus('Failed: ' + (e && e.message || e), 'error');
+    } finally {
+        hideUploadProgress();
+        if (btn) btn.disabled = false;
+    }
+}
+
+function readImageOptSettingsFromUI() {
+    const q = parseFloat(document.getElementById('settings-image-quality')?.value);
+    const m = parseInt(document.getElementById('settings-image-maxedge')?.value, 10);
+    const f = document.getElementById('settings-image-format')?.value;
+    const d = getImageOptSettings();
+    return {
+        quality: isFinite(q) ? q : d.quality,
+        maxEdge: isFinite(m) ? m : d.maxEdge,
+        format: f || d.format,
+    };
+}
+
 function openSettingsModal() {
     // Load saved provider
     const savedProvider = getSelectedProvider();
@@ -7609,6 +7881,20 @@ function openSettingsModal() {
         if (toolsEl) toolsEl.innerHTML = '';
     }
 
+    // Image compression preferences (+ what the open project currently weighs)
+    const imgCfg = getImageOptSettings();
+    const pick = (id, value, fallback) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.value = String(value);
+        if (!sel.value) sel.value = String(fallback); // stored value isn't an option anymore
+    };
+    pick('settings-image-quality', imgCfg.quality, IMAGE_OPT_DEFAULTS.quality);
+    pick('settings-image-maxedge', imgCfg.maxEdge, IMAGE_OPT_DEFAULTS.maxEdge);
+    pick('settings-image-format', imgCfg.format, IMAGE_OPT_DEFAULTS.format);
+    setOptimizeStatus('');
+    refreshStorageReadout();
+
     document.getElementById('settings-modal').classList.add('visible');
 }
 
@@ -7634,6 +7920,12 @@ function saveSettings() {
     const mcpToken = (document.getElementById('settings-mcp-token')?.value || '').trim();
     if (mcpUrl) localStorage.setItem('mcpServerUrl', mcpUrl); else localStorage.removeItem('mcpServerUrl');
     if (mcpToken) localStorage.setItem('mcpServerToken', mcpToken); else localStorage.removeItem('mcpServerToken');
+
+    // Image compression preferences (applied to every image imported from now on)
+    const imgCfg = readImageOptSettingsFromUI();
+    localStorage.setItem('imageQuality', String(imgCfg.quality));
+    localStorage.setItem('imageMaxEdge', String(imgCfg.maxEdge));
+    localStorage.setItem('imageFormat', imgCfg.format);
 
     // Save all API keys and models
     let allValid = true;
@@ -8202,6 +8494,11 @@ async function processDesktopImageFile(fileData) {
                 deviceType = 'iPad';
             }
 
+            // Compress before the image enters the project (see processImageFile).
+            const optimized = await optimizeImportedImage(fileData.dataUrl);
+            const useImg = optimized ? optimized.image : img;
+            const useSrc = optimized ? optimized.src : fileData.dataUrl;
+
             // Detect language from filename
             const detectedLang = detectLanguageFromFilename(fileData.name);
 
@@ -8218,22 +8515,22 @@ async function processDesktopImageFile(fileData) {
                     const choice = await showDuplicateDialog({
                         existingIndex: existingIndex,
                         detectedLang: detectedLang,
-                        newImage: img,
-                        newSrc: fileData.dataUrl,
+                        newImage: useImg,
+                        newSrc: useSrc,
                         newName: fileData.name
                     });
 
                     if (choice === 'replace') {
-                        addLocalizedImage(existingIndex, detectedLang, img, fileData.dataUrl, fileData.name);
+                        addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, fileData.name);
                     } else if (choice === 'create') {
-                        createNewScreenshot(img, fileData.dataUrl, fileData.name, detectedLang, deviceType);
+                        createNewScreenshot(useImg, useSrc, fileData.name, detectedLang, deviceType);
                     }
                 } else {
                     // No image for this language yet - just add it silently
-                    addLocalizedImage(existingIndex, detectedLang, img, fileData.dataUrl, fileData.name);
+                    addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, fileData.name);
                 }
             } else {
-                createNewScreenshot(img, fileData.dataUrl, fileData.name, detectedLang, deviceType);
+                createNewScreenshot(useImg, useSrc, fileData.name, detectedLang, deviceType);
             }
 
             // Update 3D texture if in 3D mode
@@ -8306,6 +8603,13 @@ async function processImageFile(file) {
                     deviceType = 'iPad';
                 }
 
+                // Compress BEFORE the image enters the project, so the editor
+                // holds — and later uploads — the small version, not the
+                // multi-megabyte original. Falls back to the original untouched.
+                const optimized = await optimizeImportedImage(e.target.result);
+                const useImg = optimized ? optimized.image : img;
+                const useSrc = optimized ? optimized.src : e.target.result;
+
                 // Detect language from filename
                 const detectedLang = detectLanguageFromFilename(file.name);
 
@@ -8322,24 +8626,24 @@ async function processImageFile(file) {
                         const choice = await showDuplicateDialog({
                             existingIndex: existingIndex,
                             detectedLang: detectedLang,
-                            newImage: img,
-                            newSrc: e.target.result,
+                            newImage: useImg,
+                            newSrc: useSrc,
                             newName: file.name
                         });
 
                         if (choice === 'replace') {
-                            addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                            addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, file.name);
                         } else if (choice === 'create') {
-                            createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                            createNewScreenshot(useImg, useSrc, file.name, detectedLang, deviceType);
                         }
                         // 'ignore' does nothing
                     } else {
                         // No image for this language yet - just add it silently
-                        addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                        addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, file.name);
                     }
                 } else {
                     // No duplicate - create new screenshot
-                    createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                    createNewScreenshot(useImg, useSrc, file.name, detectedLang, deviceType);
                 }
 
                 // Update 3D texture if in 3D mode

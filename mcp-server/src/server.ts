@@ -49,6 +49,7 @@ import {
   storeIsEphemeral,
   EPHEMERAL_STORE_MSG,
 } from "./projectstore.js";
+import { optimizeRecordImages, projectStorage } from "./imageopt.js";
 import { outputPathFor, OUTPUT_DIR } from "./security.js";
 
 // ---------- Zod schemas (shared by generate_screenshot and generate_batch) ----------
@@ -829,7 +830,9 @@ async function runHttp(port: number) {
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Auth-Token, Accept, mcp-session-id, mcp-protocol-version, last-event-id",
+      // If-Match carries the optimistic-concurrency rev on project PUTs — without
+      // it here, every cross-origin save is blocked at the preflight.
+      "Content-Type, Authorization, X-Auth-Token, Accept, If-Match, mcp-session-id, mcp-protocol-version, last-event-id",
     );
     res.header("Access-Control-Expose-Headers", "mcp-session-id");
     res.header("Access-Control-Max-Age", "86400");
@@ -1080,6 +1083,67 @@ async function runHttp(port: number) {
         res.json({ missing: await missingBlobs(names) });
       } catch (e: any) {
         res.status(400).json({ error: String(e?.message ?? e) });
+      }
+    });
+
+    // How much disk this project's images take (deduplicated by blob, so images
+    // shared across languages count once). Drives the "storage used" readout in
+    // the app's settings.
+    app.get(`${p}/projects/:id/storage`, async (req, res) => {
+      try {
+        const rec = await getProject(req.params.id);
+        if (!rec) {
+          res.status(404).json({ error: "not found" });
+          return;
+        }
+        const s = await projectStorage(rec);
+        res.json({ id: rec.id, name: rec.name || rec.id, screenshots: rec.screenshots?.length || 0, ...s });
+      } catch (e: any) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+      }
+    });
+
+    // Re-encode this project's stored images (smaller codec + no more pixels than
+    // the output size can show) and repoint the record at the new blobs. The old
+    // ones are left for the normal GC, which keeps any another project still uses.
+    app.post(`${p}/projects/:id/optimize`, async (req, res) => {
+      try {
+        if (storeIsEphemeral()) {
+          res.status(507).json({ error: EPHEMERAL_STORE_MSG });
+          return;
+        }
+        const body = req.body || {};
+        const opts = {
+          quality: typeof body.quality === "number" ? body.quality : undefined,
+          format: body.format === "jpeg" ? ("jpeg" as const) : ("webp" as const),
+          maxEdge: typeof body.maxEdge === "number" ? body.maxEdge : undefined,
+          keepResolution: body.keepResolution === true,
+        };
+        const out = await withProjectLock(req.params.id, async () => {
+          const rec = await getProject(req.params.id);
+          if (!rec) return null;
+          const stats = await optimizeRecordImages(rec, opts);
+          // Only write when something actually changed — an already-optimal
+          // project shouldn't bump its rev and make every open tab reload.
+          const saved = stats.rewritten > 0 ? await saveProject(rec) : rec;
+          return { stats, rev: saved.rev ?? 0 };
+        });
+        if (!out) {
+          res.status(404).json({ error: "not found" });
+          return;
+        }
+        console.error(
+          `[appscreen-mcp] optimize ${req.params.id}: ${out.stats.rewritten}/${out.stats.images} image(s) re-encoded, ` +
+          `${(out.stats.beforeBytes / 1048576).toFixed(1)} MB → ${(out.stats.afterBytes / 1048576).toFixed(1)} MB`,
+        );
+        if (out.stats.rewritten) {
+          gcBlobs()
+            .then((r) => { if (r.deleted) console.error(`[appscreen-mcp] gc(after-optimize): removed ${r.deleted} blob(s), freed ${r.freedBytes} bytes`); })
+            .catch((e) => console.error("[appscreen-mcp] gc(after-optimize) failed:", e));
+        }
+        res.json({ ok: true, id: req.params.id, rev: out.rev, ...out.stats });
+      } catch (e: any) {
+        res.status(500).json({ error: String(e?.message ?? e) });
       }
     });
 
