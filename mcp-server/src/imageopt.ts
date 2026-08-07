@@ -28,24 +28,20 @@ import {
   putBlob,
   type ProjectRecord,
 } from "./projectstore.js";
-import { OUTPUT_SIZES, type Size } from "./presets.js";
-
-// Headroom on top of what the project renders today: never downscale an image's
-// longest edge below this, whatever its current output size says. The output
-// device is a setting the user flips at any time (a project set to "web-og"
-// today may export 6.9" screenshots tomorrow), and downscaling is the one
-// irreversible step here — so the floor keeps every image big enough for the
-// largest stock App Store output size (mac-2880 = 2880px, iphone-6.9 = 2868px).
-// Projects rendering wider than that (panorama span, custom size) are covered by
-// `need` in targetScale, which this floor only ever adds to.
-const MIN_LONG_EDGE = 2880;
+import {
+  DEFAULT_QUALITY,
+  EXT_FOR,
+  MIN_LONG_EDGE,
+  UNTOUCHABLE,
+  baseCanvas,
+  extOf,
+  type OptimizeFormat,
+} from "./imagecodec.js";
 
 // Below this gain, downscaling isn't worth the resample.
 const RESIZE_EPSILON = 0.98;
 
-const DEFAULT_QUALITY = 82;
-
-export type OptimizeFormat = "webp" | "jpeg";
+export type { OptimizeFormat };
 
 export interface OptimizeOptions {
   /** Encoder quality, 1-100 (default 82). */
@@ -103,16 +99,6 @@ interface Use { name: string; sites: Site[]; constraints: Constraint[] }
 const isRef = (v: unknown): v is string =>
   typeof v === "string" && v.startsWith(BLOB_REF_PREFIX);
 const refName = (v: string) => v.slice(BLOB_REF_PREFIX.length);
-
-/** The output canvas one screen of this project renders to (before panorama span). */
-function baseCanvas(rec: ProjectRecord): Size {
-  if (rec.outputDevice === "custom") {
-    const width = Number(rec.customWidth) || 1290;
-    const height = Number(rec.customHeight) || 2796;
-    return { width, height };
-  }
-  return OUTPUT_SIZES[rec.outputDevice || "iphone-6.9"] || OUTPUT_SIZES["iphone-6.9"];
-}
 
 /**
  * Source width (in pixels of the full image) the screenshot's most demanding
@@ -221,12 +207,6 @@ function targetScale(use: Use, imgW: number, imgH: number, opts: OptimizeOptions
   scale = Math.min(1, scale);
   return scale > RESIZE_EPSILON ? 1 : scale;
 }
-
-const extOf = (name: string) => (name.split(".").pop() || "").toLowerCase();
-const EXT_FOR: Record<OptimizeFormat, string> = { webp: "webp", jpeg: "jpg" };
-// Formats we must never re-encode: vector (no pixels to resample) and animated
-// (a canvas round-trip would keep the first frame only).
-const UNTOUCHABLE = new Set(["svg", "gif"]);
 
 /** Re-encode one image. Returns null when it should be left exactly as it is. */
 async function reencode(

@@ -52,6 +52,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 - **Multiple Projects**: Create, rename, and delete projects
 - **Auto-Save**: All changes saved automatically to browser storage
 - **Screenshot Count**: See screenshot counts in project selector
+- **Bulk Import (MCP)**: `import_screenshots` imports a whole folder in one call — the language is read off each filename suffix (`home_de.png`, `home_pt-br.png`) and files sharing a base name become one screenshot with all its localized images
 - **Image Compression**: Imported screenshots are re-encoded to WebP and capped at a maximum size before they are stored — quality, size and format are configurable in Settings → Image compression, where a one-click pass also re-encodes the images an existing project already stores
 
 ### User Interface

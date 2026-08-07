@@ -7,7 +7,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import express from "express";
-import { writeFile } from "node:fs/promises";
+import { writeFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import {
   OUTPUT_SIZES,
@@ -40,6 +41,7 @@ import {
   summarizeProject,
   putBlob,
   getBlob,
+  storeImageAsBlob,
   missingBlobs,
   gcBlobs,
   readRev,
@@ -50,7 +52,13 @@ import {
   EPHEMERAL_STORE_MSG,
 } from "./projectstore.js";
 import { optimizeRecordImages, projectStorage } from "./imageopt.js";
-import { outputPathFor, OUTPUT_DIR } from "./security.js";
+import { ingestSettings, recordRenderLongEdge } from "./imagecodec.js";
+import { isImageFile, naturalCompare, stripLanguageSuffix } from "./filenames.js";
+import { outputPathFor, OUTPUT_DIR, imagePathFor } from "./security.js";
+
+// Ceiling on one bulk import call: enough for a full store listing (a dozen
+// screens across 40 languages) while still refusing a runaway request.
+const MAX_BULK_IMPORT = 1000;
 
 // ---------- Zod schemas (shared by generate_screenshot and generate_batch) ----------
 
@@ -560,6 +568,191 @@ function buildServer(ctx: ServerCtx = {}): McpServer {
           addScreenshot(rec, { name, image: dataUrl, language }),
         );
         return ok({ projectId, index, screenshotCount: rec.screenshots.length });
+      } catch (e: any) {
+        return { isError: true, content: [{ type: "text", text: String(e?.message ?? e) }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "import_screenshots",
+    {
+      title: "Import many screenshots at once (bulk)",
+      description:
+        "BULK IMPORT — use this instead of calling set_screenshot_image once per image. Takes a list of " +
+        "images (or a whole server directory) and slots them all in ONE atomic write, exactly the way " +
+        "drag-and-drop does in the app.\n" +
+        "match='filename' (default): the language is read off the filename suffix (home_de.png → 'de', " +
+        "home_pt-br.png → 'pt-br') and files sharing a base name become ONE screenshot with several " +
+        "localized images; a base name that matches an existing screenshot updates it, otherwise a new " +
+        "screenshot is appended in natural filename order. match='order': files map onto existing " +
+        "screenshots by position, per language. match='append': every file becomes a new screenshot.\n" +
+        "A per-item `language` or `index` always overrides detection. Images are compressed on the way in." +
+        uploadHint,
+      inputSchema: {
+        projectId: z.string(),
+        images: z
+          .array(
+            z.object({
+              image: z.string().describe("Image (any supported input form)."),
+              name: z.string().optional().describe("File name — drives language detection and grouping."),
+              language: z.string().optional().describe("Explicit language code; overrides the filename suffix."),
+              index: z.number().int().min(0).optional().describe("Explicit target screenshot index; overrides matching."),
+            }),
+          )
+          .optional()
+          .describe("Images to import. Use this, or `directory`, or both."),
+        directory: z
+          .string()
+          .optional()
+          .describe("Server directory (under MCP_IMAGE_DIR) — every image file in it is imported."),
+        match: z
+          .enum(["filename", "order", "append"])
+          .optional()
+          .describe("How files are slotted onto screenshots (default 'filename')."),
+        defaultLanguage: z
+          .string()
+          .optional()
+          .describe("Language for files with no detectable suffix (default the project's current, else 'en')."),
+        replace: z
+          .boolean()
+          .optional()
+          .describe("Overwrite an existing image for that language (default true; false skips them)."),
+      },
+    },
+    async ({ projectId, images, directory, match, defaultLanguage, replace }) => {
+      try {
+        const mode = match || "filename";
+        const overwrite = replace !== false;
+
+        // 1. Gather the inputs (explicit list + directory listing).
+        const items: { image: string; name: string; language?: string; index?: number }[] = [];
+        for (const it of images || []) {
+          items.push({ image: it.image, name: it.name || "", language: it.language, index: it.index });
+        }
+        if (directory) {
+          const dir = imagePathFor(directory);
+          const entries = (await readdir(dir)).filter(isImageFile).sort(naturalCompare);
+          for (const f of entries) items.push({ image: join(directory, f), name: f });
+        }
+        if (!items.length) {
+          return { isError: true, content: [{ type: "text", text: "nothing to import: pass `images` and/or `directory`" }] };
+        }
+        if (items.length > MAX_BULK_IMPORT) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: `too many images in one call (${items.length} > ${MAX_BULK_IMPORT}) — split the import` }],
+          };
+        }
+
+        // 2. Resolve, compress and store every image OUTSIDE the project lock —
+        //    this is the slow part (network, decode, re-encode) and blobs are
+        //    content-addressed, so a failure here leaves only orphans for the GC.
+        //    Storing them as refs (not data URLs) also keeps peak memory to one
+        //    image, instead of holding hundreds of megabytes of base64 at once.
+        const current = await getProject(projectId);
+        if (!current) {
+          return { isError: true, content: [{ type: "text", text: `No project: ${projectId}` }] };
+        }
+        const maxEdge = Math.max(ingestSettings().maxEdge, recordRenderLongEdge(current));
+        const failures: { name: string; error: string }[] = [];
+        const resolved: { ref: string; name: string; base: string; language: string; index?: number }[] = [];
+        for (const it of items) {
+          try {
+            const dataUrl = await resolveImageToDataUrl(it.image);
+            const ref = await storeImageAsBlob(dataUrl, { maxEdge });
+            const parsed = stripLanguageSuffix(it.name || "");
+            resolved.push({
+              ref,
+              name: it.name || "",
+              base: parsed.base,
+              language: it.language || parsed.lang || defaultLanguage || current.currentLanguage || "en",
+              index: it.index,
+            });
+          } catch (e: any) {
+            failures.push({ name: it.name || it.image.slice(0, 60), error: String(e?.message ?? e) });
+          }
+        }
+
+        // 3. Slot them all in one atomic read-modify-write.
+        const { rec, result } = await mutateProject(projectId, (rec) => {
+          const touched = new Map<number, Set<string>>();
+          const skipped: string[] = [];
+          let created = 0;
+          const put = (index: number, r: (typeof resolved)[number]) => {
+            const existing = rec.screenshots[index]?.localizedImages?.[r.language]?.src;
+            if (existing && !overwrite) { skipped.push(r.name || r.base); return; }
+            setScreenshotImage(rec, index, r.ref, { language: r.language, name: r.name || undefined });
+            if (!touched.has(index)) touched.set(index, new Set());
+            touched.get(index)!.add(r.language);
+          };
+          const appendScreen = (name: string) => {
+            created++;
+            return addScreenshot(rec, { name });
+          };
+
+          // Explicit indexes bypass every matching rule.
+          const explicit = resolved.filter((r) => r.index != null);
+          for (const r of explicit) {
+            if (!rec.screenshots[r.index!]) throw new Error(`no screenshot at index ${r.index}`);
+            put(r.index!, r);
+          }
+          const rest = resolved.filter((r) => r.index == null);
+
+          if (mode === "append") {
+            for (const r of rest) put(appendScreen(r.base || r.name), r);
+          } else if (mode === "order") {
+            // Per language, the n-th file lands on the n-th screenshot.
+            const byLang = new Map<string, typeof rest>();
+            for (const r of rest) {
+              if (!byLang.has(r.language)) byLang.set(r.language, []);
+              byLang.get(r.language)!.push(r);
+            }
+            for (const list of byLang.values()) {
+              list.sort((a, b) => naturalCompare(a.name || a.base, b.name || b.base));
+              list.forEach((r, i) => put(rec.screenshots[i] ? i : appendScreen(r.base || r.name), r));
+            }
+          } else {
+            // 'filename': group by base name, reuse the screenshot already
+            // holding that base name, else append one — like the app's importer.
+            const groups = new Map<string, typeof rest>();
+            for (const r of rest) {
+              const key = r.base || r.name;
+              if (!groups.has(key)) groups.set(key, []);
+              groups.get(key)!.push(r);
+            }
+            const keys = [...groups.keys()].sort(naturalCompare);
+            for (const key of keys) {
+              let index = rec.screenshots.findIndex((s: any) =>
+                Object.values(s?.localizedImages || {}).some(
+                  (e: any) => e?.name && stripLanguageSuffix(e.name).base === key,
+                ),
+              );
+              if (index < 0) index = appendScreen(key);
+              for (const r of groups.get(key)!) put(index, r);
+            }
+          }
+          return {
+            created,
+            updated: touched.size - created,
+            skipped,
+            screens: [...touched.entries()]
+              .sort((a, b) => a[0] - b[0])
+              .map(([index, langs]) => ({ index, languages: [...langs].sort() })),
+          };
+        });
+
+        return ok({
+          projectId,
+          imported: resolved.length - result.skipped.length,
+          screenshotsCreated: result.created,
+          screenshotsUpdated: Math.max(0, result.updated),
+          screenshotCount: rec.screenshots.length,
+          languages: rec.projectLanguages,
+          screens: result.screens,
+          skipped: result.skipped.length ? result.skipped : undefined,
+          failed: failures.length ? failures : undefined,
+        });
       } catch (e: any) {
         return { isError: true, content: [{ type: "text", text: String(e?.message ?? e) }] };
       }
