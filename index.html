@@ -2148,12 +2148,9 @@
 
                 <p class="settings-description" style="margin-top: 16px;">Images already stored can be re-encoded with these settings. It runs on the server, replaces each image with its smaller version, and cannot be undone.</p>
                 <div style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
-                    <select id="optimize-images-scope" class="settings-model-select" style="flex: 0 0 auto; width: auto;">
-                        <option value="current">This project</option>
-                        <option value="all">All projects</option>
-                    </select>
-                    <button class="modal-btn modal-btn-confirm" id="optimize-images-btn" style="background: var(--accent); flex: 0 0 auto;">Optimize stored images</button>
-                    <span class="settings-description" style="margin:0;">Stored: <span id="settings-storage-readout">—</span></span>
+                    <button class="modal-btn modal-btn-confirm" id="optimize-images-btn" style="background: var(--accent); flex: 0 0 auto;">Optimize this project</button>
+                    <button class="modal-btn modal-btn-cancel" id="optimize-images-all-btn" style="flex: 0 0 auto;">Optimize all projects</button>
+                    <span class="settings-description" style="margin:0;">This project: <span id="settings-storage-readout">—</span></span>
                 </div>
                 <div class="settings-key-status" id="optimize-images-status"></div>
             </div>

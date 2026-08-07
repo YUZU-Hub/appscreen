@@ -409,7 +409,11 @@ function renderAlvCell(cell) {
     ss.text.currentHeadlineLang = lang;
     ss.text.currentSubheadlineLang = lang;
     const canvas = document.createElement('canvas');
-    try { renderScreenshotToCanvas(i, canvas, canvas.getContext('2d'), dims, scale); } catch (e) {}
+    // Rasterize at thumbnail size, not at output size: a cell is 96px wide, so a
+    // full-resolution buffer was ~15 MB and a full-resolution render each, times
+    // screenshots × languages.
+    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    try { renderScreenshotToCanvas(i, canvas, canvas.getContext('2d'), dims, scale, scale * dpr); } catch (e) {}
     // Overlap detection for this view+language (uses the rect from the render above).
     let overlaps = false;
     try {
