@@ -1645,12 +1645,37 @@ async function reapplyPendingUploads(projectId) {
 // optimizeStoredImages).
 const IMAGE_OPT_DEFAULTS = {
     quality: 0.82,
-    // Longest edge, in pixels. 2880 covers every App Store output size
-    // (mac-2880 = 2880, iphone-6.9 = 2868), so capping here never costs
-    // definition on an export. 0 = keep whatever the file came with.
+    // Longest edge, in pixels. 2880 covers every stock App Store output size
+    // (mac-2880 = 2880, iphone-6.9 = 2868). Projects that render WIDER than that
+    // — a panorama spanning several screens, or a custom output size — raise it
+    // themselves, see effectiveMaxEdge(). 0 = keep whatever the file came with.
     maxEdge: 2880,
     format: 'auto', // 'auto' → WebP when the browser can encode it, else JPEG
 };
+
+// The largest edge at which THIS project can actually draw an image: its output
+// canvas, widened by the biggest panorama span in use. Downscaling below this is
+// the one way compression could soften an export (the export itself is always a
+// full-resolution PNG re-rendered from the canvas), so it is a hard floor under
+// the user's "maximum size" setting rather than something the setting can undercut.
+function projectRenderLongEdge() {
+    try {
+        const base = state.outputDevice === 'custom'
+            ? { width: state.customWidth || 1290, height: state.customHeight || 2796 }
+            : (deviceDimensions[state.outputDevice] || deviceDimensions['iphone-6.9']);
+        let span = 1;
+        for (const s of state.screenshots || []) {
+            const n = s && s.screenshot && s.screenshot.spanScreens;
+            if (n > span) span = n;
+        }
+        return Math.max(base.width * span, base.height);
+    } catch (e) { return 0; }
+}
+
+function effectiveMaxEdge(cfg) {
+    if (!cfg.maxEdge) return 0; // "keep original size"
+    return Math.max(cfg.maxEdge, projectRenderLongEdge());
+}
 
 function getImageOptSettings() {
     const num = (v, d) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
@@ -1735,7 +1760,8 @@ function optimizeImageDataUrl(dataUrl, opts = {}) {
                 const h0 = img.naturalHeight || img.height;
                 if (!w0 || !h0) return resolve(dataUrl);
                 const longest = Math.max(w0, h0);
-                const scale = (cfg.maxEdge > 0 && longest > cfg.maxEdge) ? cfg.maxEdge / longest : 1;
+                const cap = effectiveMaxEdge(cfg);
+                const scale = (cap > 0 && longest > cap) ? cap / longest : 1;
                 // Nothing to gain: already compressed and already small enough.
                 if (scale === 1 && isLossy && !cfg.allowRecompress) return resolve(dataUrl);
                 const w = Math.max(1, Math.round(w0 * scale));

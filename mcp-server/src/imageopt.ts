@@ -30,12 +30,14 @@ import {
 } from "./projectstore.js";
 import { OUTPUT_SIZES, type Size } from "./presets.js";
 
-// Never downscale an image's longest edge below this, whatever the project's
-// current output size says. The output device is a setting the user flips at
-// any time (a project set to "web-og" today may export 6.9" screenshots
-// tomorrow), and downscaling is the one irreversible step here — so the floor
-// keeps every image big enough for the largest App Store output size
-// (mac-2880 = 2880px, iphone-6.9 = 2868px) no matter what.
+// Headroom on top of what the project renders today: never downscale an image's
+// longest edge below this, whatever its current output size says. The output
+// device is a setting the user flips at any time (a project set to "web-og"
+// today may export 6.9" screenshots tomorrow), and downscaling is the one
+// irreversible step here — so the floor keeps every image big enough for the
+// largest stock App Store output size (mac-2880 = 2880px, iphone-6.9 = 2868px).
+// Projects rendering wider than that (panorama span, custom size) are covered by
+// `need` in targetScale, which this floor only ever adds to.
 const MIN_LONG_EDGE = 2880;
 
 // Below this gain, downscaling isn't worth the resample.
@@ -197,20 +199,24 @@ function collectUses(rec: ProjectRecord): Map<string, Use> {
 function targetScale(use: Use, imgW: number, imgH: number, opts: OptimizeOptions): number {
   if (opts.keepResolution) return 1;
   if (!imgW || !imgH) return 1;
-  let scale = 0;
+  // What rendering this project TODAY actually requires. Nothing below this line
+  // may be thrown away: the export is a full-resolution PNG re-rendered from the
+  // canvas, so any pixel missing here is a softer App Store screenshot.
+  let need = 0;
   for (const c of use.constraints) {
     const fitScale = c.fit === "cover"
       ? Math.max(c.canvasW / imgW, c.canvasH / imgH)
       : Math.min(c.canvasW / imgW, c.canvasH / imgH);
     const popScale = c.popoutSourceW > 0 ? c.popoutSourceW / imgW : 0;
-    scale = Math.max(scale, fitScale, popScale);
+    need = Math.max(need, fitScale, popScale);
   }
-  if (scale <= 0) scale = 1;
-  // Safety floor: stay usable for the biggest output size the user could switch to.
-  scale = Math.max(scale, MIN_LONG_EDGE / Math.max(imgW, imgH));
-  // Explicit user cap, when asked for.
+  if (need <= 0) need = 1;
+  const longest = Math.max(imgW, imgH);
+  // On top of that, headroom for the biggest output size the user could switch to.
+  let scale = Math.max(need, MIN_LONG_EDGE / longest);
+  // An explicit cap may trade that headroom away — but never `need`.
   if (opts.maxEdge && opts.maxEdge > 0) {
-    scale = Math.min(scale, opts.maxEdge / Math.max(imgW, imgH));
+    scale = Math.max(need, Math.min(scale, opts.maxEdge / longest));
   }
   scale = Math.min(1, scale);
   return scale > RESIZE_EPSILON ? 1 : scale;
