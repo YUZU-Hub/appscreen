@@ -11,6 +11,7 @@ export const OUTPUT_SIZES: Record<string, Size> = {
   "iphone-6.7": { width: 1290, height: 2796 },
   "iphone-6.5": { width: 1284, height: 2778 },
   "iphone-5.5": { width: 1242, height: 2208 },
+  "ipad-13": { width: 2064, height: 2752 },
   "ipad-12.9": { width: 2048, height: 2732 },
   "ipad-11": { width: 1668, height: 2388 },
   "mac-2880": { width: 2880, height: 1800 },

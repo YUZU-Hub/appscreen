@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { getFile as getUploadedFile } from "./filestore.js";
 import { assertPublicUrl, imagePathFor } from "./security.js";
+import { compressImageBuffer, ingestSettings, recordRenderLongEdge } from "./imagecodec.js";
 
 // Fires after every persisted change so transports can push live updates (the
 // HTTP server relays these to browsers over SSE). "saved" → { id, rev };
@@ -152,6 +153,15 @@ export async function getBlob(name: string): Promise<Buffer | null> {
     return buf;
   } catch { return null; }
 }
+/** Size on disk of a stored blob, or null when it isn't there. */
+export async function blobSize(name: string): Promise<number | null> {
+  try { return (await stat(join(BLOBS_DIR, safeBlobName(name)))).size; } catch { /* try the trash */ }
+  try { return (await stat(join(PROJECTS_DIR, ".blobs-trash", safeBlobName(name)))).size; } catch { return null; }
+}
+
+/** The "appdisk://" scheme project records use to reference stored image blobs. */
+export const BLOB_REF_PREFIX = REF_PREFIX;
+
 /** Of the given blob names, return those NOT yet on disk (so the client only uploads new ones). */
 export async function missingBlobs(names: string[]): Promise<string[]> {
   const out: string[] = [];
@@ -340,24 +350,87 @@ async function visit(v: any, fn: (v: any) => Promise<any>): Promise<any> {
   return v;
 }
 
+/**
+ * Store one image's bytes as a content-addressed blob and return its
+ * "appdisk://<hash>.<ext>" ref.
+ *
+ * Unless `keepFormat` is set, the bytes are compressed on the way in with the
+ * same policy the browser applies to its own uploads (see imagecodec.ts) — MCP
+ * callers used to be the one path that wrote raw multi-megabyte PNGs to disk.
+ * `maxEdge` must already account for what the project renders; pass 0 to
+ * re-encode without resizing.
+ */
+export async function storeImageAsBlob(
+  dataUrl: string,
+  opts: { keepFormat?: boolean; maxEdge?: number } = {},
+): Promise<string> {
+  await ensureBlobsDir();
+  const comma = dataUrl.indexOf(",");
+  const header = dataUrl.slice(5, comma);
+  let mime = header.split(";")[0] || "image/png";
+  let buf = Buffer.from(dataUrl.slice(comma + 1), /;base64/i.test(header) ? "base64" : "utf8");
+  // Element / popout artwork can be a transparent PNG — flattening it onto white
+  // would visibly wreck it, so those are stored exactly as they arrived.
+  if (!opts.keepFormat) {
+    const cfg = ingestSettings();
+    if (cfg.enabled) {
+      const out = await compressImageBuffer(buf, mime, {
+        quality: cfg.quality,
+        format: cfg.format,
+        maxEdge: opts.maxEdge ?? cfg.maxEdge,
+      });
+      if (out) { buf = out.bytes; mime = out.mime; }
+    }
+  }
+  const hash = createHash("sha256").update(buf).digest("hex").slice(0, 40);
+  const name = `${hash}.${extFromMime(mime)}`;
+  await putBlob(name, buf);
+  return REF_PREFIX + name;
+}
+
 // Replace inline data:image URLs with refs, writing each unique image to the blob
 // store. Leaves existing refs untouched. Used by saveProject so MCP-tool data URLs
 // are externalized too.
+//
+// The walk carries one bit of context — whether we are inside an `elements` /
+// `popouts` subtree — because those hold transparent artwork that must keep its
+// format, while screenshots and backgrounds get compressed.
 async function externalizeRecord(rec: ProjectRecord): Promise<void> {
   await ensureBlobsDir();
-  await walkStrings(rec, async (v) => {
-    if (typeof v === "string" && v.startsWith("data:image/")) {
-      const comma = v.indexOf(",");
-      const header = v.slice(5, comma);
-      const mime = header.split(";")[0] || "image/png";
-      const buf = Buffer.from(v.slice(comma + 1), /;base64/i.test(header) ? "base64" : "utf8");
-      const hash = createHash("sha256").update(buf).digest("hex").slice(0, 40);
-      const name = `${hash}.${extFromMime(mime)}`;
-      await putBlob(name, buf);
-      return REF_PREFIX + name;
+  const cfg = ingestSettings();
+  // Never cap below what this project actually draws (panorama span, custom
+  // output size); the floor in ingestSettings only adds headroom on top.
+  const maxEdge = cfg.enabled ? Math.max(cfg.maxEdge, recordRenderLongEdge(rec)) : 0;
+  const seen = new Map<string, string>(); // data URL -> ref (dedup within one save)
+
+  const handle = async (val: any, keepFormat: boolean): Promise<any> => {
+    if (typeof val !== "string" || !val.startsWith("data:image/")) return val;
+    const key = (keepFormat ? "k:" : "c:") + val;
+    const hit = seen.get(key);
+    if (hit) return hit;
+    const ref = await storeImageAsBlob(val, { keepFormat, maxEdge });
+    seen.set(key, ref);
+    return ref;
+  };
+
+  const walk = async (node: any, keepFormat: boolean): Promise<void> => {
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        const mapped = await handle(node[i], keepFormat);
+        if (mapped !== node[i]) node[i] = mapped;
+        else if (node[i] && typeof node[i] === "object") await walk(node[i], keepFormat);
+      }
+      return;
     }
-    return v;
-  });
+    if (!node || typeof node !== "object") return;
+    for (const k of Object.keys(node)) {
+      const childKeep = keepFormat || k === "elements" || k === "popouts";
+      const mapped = await handle(node[k], childKeep);
+      if (mapped !== node[k]) node[k] = mapped;
+      else if (node[k] && typeof node[k] === "object") await walk(node[k], childKeep);
+    }
+  };
+  await walk(rec, false);
 }
 
 // Inverse: replace refs with reconstructed data URLs (for the browser, which
