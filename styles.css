@@ -179,6 +179,20 @@ body.panel-resizing * { user-select: none !important; }
 }
 .panel-collapse-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
 
+/* Mirror the left panel's control instead of copying its placement: each one
+   belongs at its panel's INNER edge, next to the canvas boundary it moves. The
+   shared `margin-left: auto` put the right panel's button against the window
+   border, on top of the last tab. */
+.panel-collapse-btn.right {
+    order: -1;
+    margin-left: 0;
+    margin-right: 2px;
+    align-self: stretch;
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+    padding: 4px 6px;
+}
+
 .panel-reopen {
     position: absolute;
     top: 14px;

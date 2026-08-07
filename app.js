@@ -10980,117 +10980,17 @@ function drawBackground() {
 }
 
 function drawScreenshot() {
+    // Single renderer for the main canvas, the side previews and the export:
+    // this used to be a hand-copied twin of drawScreenshotToContext that had
+    // drifted — it approximated the device's rounded corners with quadratic
+    // curves where the shared renderer uses real elliptical arcs, so the preview
+    // and the exported PNG disagreed on every corner and shadow edge.
     const dims = getCanvasDimensions();
     const screenshot = state.screenshots[state.selectedIndex];
     if (!screenshot) return;
-
-    // Use localized image based on current language
     const img = getScreenshotImage(screenshot);
     if (!img) return;
-
-    const settings = getScreenshotSettings();
-    const scale = settings.scale / 100;
-
-    // Calculate scaled dimensions
-    let imgWidth = dims.width * scale;
-    let imgHeight = (img.height / img.width) * imgWidth;
-
-    // If image is taller than canvas after scaling, adjust
-    if (imgHeight > dims.height * scale) {
-        imgHeight = dims.height * scale;
-        imgWidth = (img.width / img.height) * imgHeight;
-    }
-
-    // Ensure minimum movement range so position works even at 100% scale
-    const moveX = Math.max(dims.width - imgWidth, dims.width * 0.15);
-    const moveY = Math.max(dims.height - imgHeight, dims.height * 0.15);
-    const x = (dims.width - imgWidth) / 2 + (settings.x / 100 - 0.5) * moveX;
-    const y = (dims.height - imgHeight) / 2 + (settings.y / 100 - 0.5) * moveY;
-
-    // Center point for transformations
-    const centerX = x + imgWidth / 2;
-    const centerY = y + imgHeight / 2;
-
-    // Record the device rect for text auto-fit / overlap detection.
-    if (typeof window !== 'undefined') window.__imgRect = { x, y, w: imgWidth, h: imgHeight, has: true };
-
-    ctx.save();
-
-    // Apply transformations
-    ctx.translate(centerX, centerY);
-
-    // Apply rotation
-    if (settings.rotation !== 0) {
-        ctx.rotate(settings.rotation * Math.PI / 180);
-    }
-
-    // Apply perspective (simulated with scale transform)
-    if (settings.perspective !== 0) {
-        const perspectiveScale = 1 - Math.abs(settings.perspective) * 0.005;
-        ctx.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
-    }
-
-    ctx.translate(-centerX, -centerY);
-
-    // Draw rounded rectangle with screenshot
-    const radius = settings.cornerRadius * (imgWidth / 400); // Scale radius with image
-
-    // Draw shadow first (needs a filled shape, not clipped)
-    if (settings.shadow.enabled) {
-        const shadowColor = hexToRgba(settings.shadow.color, settings.shadow.opacity / 100);
-        ctx.shadowColor = shadowColor;
-        ctx.shadowBlur = settings.shadow.blur;
-        ctx.shadowOffsetX = settings.shadow.x;
-        ctx.shadowOffsetY = settings.shadow.y;
-
-        // Draw filled rounded rect for shadow
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        roundRect(ctx, x, y, imgWidth, imgHeight, radius);
-        ctx.fill();
-
-        // Reset shadow before drawing image
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-    }
-
-    // Clip and draw image
-    ctx.beginPath();
-    roundRect(ctx, x, y, imgWidth, imgHeight, radius);
-    ctx.clip();
-    ctx.drawImage(img, x, y, imgWidth, imgHeight);
-
-    ctx.restore();
-
-    // Draw device frame if enabled (needs separate transform context)
-    if (settings.frame.enabled) {
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        if (settings.rotation !== 0) {
-            ctx.rotate(settings.rotation * Math.PI / 180);
-        }
-        if (settings.perspective !== 0) {
-            ctx.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
-        }
-        ctx.translate(-centerX, -centerY);
-        drawDeviceFrame(x, y, imgWidth, imgHeight);
-        ctx.restore();
-    }
-
-    // Draw 2D device bezel + notch / Dynamic Island (independent of the border)
-    const hasNotch2 = settings.frame.notch && settings.frame.notch !== 'none';
-    if (settings.bezelEnabled || hasNotch2) {
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        if (settings.rotation !== 0) ctx.rotate(settings.rotation * Math.PI / 180);
-        if (settings.perspective !== 0) ctx.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
-        ctx.translate(-centerX, -centerY);
-        if (settings.bezelEnabled) drawDeviceBezel(ctx, x, y, imgWidth, imgHeight, radius, settings.deviceModel2D || 'iphone', settings.deviceMacFinish || 'silver');
-        if (hasNotch2) drawNotchShape(ctx, x, y, imgWidth, imgHeight, radius, settings.frame.notch);
-        ctx.restore();
-    }
+    drawScreenshotToContext(ctx, dims, img, getScreenshotSettings());
 }
 
 function drawDeviceFrame(x, y, width, height) {
@@ -11206,6 +11106,44 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// ===== Off-screen export rendering =====
+// Exports used to drive the VISIBLE preview canvas: they moved
+// state.selectedIndex, called renderCanvasNow() and read the pixels back. That
+// made every exported frame pay for a full-size repaint AND for
+// scheduleSidePreviews(), which re-renders the four neighbouring previews
+// through the whole pipeline (noise loop included) each time the selection
+// changes — four extra full renders per screenshot, per language, that nobody
+// sees while a ZIP is being built.
+//
+// Rendering into a detached canvas instead skips all of it. It is the same
+// function the side previews use, so the output is pixel-identical to the
+// preview; only the destination changes.
+let _exportCanvas = null;
+let _exportCtx = null;
+function getExportSurface() {
+    if (!_exportCanvas) {
+        _exportCanvas = document.createElement('canvas');
+        _exportCtx = _exportCanvas.getContext('2d');
+    }
+    return { canvas: _exportCanvas, ctx: _exportCtx };
+}
+
+// Render one screenshot at full output resolution, off-screen, and return its
+// PNG panels (more than one only for panoramas).
+function renderScreenshotPanels(index) {
+    const { canvas: c, ctx: cx } = getExportSurface();
+    const dims = getCanvasDimensions(index);
+    renderScreenshotToCanvas(index, c, cx, dims, 1);
+    return sliceCanvasToPanels(c, dims.span || 1);
+}
+
+// Let the browser paint the progress modal between frames. A plain setTimeout(0)
+// costs a millisecond or two; the fixed 16 ms sleep this replaces was clamped up
+// to ~38 ms in practice, which on a 40-language export is minutes of waiting.
+function yieldToUI() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 // Slice a (possibly panoramic) canvas into `span` equal vertical panels.
 // Returns an array of PNG data URLs, left-to-right.
 function sliceCanvasToPanels(srcCanvas, span) {
@@ -11261,12 +11199,8 @@ async function exportCurrent() {
 
     // Make sure the current language's images are decoded (lazy loading), then render.
     await ensureLanguageImagesLoaded(state.currentLanguage);
-    // Render synchronously (updateCanvas is now rAF-deferred) so the canvas is
-    // current before we read its pixels.
-    renderCanvasNow();
 
-    const span = (state.screenshots[state.selectedIndex]?.screenshot?.spanScreens) || 1;
-    const panels = sliceCanvasToPanels(canvas, span);
+    const panels = renderScreenshotPanels(state.selectedIndex);
     panels.forEach((url, k) => {
         const link = document.createElement('a');
         link.download = span > 1
@@ -11350,18 +11284,13 @@ async function exportAllForLanguage(lang) {
     let panelNum = 1; // running counter so panorama panels stay in order
     const pad = (n) => String(n).padStart(2, '0');
     for (let i = 0; i < state.screenshots.length; i++) {
-        state.selectedIndex = i;
-        renderCanvasNow(); // synchronous — don't rely on the rAF-deferred updateCanvas
-
         // Update progress
         const percent = Math.round(((i + 1) / total) * 90); // Reserve 10% for ZIP generation
         showExportProgress('Exporting...', `Screenshot ${i + 1} of ${total}`, percent);
+        await yieldToUI();
 
-        await new Promise(resolve => setTimeout(resolve, 16));
-
-        // Slice into panels for panoramic screenshots (span > 1)
-        const span = (state.screenshots[i]?.screenshot?.spanScreens) || 1;
-        const panels = sliceCanvasToPanels(canvas, span);
+        // Rendered off-screen: the visible preview and its neighbours are left alone.
+        const panels = renderScreenshotPanels(i);
         panels.forEach((dataUrl) => {
             const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
             zip.file(`screenshot-${pad(panelNum++)}.png`, base64Data, { base64: true });
@@ -11382,7 +11311,7 @@ async function exportAllForLanguage(lang) {
     const content = await zip.generateAsync({ type: 'blob' });
 
     showExportProgress('Complete!', '', 100);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 400));
     hideExportProgress();
 
     const link = document.createElement('a');
@@ -11428,18 +11357,13 @@ async function exportAllLanguages() {
 
         let panelNum = 1; // running counter so panorama panels stay in order
         for (let i = 0; i < state.screenshots.length; i++) {
-            state.selectedIndex = i;
-            renderCanvasNow(); // synchronous — don't rely on the rAF-deferred updateCanvas
-
             completedItems++;
             const percent = Math.round((completedItems / totalItems) * 90); // Reserve 10% for ZIP
             showExportProgress('Exporting...', `${langName}: Screenshot ${i + 1} of ${totalScreenshots}`, percent);
+            await yieldToUI();
 
-            await new Promise(resolve => setTimeout(resolve, 16));
-
-            // Slice into panels for panoramic screenshots (span > 1)
-            const span = (state.screenshots[i]?.screenshot?.spanScreens) || 1;
-            const panels = sliceCanvasToPanels(canvas, span);
+            // Rendered off-screen: the visible preview and its neighbours are left alone.
+            const panels = renderScreenshotPanels(i);
             panels.forEach((dataUrl) => {
                 const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
                 // Use language code as folder name
@@ -11462,7 +11386,7 @@ async function exportAllLanguages() {
     const content = await zip.generateAsync({ type: 'blob' });
 
     showExportProgress('Complete!', '', 100);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 400));
     hideExportProgress();
 
     const link = document.createElement('a');
