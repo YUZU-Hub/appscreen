@@ -35,8 +35,9 @@ const state = {
             rotation: 0,
             perspective: 0,
             cornerRadius: 24,
-            deviceModel2D: 'iphone', // 2D device model: 'iphone' | 'ipad' | 'samsung' | 'mac'
+            deviceModel2D: 'iphone', // 2D device model: 'iphone' | 'ipad' | 'samsung' | 'mac' | 'watch'
             deviceMacFinish: 'silver', // Mac chassis finish: 'silver' | 'space-black'
+            deviceWatchFinish: 'midnight', // Apple Watch case finish, see WATCH_FINISHES
             bezelEnabled: false,      // draw a device bezel/shell in 2D
             spanScreens: 1,           // panorama: span this screenshot across N output slots
             use3D: false,
@@ -1363,6 +1364,17 @@ const deviceDimensions = {
     'ipad-13': { width: 2064, height: 2752 },
     'ipad-12.9': { width: 2048, height: 2732 },
     'ipad-11': { width: 1668, height: 2388 },
+    // Apple Watch — App Store Connect accepts exactly these six sizes, one per
+    // MODEL FAMILY (not per case size): a Series 11 42mm still uploads at the
+    // 46mm size, an SE 3 40mm at the 44mm size. Keys must keep the `watch`
+    // prefix — the 2D device-model handler matches the output device by family
+    // prefix (appstore-features.js, initDeviceTextExtras).
+    'watch-ultra3': { width: 422, height: 514 },
+    'watch-ultra': { width: 410, height: 502 },
+    'watch-46': { width: 416, height: 496 },
+    'watch-45': { width: 396, height: 484 },
+    'watch-44': { width: 368, height: 448 },
+    'watch-42': { width: 312, height: 390 },
     'mac-2880': { width: 2880, height: 1800 },
     'mac-2560': { width: 2560, height: 1600 },
     'mac-1440': { width: 1440, height: 900 },
@@ -1376,6 +1388,54 @@ const deviceDimensions = {
     'web-hero': { width: 1920, height: 1080 },
     'web-feature': { width: 1024, height: 500 }
 };
+
+// The default watch size when the user picks the Watch device model.
+const DEFAULT_WATCH_DEVICE = 'watch-46';
+
+// Is `key` (default: the project's output size) an Apple Watch canvas? Watch
+// canvases are an order of magnitude smaller than every other output size
+// (416 px wide vs 1320), so a few renderer defaults tuned in absolute pixels
+// — shadows, the auto-fit floor — key off this.
+function isWatchOutput(key) {
+    return String(key === undefined ? state.outputDevice : key).startsWith('watch');
+}
+
+// 3D mockups are driven by the GLB models in models/ (three-renderer.js
+// deviceConfigs). There is no Apple Watch model, so watch output stays 2D.
+function output3DSupported() {
+    return !isWatchOutput();
+}
+
+// Human family label for an output size key, for the screenshot list.
+function outputDeviceFamilyLabel(key) {
+    const k = String(key === undefined ? state.outputDevice : key);
+    if (k.startsWith('watch')) return 'Apple Watch';
+    if (k.startsWith('ipad')) return 'iPad';
+    if (k.startsWith('mac')) return 'Mac';
+    if (k.startsWith('android')) return 'Android';
+    if (k.startsWith('web')) return 'Web';
+    if (k === 'custom') return 'Custom';
+    return 'iPhone';
+}
+
+// The 2D device model that goes with an output size family. Mirrors the
+// model→size map the Device Model buttons use, in the other direction.
+function outputDeviceModel2D(key) {
+    const k = String(key === undefined ? state.outputDevice : key);
+    if (k.startsWith('watch')) return 'watch';
+    if (k.startsWith('ipad')) return 'ipad';
+    if (k.startsWith('mac')) return 'mac';
+    if (k.startsWith('android')) return 'samsung';
+    return 'iphone';
+}
+
+// Pixel size of any output key, `custom` included — deviceDimensions alone
+// can't answer for `custom`, and `hasOwnProperty` keeps inherited Object keys
+// ('constructor', 'toString', …) from passing as valid device names.
+function outputDeviceSize(key) {
+    if (key === 'custom') return { width: state.customWidth, height: state.customHeight };
+    return Object.prototype.hasOwnProperty.call(deviceDimensions, key) ? deviceDimensions[key] : null;
+}
 
 // DOM elements
 const canvas = document.getElementById('preview-canvas');
@@ -3369,7 +3429,13 @@ function loadState(injectedRecord) {
                     }
 
                     state.selectedIndex = parsed.selectedIndex || 0;
-                    state.outputDevice = parsed.outputDevice || 'iphone-6.9';
+                    // Validate the key, don't just check it's non-empty: the
+                    // server stores outputDevice as an unconstrained string, so
+                    // a size written by a newer client would otherwise reach
+                    // getCanvasDimensions() and render at the fallback size
+                    // without anyone noticing.
+                    const loadedDevice = parsed.outputDevice;
+                    state.outputDevice = outputDeviceSize(loadedDevice) ? loadedDevice : 'iphone-6.9';
                     state.customWidth = parsed.customWidth || 1320;
                     state.customHeight = parsed.customHeight || 2868;
 
@@ -3456,6 +3522,14 @@ function resetStateToDefaults() {
             rotation: 0,
             perspective: 0,
             cornerRadius: 24,
+            deviceModel2D: 'iphone',
+            deviceMacFinish: 'silver',
+            deviceWatchFinish: 'midnight',
+            bezelEnabled: false,
+            spanScreens: 1,
+            use3D: false,
+            device3D: 'iphone',
+            rotation3D: { x: 0, y: 0, z: 0 },
             shadow: {
                 enabled: true,
                 color: '#000000',
@@ -3901,8 +3975,17 @@ function syncUIWithState() {
     updateHeadlineLanguageUI();
     updateSubheadlineLanguageUI();
 
-    // 3D mode
-    const use3D = ss.use3D || false;
+    // 3D mode. Output sizes with no GLB model (Apple Watch) are 2D-only: hide
+    // the 3D button and clear the flag rather than silently rendering an
+    // iPhone in its place.
+    // Deliberately does not clear a stored use3D: syncUIWithState is a pure
+    // read of state into the UI, and every render path already ANDs with
+    // output3DSupported(). Leaving the flag alone also means a project that
+    // visits a watch size and comes back keeps its 3D setting.
+    const can3D = output3DSupported();
+    const btn3D = document.querySelector('#device-type-selector button[data-type="3d"]');
+    if (btn3D) btn3D.style.display = can3D ? '' : 'none';
+    const use3D = can3D && (ss.use3D || false);
     const device3D = ss.device3D || 'iphone';
     const rotation3D = ss.rotation3D || { x: 0, y: 0, z: 0 };
     document.querySelectorAll('#device-type-selector button').forEach(btn => {
@@ -5239,7 +5322,7 @@ function setupEventListeners() {
 
     // Add blank screen button
     document.getElementById('add-blank-btn').addEventListener('click', () => {
-        createNewScreenshot(null, null, 'Blank Screen', null, state.outputDevice);
+        createNewScreenshot(null, null, 'Blank Screen', null, outputDeviceFamilyLabel());
         state.selectedIndex = state.screenshots.length - 1;
         updateScreenshotList();
         syncUIWithState();
@@ -5980,7 +6063,17 @@ function setupEventListeners() {
             e.stopPropagation();
             document.querySelectorAll('.output-size-menu .device-option').forEach(o => o.classList.remove('selected'));
             opt.classList.add('selected');
+            const prevDevice = state.outputDevice;
             state.outputDevice = opt.dataset.device;
+
+            // Moving to/from the Apple Watch is a 3× jump in canvas size, so the
+            // absolute text sizes and the 2D device model both have to follow.
+            rescaleTextForOutput(prevDevice, state.outputDevice);
+            if (isWatchOutput() !== isWatchOutput(prevDevice)) {
+                if (isWatchOutput()) adoptWatchDeviceModel(); else dropWatchDeviceModel(state.outputDevice);
+                if (typeof syncDeviceTextExtras === 'function') syncDeviceTextExtras();
+                syncUIWithState();
+            }
 
             // Update trigger text
             document.getElementById('output-size-name').textContent = opt.querySelector('.device-option-name').textContent;
@@ -6534,6 +6627,8 @@ function setupEventListeners() {
     // Device type selector (2D/3D)
     document.querySelectorAll('#device-type-selector button').forEach(btn => {
         btn.addEventListener('click', () => {
+            // No GLB model for this output size (Apple Watch) — stay in 2D.
+            if (btn.dataset.type === '3d' && !output3DSupported()) return;
             document.querySelectorAll('#device-type-selector button').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
@@ -8517,10 +8612,14 @@ async function processDesktopImageFile(fileData) {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = async () => {
-            // Detect device type based on aspect ratio
+            // Detect device type based on aspect ratio. Watch panels are tiny
+            // (the largest is 422x514) and their ratio overlaps the iPad's, so
+            // size has to be checked before the ratio.
             const ratio = img.width / img.height;
             let deviceType = 'iPhone';
-            if (ratio > 0.6) {
+            if (Math.max(img.width, img.height) <= 560) {
+                deviceType = 'Apple Watch';
+            } else if (ratio > 0.6) {
                 deviceType = 'iPad';
             }
 
@@ -8626,10 +8725,14 @@ async function processImageFile(file) {
         reader.onload = async (e) => {
             const img = new Image();
             img.onload = async () => {
-                // Detect device type based on aspect ratio
+                // Detect device type based on aspect ratio. Watch panels are
+                // tiny (the largest is 422x514) and their ratio overlaps the
+                // iPad's, so size has to be checked before the ratio.
                 const ratio = img.width / img.height;
                 let deviceType = 'iPhone';
-                if (ratio > 0.6) {
+                if (Math.max(img.width, img.height) <= 560) {
+                    deviceType = 'Apple Watch';
+                } else if (ratio > 0.6) {
                     deviceType = 'iPad';
                 }
 
@@ -9347,10 +9450,106 @@ function updateGradientStopsUI() {
     });
 }
 
+// Text and overlay-element sizes are stored in absolute canvas pixels, so they
+// only make sense against the canvas they were chosen on. An Apple Watch canvas
+// is a third the width of a phone's, which is a big enough jump that a 100px
+// headline goes from a comfortable 7.6% of the width to an unusable 24%. When
+// the user moves in or out of the watch family, rescale those sizes so the
+// design they already have survives the move. (Deliberately limited to that
+// boundary: every other output size is within a factor of two of a phone, and
+// silently rewriting sizes on an iPhone→iPad switch would be a surprise.)
+function rescaleTextForOutput(prevKey, nextKey) {
+    if (isWatchOutput(prevKey) === isWatchOutput(nextKey)) return;
+    const a = outputDeviceSize(prevKey), b = outputDeviceSize(nextKey);
+    if (!a || !b || !a.width || !b.width) return;
+    const f = b.width / a.width;
+    if (!isFinite(f) || f <= 0) return;
+    const SIZE_KEYS = ['headlineSize', 'subheadlineSize', 'subheadlineSpacing'];
+    const scaleText = (t) => {
+        if (!t || typeof t !== 'object') return;
+        SIZE_KEYS.forEach(k => {
+            if (typeof t[k] === 'number' && t[k] > 0) t[k] = Math.max(8, Math.round(t[k] * f));
+        });
+        Object.values(t.languageSettings || {}).forEach(scaleText);
+        (t.panelTexts || []).forEach(scaleText);
+    };
+    scaleText(state.defaults && state.defaults.text);
+    (state.screenshots || []).forEach(s => {
+        scaleText(s.text);
+        (s.elements || []).forEach(el => {
+            if (typeof el.fontSize === 'number' && el.fontSize > 0) {
+                el.fontSize = Math.max(8, Math.round(el.fontSize * f));
+            }
+        });
+    });
+    (state.defaults && state.defaults.elements || []).forEach(el => {
+        if (typeof el.fontSize === 'number' && el.fontSize > 0) {
+            el.fontSize = Math.max(8, Math.round(el.fontSize * f));
+        }
+    });
+}
+
+// Picking a watch output size means the mockup should be a watch: switch the
+// 2D model over so the bezel, corner radius and notch match. This mirrors the
+// model→size link the Device Model buttons already have, in the other
+// direction. Only runs when moving INTO the watch family, so re-picking a
+// different watch size never clobbers deliberate per-screen choices.
+function adoptWatchDeviceModel() {
+    const radius = deviceModelRadius('watch', 104);
+    const adopt = (ss) => {
+        if (!ss) return;
+        ss.deviceModel2D = 'watch';
+        ss.cornerRadius = radius;
+        ss.use3D = false;
+        // The App Store takes no panoramic watch screenshots, and the Span
+        // Screens control is hidden for watch output — so a span left over
+        // from a phone project would be stuck on with no way to clear it.
+        ss.spanScreens = 1;
+        if (ss.frame) ss.frame.notch = 'none';
+    };
+    (state.screenshots || []).forEach(s => adopt(s.screenshot));
+    adopt(state.defaults && state.defaults.screenshot);
+}
+
+// …and the other way: leaving the watch family would otherwise leave a watch
+// case wrapped around a phone- or tablet-shaped canvas. Only screens still set
+// to the watch model are touched, they take the model of whatever family the
+// canvas moved to, and the notch is left alone rather than guessed at.
+function dropWatchDeviceModel(nextKey) {
+    const model = outputDeviceModel2D(nextKey);
+    if (model === 'watch') return;
+    const radius = deviceModelRadius(model, 52);
+    const drop = (ss) => {
+        if (!ss || ss.deviceModel2D !== 'watch') return;
+        ss.deviceModel2D = model;
+        ss.cornerRadius = radius;
+    };
+    (state.screenshots || []).forEach(s => drop(s.screenshot));
+    drop(state.defaults && state.defaults.screenshot);
+}
+
+// DEVICE_2D_RADIUS lives in appstore-features.js, which loads after app.js —
+// safe to read from a function body, never at module scope.
+function deviceModelRadius(model, fallback) {
+    return (typeof DEVICE_2D_RADIUS !== 'undefined' && DEVICE_2D_RADIUS[model]) || fallback;
+}
+
+// A few renderer defaults are stored in absolute canvas pixels, tuned against a
+// phone canvas: shadow blur/offset, and how far text auto-fit is allowed to
+// shrink. On an Apple Watch canvas they are ~3x too big, so scale them by how
+// much narrower the canvas is. Keyed off ONE screen's width (baseWidth), not
+// the panorama-multiplied total, so a spanned screen doesn't lose the
+// compensation. 700 sits below every other stock output size (the smallest is
+// web-feature at 1024), so nothing but the watch is affected.
+function smallCanvasScale(dims) {
+    const w = (dims && (dims.baseWidth || dims.width)) || 0;
+    return w > 0 && w < 700 ? w / 1320 : 1;
+}
+
 function getCanvasDimensions(index) {
     const base = state.outputDevice === 'custom'
         ? { width: state.customWidth, height: state.customHeight }
-        : deviceDimensions[state.outputDevice];
+        : (deviceDimensions[state.outputDevice] || deviceDimensions['iphone-6.9']);
     // Panorama: a screenshot can span N output slots → render at N× width.
     const i = index === undefined ? state.selectedIndex : index;
     const ss = state.screenshots[i];
@@ -9405,14 +9604,15 @@ function renderCanvasNow() {
         const img = screenshot ? getScreenshotImage(screenshot) : null;
         const ss = getScreenshotSettings();
         const use3D = ss.use3D || false;
-        if (use3D && img && typeof renderThreeJSToCanvas === 'function' && phoneModelLoaded) {
+        if (use3D && output3DSupported() && img && typeof renderThreeJSToCanvas === 'function' && phoneModelLoaded) {
             // In 3D mode, update the screen texture and render the phone model
             if (typeof updateScreenTexture === 'function') {
                 updateScreenTexture();
             }
             renderThreeJSToCanvas(canvas, dims.width, dims.height);
-        } else if (!use3D) {
-            // In 2D mode, draw the screenshot normally
+        } else if (!use3D || !output3DSupported()) {
+            // 2D mode — and the fallback for a stored use3D on an output size
+            // with no 3D model, which would otherwise draw nothing at all.
             drawScreenshot();
         }
     }
@@ -9472,8 +9672,10 @@ function updateSidePreviews() {
     const maxPreviewHeight = 700;
     const previewScale = Math.min(maxPreviewWidth / dims.width, maxPreviewHeight / dims.height);
 
-    // Initialize Three.js if any screenshot uses 3D mode (needed for side previews)
-    const any3D = state.screenshots.some(s => s.screenshot?.use3D);
+    // Initialize Three.js if any screenshot uses 3D mode (needed for side
+    // previews) — unless this output size has no 3D model at all, in which case
+    // a stale use3D flag would spin up the renderer for nothing.
+    const any3D = output3DSupported() && state.screenshots.some(s => s.screenshot?.use3D);
     if (any3D && typeof showThreeJS === 'function') {
         showThreeJS(true);
 
@@ -9699,7 +9901,7 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     const use3D = settings.use3D || false;
 
     if (img) {
-        if (use3D && typeof renderThreeJSForScreenshot === 'function' && phoneModelLoaded) {
+        if (use3D && output3DSupported() && typeof renderThreeJSForScreenshot === 'function' && phoneModelLoaded) {
             // Render 3D phone model for this specific screenshot
             renderThreeJSForScreenshot(targetCanvas, dims.width, dims.height, index);
         } else {
@@ -9852,14 +10054,21 @@ function drawScreenshotToContext(context, dims, img, settings) {
     // Scale corner radius with image size
     const radius = (settings.cornerRadius || 0) * (imgWidth / 400);
 
+    // Shadow blur and offset are stored in absolute canvas pixels, tuned against
+    // a phone canvas. On an Apple Watch canvas (416px wide) the default blur of
+    // 40 is 10% of the width instead of 3%, which buries the device in a smear —
+    // so scale them down on canvases far smaller than a phone's. 700 sits below
+    // every other stock output size (the smallest is 1024), so nothing else moves.
+    const smallCanvas = smallCanvasScale(dims);
+
     // Draw shadow first (needs a filled shape, not clipped)
     if (settings.shadow && settings.shadow.enabled) {
         const shadowOpacity = settings.shadow.opacity / 100;
         const shadowColor = settings.shadow.color + Math.round(shadowOpacity * 255).toString(16).padStart(2, '0');
         context.shadowColor = shadowColor;
-        context.shadowBlur = settings.shadow.blur;
-        context.shadowOffsetX = settings.shadow.x;
-        context.shadowOffsetY = settings.shadow.y;
+        context.shadowBlur = settings.shadow.blur * smallCanvas;
+        context.shadowOffsetX = settings.shadow.x * smallCanvas;
+        context.shadowOffsetY = settings.shadow.y * smallCanvas;
 
         // Draw filled rounded rect for shadow
         context.fillStyle = '#000';
@@ -9905,7 +10114,14 @@ function drawScreenshotToContext(context, dims, img, settings) {
         if (settings.rotation !== 0) context.rotate(settings.rotation * Math.PI / 180);
         if (settings.perspective !== 0) context.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
         context.translate(-centerX, -centerY);
-        if (settings.bezelEnabled) drawDeviceBezel(context, x, y, imgWidth, imgHeight, radius, settings.deviceModel2D || 'iphone', settings.deviceMacFinish || 'silver');
+        if (settings.bezelEnabled) drawDeviceBezel(
+            context, x, y, imgWidth, imgHeight, radius,
+            settings.deviceModel2D || 'iphone',
+            settings.deviceMacFinish || 'silver',
+            // The Ultra case shape follows the output size, not a user choice:
+            // 422×514 and 410×502 ARE the Ultra panels.
+            { finish: settings.deviceWatchFinish || 'midnight', ultra: /^watch-ultra/.test(state.outputDevice) }
+        );
         if (hasNotch) drawNotchShape(context, x, y, imgWidth, imgHeight, radius, settings.frame.notch);
         context.restore();
     }
@@ -9955,12 +10171,15 @@ function drawNotchShape(context, x, y, width, height, radius, style) {
     context.restore();
 }
 
-// Shared: draw a 2D device bezel/shell (iPhone, iPad, Samsung or Mac) around the screen.
-function drawDeviceBezel(context, x, y, width, height, radius, model, macFinish) {
+// Shared: draw a 2D device bezel/shell (iPhone, iPad, Samsung, Mac or Apple
+// Watch) around the screen. `watch` carries the watch-only extras: { finish,
+// ultra } — see drawWatchBezel.
+function drawDeviceBezel(context, x, y, width, height, radius, model, macFinish, watch) {
     const isSamsung = model === 'samsung';
     const isIpad = model === 'ipad';
     const isMac = model === 'mac';
     if (isMac) { drawMacBezel(context, x, y, width, height, radius, macFinish); return; }
+    if (model === 'watch') { drawWatchBezel(context, x, y, width, height, radius, watch); return; }
     // iPad bezels are uniform and a touch thinner than iPhone; Samsung thinnest.
     const bw = width * (isSamsung ? 0.020 : isIpad ? 0.024 : 0.028);
     context.save();
@@ -9976,6 +10195,203 @@ function drawDeviceBezel(context, x, y, width, height, radius, model, macFinish)
     context.beginPath();
     context.roundRect(x - bw, y - bw, width + bw * 2, height + bw * 2, radius + bw);
     context.stroke();
+    context.restore();
+}
+
+// Apple Watch case finishes. Sampled from Apple's own product renders: `hi` /
+// `mid` / `lo` are the top-highlight, body and bottom-shadow stops of the
+// vertical gradient down the metal, `edge` the specular catch-light on the
+// outer rim. Aluminium reads near-neutral with a hard highlight; the titanium
+// finishes are warmer and lower-contrast.
+const WATCH_FINISHES = {
+    midnight:  { hi: '#5f626a', mid: '#40434b', lo: '#2b2e35', edge: 'rgba(255,255,255,0.26)' },
+    starlight: { hi: '#ebe0d8', mid: '#c0b3ab', lo: '#a2958d', edge: 'rgba(255,255,255,0.60)' },
+    silver:    { hi: '#f7f7f9', mid: '#c3c4c3', lo: '#9d9d9b', edge: 'rgba(255,255,255,0.66)' },
+    gold:      { hi: '#fef7ee', mid: '#b0a297', lo: '#89745c', edge: 'rgba(255,255,255,0.52)' }
+};
+
+// Shared: draw an Apple Watch case around the screen.
+//
+// Every ratio below is measured from Apple's official device bezel artwork
+// (the 46mm and 42mm Series 11 renders agree to under 0.5%, so they are the
+// family constants; the Ultra is a genuinely different shape, not a scaled
+// Series case). The stack, outermost first, is: metal case → black glass ring
+// → screen content. The screen rect itself is never painted over — the case
+// and the glass are both drawn as even-odd rings — because the screenshot has
+// already been drawn by the time this runs.
+//
+// `opts` = { finish: keyof WATCH_FINISHES, ultra: boolean }.
+function drawWatchBezel(context, x, y, width, height, radius, opts) {
+    const o = opts || {};
+    const FIN = WATCH_FINISHES[o.finish] || WATCH_FINISHES.midnight;
+    const ultra = !!o.ultra;
+    const W = width, H = height;
+
+    // ---- Case geometry ----
+    // The Series case is centred on the screen with a uniform rim. The Ultra's
+    // rim is asymmetric (the crown guard fattens the right side), so its screen
+    // sits left of the case centre and the two edges are measured separately.
+    const caseW = (ultra ? 1.3128 : 1.19231) * W;
+    const caseH = (ultra ? 1.2140 : 1.15726) * H;
+    // Vertically the screen is centred on both models; horizontally only the
+    // Series is — the Ultra's crown guard fattens the right side, so its screen
+    // sits left of centre. Deriving caseY from caseH (rather than from caseW,
+    // as the source measurements express it) keeps the case centred whatever
+    // aspect the drawn screenshot happens to have.
+    const caseX = ultra ? x - 0.0939 * caseW : x - (caseW - W) / 2;
+    const caseY = y - (caseH - H) / 2;
+    const caseR = (ultra ? 0.2870 : 0.27419) * caseW;
+
+    // Black glass reaches beyond the active pixels before the metal starts —
+    // thinner at the top on the Series, uniform on the Ultra.
+    const glassSide = (ultra ? 0.0474 : 0.0649) * W;
+    const glassTop = (ultra ? 0.0474 : 0.0361) * W;
+    const glassX = x - glassSide;
+    const glassY = y - glassTop;
+    const glassW = W + glassSide * 2;
+    const glassH = H + glassTop + glassSide;
+    // The glass corner radius follows the SCREEN's, which the user can dial
+    // down to 0 — but the case radius is fixed, so a square-cornered glass
+    // rect would poke out through the case's rounded corners. Never let it
+    // round less than the case does, allowing for the metal between them.
+    const metalInset = Math.min(
+        glassX - caseX, glassY - caseY,
+        (caseX + caseW) - (glassX + glassW), (caseY + caseH) - (glassY + glassH)
+    );
+    const glassR = Math.max(radius + glassSide, caseR - Math.max(0, metalInset));
+
+    // rounded-rect subpath (no beginPath — these compose into even-odd fills)
+    const rr = (rx, ry, rw, rh, r) => {
+        const rad = Math.max(0, Math.min(r, rw / 2, rh / 2));
+        context.moveTo(rx + rad, ry);
+        context.arcTo(rx + rw, ry, rx + rw, ry + rh, rad);
+        context.arcTo(rx + rw, ry + rh, rx, ry + rh, rad);
+        context.arcTo(rx, ry + rh, rx, ry, rad);
+        context.arcTo(rx, ry, rx + rw, ry, rad);
+        context.closePath();
+    };
+
+    const metal = context.createLinearGradient(0, caseY, 0, caseY + caseH);
+    metal.addColorStop(0, FIN.hi);
+    metal.addColorStop(0.45, FIN.mid);
+    metal.addColorStop(1, FIN.lo);
+
+    context.save();
+
+    // ---- 1) Side hardware, drawn first so the case rounds over the seams ----
+    // The Digital Crown is the only part that protrudes on a face-on view (the
+    // side button measures flush on Apple's own render, so it is drawn as a
+    // hairline seam rather than a bump). On the Ultra even the crown sits
+    // almost flush inside its guard rail.
+    const crownH = (ultra ? 0.1683 : 0.15679) * caseH;
+    const crownY = caseY + (ultra ? 0.2853 : 0.23345) * caseH;
+    const crownOut = (ultra ? 0.0090 : 0.04839) * caseW;
+    const crownR = crownH * 0.11;
+
+    if (ultra) {
+        // Crown guard: a raised slab on the right edge spanning the crown.
+        const guardH = caseH * 0.30;
+        const guardY = caseY + caseH * 0.24;
+        context.fillStyle = metal;
+        context.beginPath();
+        rr(caseX + caseW - caseW * 0.06, guardY, caseW * 0.09, guardH, caseW * 0.03);
+        context.fill();
+    } else {
+        context.fillStyle = metal;
+        context.beginPath();
+        // Overlap the case edge so no seam shows once the ring is drawn over it.
+        rr(caseX + caseW - crownOut * 0.6, crownY, crownOut * 1.6, crownH, crownR);
+        context.fill();
+        // Grooved crown face: a couple of darker ridges read as knurling.
+        context.strokeStyle = 'rgba(0,0,0,0.30)';
+        context.lineWidth = Math.max(0.5, crownOut * 0.10);
+        for (let i = 1; i <= 2; i++) {
+            const gy = crownY + crownH * (i / 3);
+            context.beginPath();
+            context.moveTo(caseX + caseW, gy);
+            context.lineTo(caseX + caseW + crownOut, gy);
+            context.stroke();
+        }
+    }
+
+    // ---- 2) Metal case: an even-odd ring, screen + glass punched out ----
+    context.fillStyle = metal;
+    context.beginPath();
+    rr(caseX, caseY, caseW, caseH, caseR);
+    rr(glassX, glassY, glassW, glassH, glassR);
+    context.fill('evenodd');
+
+    // ---- 3) Black glass ring between the metal and the screen ----
+    context.fillStyle = '#0a0a0b';
+    context.beginPath();
+    rr(glassX, glassY, glassW, glassH, glassR);
+    rr(x, y, W, H, radius);
+    context.fill('evenodd');
+
+    // ---- 3b) Ultra hardware sits ON the case, not proud of it, so it goes
+    // on after the ring — drawn before, the ring would cover it.
+    if (ultra) {
+        // Digital Crown, recessed inside the guard rail.
+        context.fillStyle = metal;
+        context.beginPath();
+        rr(caseX + caseW - caseW * 0.055, crownY, caseW * 0.055 + crownOut, crownH, crownR);
+        context.fill();
+        context.strokeStyle = 'rgba(0,0,0,0.32)';
+        context.lineWidth = Math.max(0.5, caseW * 0.003);
+        for (let i = 1; i <= 2; i++) {
+            const gy = crownY + crownH * (i / 3);
+            context.beginPath();
+            context.moveTo(caseX + caseW - caseW * 0.05, gy);
+            context.lineTo(caseX + caseW + crownOut, gy);
+            context.stroke();
+        }
+        // Action button — Ultra only, on the LEFT edge, in International Orange.
+        const abH = 0.2724 * caseH;
+        const abY = caseY + 0.4471 * caseH;
+        const abW = caseW * 0.026;
+        context.fillStyle = '#e8631a';
+        context.beginPath();
+        rr(caseX - abW * 0.18, abY, abW * 1.18, abH, abW * 0.35);
+        context.fill();
+        context.fillStyle = 'rgba(0,0,0,0.22)';
+        context.beginPath();
+        rr(caseX + abW * 0.62, abY, abW * 0.38, abH, abW * 0.18);
+        context.fill();
+    }
+
+    // ---- 4) Edge treatments ----
+    // Specular catch-light just inside the outer case edge.
+    context.strokeStyle = FIN.edge;
+    context.lineWidth = Math.max(1, caseW * 0.006);
+    context.beginPath();
+    rr(caseX + context.lineWidth / 2, caseY + context.lineWidth / 2,
+       caseW - context.lineWidth, caseH - context.lineWidth, caseR);
+    context.stroke();
+
+    // Side-button seam (Series only — the Ultra's buttons live on the guard).
+    if (!ultra) {
+        context.strokeStyle = 'rgba(0,0,0,0.35)';
+        context.lineWidth = Math.max(1, caseW * 0.004);
+        const seamY = caseY + caseH * 0.52;
+        context.beginPath();
+        context.moveTo(caseX + caseW - caseW * 0.004, seamY - caseH * 0.055);
+        context.lineTo(caseX + caseW - caseW * 0.004, seamY + caseH * 0.055);
+        context.stroke();
+    }
+
+    // Contact shadow where the glass meets the screen, for a little depth.
+    context.save();
+    context.beginPath();
+    rr(x, y, W, H, radius);
+    context.clip();
+    context.strokeStyle = 'rgba(0,0,0,0.45)';
+    context.lineWidth = Math.max(1, W * 0.006);
+    context.beginPath();
+    rr(x + context.lineWidth / 2, y + context.lineWidth / 2,
+       W - context.lineWidth, H - context.lineWidth, radius);
+    context.stroke();
+    context.restore();
+
     context.restore();
 }
 
@@ -10351,7 +10767,11 @@ function computeTextFit(context, dims, txt) {
     // Find the largest font scale whose re-wrapped block fits the available height.
     // (Smaller font reflows over the same full width, so the block only shrinks
     // vertically — the width is preserved.)
-    let lo = 0.35, hi = 1, best = 0.35;
+    // A phone canvas never needs to shrink text below 35%; a watch canvas is a
+    // third the width, so the same headline needs three times the headroom
+    // before it fits (cf. zoneFitForText's FLOOR of 0.1).
+    const FLOOR = smallCanvasScale(dims) < 1 ? 0.10 : 0.35;
+    let lo = FLOOR, hi = 1, best = FLOOR;
     for (let i = 0; i < 8; i++) {
         const mid = (lo + hi) / 2;
         const e = textVerticalExtent(context, dims, txt, mid);
@@ -11233,7 +11653,7 @@ async function exportCurrent() {
     const panels = renderScreenshotPanels(state.selectedIndex);
     panels.forEach((url, k) => {
         const link = document.createElement('a');
-        link.download = span > 1
+        link.download = panels.length > 1
             ? `screenshot-${state.selectedIndex + 1}-panel-${k + 1}.png`
             : `screenshot-${state.selectedIndex + 1}.png`;
         link.href = url;

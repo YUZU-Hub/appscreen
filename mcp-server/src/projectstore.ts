@@ -671,7 +671,8 @@ function defaultSettings() {
     },
     screenshot: {
       scale: 70, y: 60, x: 50, rotation: 0, perspective: 0, cornerRadius: 24,
-      deviceModel2D: "iphone", deviceMacFinish: "silver", bezelEnabled: false, spanScreens: 1,
+      deviceModel2D: "iphone", deviceMacFinish: "silver", deviceWatchFinish: "midnight",
+      bezelEnabled: false, spanScreens: 1,
       use3D: false, device3D: "iphone", rotation3D: { x: 0, y: 0, z: 0 },
       shadow: { enabled: true, color: "#000000", blur: 40, opacity: 30, x: 0, y: 20 },
       frame: { enabled: false, color: "#1d1d1f", width: 12, opacity: 100, notch: "none" },

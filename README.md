@@ -14,7 +14,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 ## Features
 
 ### Output & Export
-- **Multiple Output Sizes**: iPhone 6.9", 6.7", 6.5", 5.5" and iPad 12.9", 11" App Store requirements, plus custom sizes
+- **Multiple Output Sizes**: iPhone, iPad, Apple Watch, Mac, Android and web sizes matching the App Store / Play Store requirements, plus custom sizes
 - **Batch Export**: Export all screenshots at once as a ZIP file
 - **Per-Screenshot Settings**: Each screenshot can have its own background, device settings, and text
 
@@ -27,7 +27,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 
 ### Device Mockups
 - **2D Mode**: Position, scale, rotate, and adjust corner radius of screenshots
-- **3D Mode**: Interactive iPhone 15 Pro Max 3D mockup with drag-to-rotate
+- **3D Mode**: Interactive iPhone 15 Pro Max and Samsung Galaxy S25 Ultra 3D mockups with drag-to-rotate (iPad, Mac and Apple Watch are 2D-only)
 - **Position Presets**: Centered, bleed, tilt left/right, perspective, and more
 - **Shadow Effects**: Customizable drop shadows with color, blur, opacity, and offset
 - **Border Effects**: Add borders around screenshots with adjustable width and opacity
@@ -168,7 +168,7 @@ docker compose -f docker-compose.build.yml up -d
 2. **Choose Output Size**: Select the target device size from the sidebar
 3. **Customize Background**: Choose gradient, solid color, or image background
 4. **Position Screenshot**: Use presets or manually adjust scale, position, and rotation
-5. **Switch to 3D** (optional): Enable 3D mode for interactive iPhone mockup
+5. **Switch to 3D** (optional): Enable 3D mode for an interactive iPhone or Samsung mockup (unavailable on Apple Watch output sizes, which have no 3D model)
 6. **Add Text**: Enter your headline and optional subheadline
 7. **Export**: Download the current screenshot or export all at once as ZIP
 
