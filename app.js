@@ -35,6 +35,11 @@ const state = {
             rotation: 0,
             perspective: 0,
             cornerRadius: 24,
+            deviceModel2D: 'iphone', // 2D device model: 'iphone' | 'ipad' | 'samsung' | 'mac' | 'watch'
+            deviceMacFinish: 'silver', // Mac chassis finish: 'silver' | 'space-black'
+            deviceWatchFinish: 'midnight', // Apple Watch case finish, see WATCH_FINISHES
+            bezelEnabled: false,      // draw a device bezel/shell in 2D
+            spanScreens: 1,           // panorama: span this screenshot across N output slots
             use3D: false,
             device3D: 'iphone',
             rotation3D: { x: 0, y: 0, z: 0 },
@@ -50,11 +55,20 @@ const state = {
                 enabled: false,
                 color: '#1d1d1f',
                 width: 12,
-                opacity: 100
+                opacity: 100,
+                notch: 'none' // 'none' | 'island' | 'notch'
             }
         },
         text: {
             headlineEnabled: true,
+            headlineBgColor: '#000000',
+            headlineBgOpacity: 0, // 0 = no text background
+            subheadlineBgColor: '#000000',
+            subheadlineBgOpacity: 0,
+            subheadlineSpacing: 0, // extra px between title and subtitle
+            perScreenText: false,  // panorama: a separate text per screen panel
+            panelHeadlines: {},    // { lang: [text per panel] }
+            panelSubheadlines: {},
             headlines: { en: '' },
             headlineLanguages: ['en'],
             currentHeadlineLang: 'en',
@@ -90,7 +104,24 @@ const state = {
             subheadlineUnderline: false,
             subheadlineStrikethrough: false,
             subheadlineColor: '#ffffff',
-            subheadlineOpacity: 70
+            subheadlineOpacity: 70,
+            // Optional text zone: when enabled the headline + subheadline are
+            // confined to this rectangle (percentages of the canvas) and the font is
+            // auto-reduced so the whole text fits inside, entirely and without
+            // breaking any word across lines.
+            textZone: {
+                enabled: false,
+                uniform: true,
+                // Off: the font size below is a ceiling — long text shrinks to fit
+                // the zone, short text stays at its designed size, so screens keep
+                // one typographic scale. On: the text also GROWS until it reaches
+                // the edge of the box. See computeZoneFit().
+                fill: false,
+                x: 8,
+                y: 6,
+                width: 84,
+                height: 26
+            }
         },
         elements: [],
         popouts: []
@@ -98,6 +129,13 @@ const state = {
 };
 
 const baseTextDefaults = JSON.parse(JSON.stringify(state.defaults.text));
+
+// Legacy migration: auto-fit text used to be a single global toggle persisted in
+// localStorage. It is now stored per screenshot (text.autoFit). For screenshots
+// saved before this change (no autoFit key), fall back to the old global value so
+// existing users keep their preference until they toggle each screen.
+let legacyAutoFitDefault = false;
+try { legacyAutoFitDefault = localStorage.getItem('autoFitText') === '1'; } catch (e) {}
 
 // Runtime-only state (not persisted)
 let selectedElementId = null;
@@ -128,7 +166,76 @@ function getScreenshotSettings() {
     return screenshot ? screenshot.screenshot : state.defaults.screenshot;
 }
 
+// Which panel the Text tab is currently editing (per-screen panorama mode).
+let __activePanelIndex = 0;
+function getActivePanelIndex() { return __activePanelIndex; }
+function setActivePanelIndex(i) { __activePanelIndex = Math.max(0, i | 0); }
+
+function spanForScreenshot(screenshot) {
+    return (screenshot && screenshot.screenshot && screenshot.screenshot.spanScreens) || 1;
+}
+
+// Ensure container.panelTexts holds `span` full text objects, seeding any missing
+// one from the container's current style/content (and migrating legacy per-panel
+// text captured before full-style panels existed).
+function ensurePanelTexts(container, span) {
+    if (!Array.isArray(container.panelTexts)) container.panelTexts = [];
+    for (let p = 0; p < span; p++) {
+        if (!container.panelTexts[p]) {
+            const seed = JSON.parse(JSON.stringify(container));
+            delete seed.panelTexts;
+            delete seed.panelHeadlines;
+            delete seed.panelSubheadlines;
+            seed.perScreenText = false;
+            const ph = container.panelHeadlines || {};
+            const ps = container.panelSubheadlines || {};
+            Object.keys(ph).forEach(lang => {
+                if (ph[lang] && ph[lang][p]) { seed.headlines = seed.headlines || {}; seed.headlines[lang] = ph[lang][p]; }
+            });
+            Object.keys(ps).forEach(lang => {
+                if (ps[lang] && ps[lang][p]) { seed.subheadlines = seed.subheadlines || {}; seed.subheadlines[lang] = ps[lang][p]; }
+            });
+            container.panelTexts[p] = seed;
+        }
+    }
+}
+
+// Panels follow the container's current language selection so editing/rendering
+// always act on the language the user is viewing.
+function syncPanelLanguage(panel, container) {
+    panel.currentHeadlineLang = container.currentHeadlineLang;
+    panel.currentSubheadlineLang = container.currentSubheadlineLang;
+    panel.currentLayoutLang = container.currentLayoutLang;
+}
+
+// In per-screen panorama mode each panel carries its OWN full text object; the
+// Text tab edits the active panel. Otherwise it edits the screenshot's text.
+function activeTextTarget(screenshot) {
+    const container = screenshot.text;
+    const span = spanForScreenshot(screenshot);
+    if (!container.perScreenText || span <= 1) return container;
+    ensurePanelTexts(container, span);
+    let p = __activePanelIndex;
+    if (p > span - 1) p = span - 1;
+    if (p < 0) p = 0;
+    container.panelTexts[p] = normalizeTextSettings(container.panelTexts[p]);
+    syncPanelLanguage(container.panelTexts[p], container);
+    return container.panelTexts[p];
+}
+
 function getText() {
+    const screenshot = getCurrentScreenshot();
+    if (screenshot) {
+        screenshot.text = normalizeTextSettings(screenshot.text);
+        return activeTextTarget(screenshot);
+    }
+    state.defaults.text = normalizeTextSettings(state.defaults.text);
+    return state.defaults.text;
+}
+
+// The renderer and per-screen UI need the CONTAINER (which holds panelTexts +
+// the perScreenText flag), not the active panel that getText() may redirect to.
+function getContainerText() {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
         screenshot.text = normalizeTextSettings(screenshot.text);
@@ -187,6 +294,15 @@ function normalizeTextSettings(text) {
     merged.headlineLanguages = merged.headlineLanguages || ['en'];
     merged.currentHeadlineLang = merged.currentHeadlineLang || merged.headlineLanguages[0] || 'en';
     merged.currentLayoutLang = merged.currentLayoutLang || merged.currentHeadlineLang || 'en';
+
+    if (typeof merged.autoFit !== 'boolean') merged.autoFit = legacyAutoFitDefault;
+
+    // Text zone: keep a complete rectangle even for projects saved before this
+    // feature shipped (or with a partial zone object).
+    merged.textZone = Object.assign(
+        { enabled: false, uniform: true, fill: false, x: 8, y: 6, width: 84, height: 26 },
+        (merged.textZone && typeof merged.textZone === 'object') ? merged.textZone : {}
+    );
 
     merged.subheadlines = merged.subheadlines || { en: '' };
     merged.subheadlineLanguages = merged.subheadlineLanguages || ['en'];
@@ -399,8 +515,8 @@ async function getLucideImage(name, color, strokeWidth) {
     const blobURL = URL.createObjectURL(blob);
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
+        img.onload = () => { URL.revokeObjectURL(blobURL); resolve(img); };
+        img.onerror = (e) => { URL.revokeObjectURL(blobURL); reject(e); };
         img.src = blobURL;
     });
 }
@@ -575,7 +691,8 @@ function setScreenshotSetting(key, value) {
 function setTextSetting(key, value) {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        screenshot.text[key] = value;
+        screenshot.text = normalizeTextSettings(screenshot.text);
+        activeTextTarget(screenshot)[key] = value;
     }
 }
 
@@ -590,12 +707,16 @@ function setCurrentScreenshotAsDefault() {
 
 // Language flags mapping
 const languageFlags = {
-    'en': '🇺🇸', 'en-gb': '🇬🇧', 'de': '🇩🇪', 'fr': '🇫🇷', 'es': '🇪🇸',
+    'en': '🇺🇸', 'en-au': '🇦🇺', 'en-ca': '🇨🇦', 'en-gb': '🇬🇧', 'de': '🇩🇪',
+    'fr': '🇫🇷', 'fr-ca': '🇨🇦', 'es': '🇪🇸', 'es-mx': '🇲🇽',
     'it': '🇮🇹', 'pt': '🇵🇹', 'pt-br': '🇧🇷', 'nl': '🇳🇱', 'ru': '🇷🇺',
     'ja': '🇯🇵', 'ko': '🇰🇷', 'zh': '🇨🇳', 'zh-tw': '🇹🇼', 'ar': '🇸🇦',
     'hi': '🇮🇳', 'tr': '🇹🇷', 'pl': '🇵🇱', 'sv': '🇸🇪', 'da': '🇩🇰',
     'no': '🇳🇴', 'fi': '🇫🇮', 'th': '🇹🇭', 'vi': '🇻🇳', 'id': '🇮🇩',
-    'uk': '🇺🇦'
+    'uk': '🇺🇦', 'ca': '🇪🇸', 'cs': '🇨🇿', 'el': '🇬🇷', 'he': '🇮🇱',
+    'hr': '🇭🇷', 'hu': '🇭🇺', 'ms': '🇲🇾', 'ro': '🇷🇴', 'sk': '🇸🇰',
+    'sl': '🇸🇮', 'bn': '🇧🇩', 'gu': '🇮🇳', 'kn': '🇮🇳', 'ml': '🇮🇳',
+    'mr': '🇮🇳', 'or': '🇮🇳', 'pa': '🇮🇳', 'ta': '🇮🇳', 'te': '🇮🇳', 'ur': '🇵🇰'
 };
 
 // Google Fonts configuration
@@ -1240,8 +1361,24 @@ const deviceDimensions = {
     'iphone-6.7': { width: 1290, height: 2796 },
     'iphone-6.5': { width: 1284, height: 2778 },
     'iphone-5.5': { width: 1242, height: 2208 },
+    'ipad-13': { width: 2064, height: 2752 },
     'ipad-12.9': { width: 2048, height: 2732 },
     'ipad-11': { width: 1668, height: 2388 },
+    // Apple Watch — App Store Connect accepts exactly these six sizes, one per
+    // MODEL FAMILY (not per case size): a Series 11 42mm still uploads at the
+    // 46mm size, an SE 3 40mm at the 44mm size. Keys must keep the `watch`
+    // prefix — the 2D device-model handler matches the output device by family
+    // prefix (appstore-features.js, initDeviceTextExtras).
+    'watch-ultra3': { width: 422, height: 514 },
+    'watch-ultra': { width: 410, height: 502 },
+    'watch-46': { width: 416, height: 496 },
+    'watch-45': { width: 396, height: 484 },
+    'watch-44': { width: 368, height: 448 },
+    'watch-42': { width: 312, height: 390 },
+    'mac-2880': { width: 2880, height: 1800 },
+    'mac-2560': { width: 2560, height: 1600 },
+    'mac-1440': { width: 1440, height: 900 },
+    'mac-1280': { width: 1280, height: 800 },
     'android-phone': { width: 1080, height: 1920 },
     'android-phone-hd': { width: 1440, height: 2560 },
     'android-tablet-7': { width: 1200, height: 1920 },
@@ -1251,6 +1388,54 @@ const deviceDimensions = {
     'web-hero': { width: 1920, height: 1080 },
     'web-feature': { width: 1024, height: 500 }
 };
+
+// The default watch size when the user picks the Watch device model.
+const DEFAULT_WATCH_DEVICE = 'watch-46';
+
+// Is `key` (default: the project's output size) an Apple Watch canvas? Watch
+// canvases are an order of magnitude smaller than every other output size
+// (416 px wide vs 1320), so a few renderer defaults tuned in absolute pixels
+// — shadows, the auto-fit floor — key off this.
+function isWatchOutput(key) {
+    return String(key === undefined ? state.outputDevice : key).startsWith('watch');
+}
+
+// 3D mockups are driven by the GLB models in models/ (three-renderer.js
+// deviceConfigs). There is no Apple Watch model, so watch output stays 2D.
+function output3DSupported() {
+    return !isWatchOutput();
+}
+
+// Human family label for an output size key, for the screenshot list.
+function outputDeviceFamilyLabel(key) {
+    const k = String(key === undefined ? state.outputDevice : key);
+    if (k.startsWith('watch')) return 'Apple Watch';
+    if (k.startsWith('ipad')) return 'iPad';
+    if (k.startsWith('mac')) return 'Mac';
+    if (k.startsWith('android')) return 'Android';
+    if (k.startsWith('web')) return 'Web';
+    if (k === 'custom') return 'Custom';
+    return 'iPhone';
+}
+
+// The 2D device model that goes with an output size family. Mirrors the
+// model→size map the Device Model buttons use, in the other direction.
+function outputDeviceModel2D(key) {
+    const k = String(key === undefined ? state.outputDevice : key);
+    if (k.startsWith('watch')) return 'watch';
+    if (k.startsWith('ipad')) return 'ipad';
+    if (k.startsWith('mac')) return 'mac';
+    if (k.startsWith('android')) return 'samsung';
+    return 'iphone';
+}
+
+// Pixel size of any output key, `custom` included — deviceDimensions alone
+// can't answer for `custom`, and `hasOwnProperty` keeps inherited Object keys
+// ('constructor', 'toString', …) from passing as valid device names.
+function outputDeviceSize(key) {
+    if (key === 'custom') return { width: state.customWidth, height: state.customHeight };
+    return Object.prototype.hasOwnProperty.call(deviceDimensions, key) ? deviceDimensions[key] : null;
+}
 
 // DOM elements
 const canvas = document.getElementById('preview-canvas');
@@ -1313,109 +1498,1275 @@ previewStrip.addEventListener('wheel', (e) => {
         swipeAccumulator = 0;
     }
 }, { passive: false });
-let suppressSwitchModelUpdate = false;  // Flag to suppress updateCanvas from switchPhoneModel
 const fileInput = document.getElementById('file-input');
 const screenshotList = document.getElementById('screenshot-list');
 const noScreenshot = document.getElementById('no-screenshot');
 
-// IndexedDB for larger storage (can store hundreds of MB vs localStorage's 5-10MB)
-let db = null;
-const DB_NAME = 'AppStoreScreenshotGenerator';
-const DB_VERSION = 2;
-const PROJECTS_STORE = 'projects';
-const META_STORE = 'meta';
+// SERVER-ONLY STORAGE. The MCP server's disk is the one and only project store:
+// a project is on the server or it doesn't exist. The browser persists nothing
+// but the current-project id (a UI preference, in localStorage). Older builds
+// kept a full IndexedDB mirror — it is deleted at startup (legacy cleanup).
+const LEGACY_DB_NAME = 'AppStoreScreenshotGenerator';
 
 let currentProjectId = 'default';
 let projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
 
-function openDatabase() {
-    return new Promise((resolve, reject) => {
-        try {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
+// Optimistic concurrency: the server revision the open project is based on. It's
+// set from each successful pull/push and sent back as the base rev, so the server
+// can reject (409) a stale tab's autosave instead of letting it overwrite newer
+// data — e.g. screenshots/text Claude (MCP) pushed while this tab sat idle. On a
+// 409 (or when the freshness check spots a newer server rev) we reload the
+// server's copy rather than clobber it. remoteRev caches the last-seen rev per id.
+let currentProjectRev = 0;
+const remoteRev = new Map();
+// True while we're reloading the server's newer copy into the editor, so saveState
+// doesn't echo that freshly-loaded data straight back out as a redundant push.
+let _reloadingFromServer = false;
+// True while a push to the server is actually in flight, so the live event stream
+// doesn't mistake our own save for a remote change and reload on top of it.
+let _remotePushInFlight = false;
+// The live update stream (Server-Sent Events). Lets MCP/Claude edits show up in
+// this tab instantly, with no manual refresh.
+let _remoteEventSource = null;
 
-            request.onerror = (event) => {
-                console.error('IndexedDB error:', event.target.error);
-                // Continue without database
-                resolve(null);
-            };
-
-            request.onsuccess = () => {
-                db = request.result;
-                resolve(db);
-            };
-
-            request.onupgradeneeded = (event) => {
-                const database = event.target.result;
-
-                // Delete old store if exists (from version 1)
-                if (database.objectStoreNames.contains('state')) {
-                    database.deleteObjectStore('state');
-                }
-
-                // Create projects store
-                if (!database.objectStoreNames.contains(PROJECTS_STORE)) {
-                    database.createObjectStore(PROJECTS_STORE, { keyPath: 'id' });
-                }
-
-                // Create meta store for project list and current project
-                if (!database.objectStoreNames.contains(META_STORE)) {
-                    database.createObjectStore(META_STORE, { keyPath: 'key' });
-                }
-            };
-
-            request.onblocked = () => {
-                console.warn('Database upgrade blocked. Please close other tabs.');
-                resolve(null);
-            };
-        } catch (e) {
-            console.error('Failed to open IndexedDB:', e);
-            resolve(null);
-        }
-    });
-}
-
-// Load project list and current project
-async function loadProjectsMeta() {
-    if (!db) return;
-
-    return new Promise((resolve) => {
-        try {
-            const transaction = db.transaction([META_STORE], 'readonly');
-            const store = transaction.objectStore(META_STORE);
-
-            const projectsReq = store.get('projects');
-            const currentReq = store.get('currentProject');
-
-            transaction.oncomplete = () => {
-                if (projectsReq.result) {
-                    projects = projectsReq.result.value;
-                }
-                if (currentReq.result) {
-                    currentProjectId = currentReq.result.value;
-                }
-                updateProjectSelector();
-                resolve();
-            };
-
-            transaction.onerror = () => resolve();
-        } catch (e) {
-            resolve();
-        }
-    });
-}
-
-// Save project list and current project
-function saveProjectsMeta() {
-    if (!db) return;
-
+// One-time cleanup of the legacy IndexedDB mirror (older builds cached projects
+// in the browser; that cache no longer exists — the server is the only store).
+function deleteLegacyDatabase() {
     try {
-        const transaction = db.transaction([META_STORE], 'readwrite');
-        const store = transaction.objectStore(META_STORE);
-        store.put({ key: 'projects', value: projects });
-        store.put({ key: 'currentProject', value: currentProjectId });
-    } catch (e) {
-        console.error('Error saving projects meta:', e);
+        if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase(LEGACY_DB_NAME);
+    } catch (e) { /* best effort */ }
+}
+
+// The only persisted UI preference: which project is open.
+function loadProjectsMeta() {
+    try {
+        const saved = localStorage.getItem('currentProjectId');
+        if (saved) currentProjectId = saved;
+    } catch (e) { /* localStorage unavailable — session-only */ }
+}
+
+function saveProjectsMeta() {
+    try {
+        localStorage.setItem('currentProjectId', currentProjectId);
+    } catch (e) { /* best effort */ }
+}
+
+// ===== Remote project store =====
+// The MCP server's disk is the ONLY project store. The list of projects, every
+// record and every image live there; the browser holds the open project in
+// memory and pushes each change. Nothing project-related persists browser-side.
+
+// ===== Pending-upload ledger ===============================================
+// Guarantee: a file that enters the editor can NOT silently disappear before the
+// SERVER has confirmed it (blob present + record referencing it accepted).
+//
+// Every imported image is recorded here (in memory — the blocking upload overlay
+// plus the beforeunload warning cover the tab-close window) and removed only on
+// server confirmation. Whenever the app adopts the server's copy of a project
+// (the server is the source of truth: SSE update, freshness reload, push
+// conflict, reconnect), pending entries are re-applied into the fresh server
+// record and pushed again. Server truth is preserved: a stale entry never
+// overwrites a slot the server has since filled — entries only complete the
+// save of the user's own recent upload.
+const PENDING_UPLOAD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // give up + warn after 7 days
+const PENDING_UPLOAD_FRESH_MS = 10 * 60 * 1000; // a fresh entry may overwrite (it's the user's latest intent)
+let _pendingUploads = {}; // { [projectId]: [{ lang, name, base, src, ts }] }
+
+async function getPendingUploads() {
+    return _pendingUploads;
+}
+function persistPendingUploads() { /* in-memory only — nothing to persist */ }
+
+// Record an image that just entered the editor (called from every import path).
+function trackPendingUpload(lang, name, src) {
+    if (!src || typeof src !== 'string' || !src.startsWith('data:image/')) return;
+    const l = lang || 'en';
+    const pid = currentProjectId; // capture now — the user may switch projects before the async hop
+    getPendingUploads().then(all => {
+        const list = all[pid] = all[pid] || [];
+        const base = (typeof getBaseFilename === 'function') ? getBaseFilename(name || '') : (name || '');
+        const entry = { lang: l, name: name || '', base, src, ts: Date.now() };
+        const i = list.findIndex(e => e.base === base && e.lang === l);
+        if (i >= 0) list[i] = entry; else list.push(entry);
+        persistPendingUploads();
+    }).catch(() => {});
+}
+
+// After a successful push: drop every entry whose slot landed in the accepted
+// record with its blob verified present (not in missingRefs).
+function confirmPendingUploads(projectId, refRecord, missingRefs) {
+    getPendingUploads().then(all => {
+        const list = all[projectId];
+        if (!list || !list.length) return;
+        const missing = new Set(missingRefs || []);
+        const slots = new Map(); // "base\u0000lang" -> src in the accepted record
+        (refRecord.screenshots || []).forEach(s => {
+            const b = (typeof getBaseFilename === 'function') ? getBaseFilename(s.name || '') : (s.name || '');
+            const li = s.localizedImages || {};
+            Object.keys(li).forEach(lang => {
+                if (li[lang] && li[lang].src) slots.set(b + '\u0000' + lang, li[lang].src);
+            });
+        });
+        const before = list.length;
+        const kept = list.filter(e => {
+            if (Date.now() - e.ts > PENDING_UPLOAD_MAX_AGE_MS) return false; // aged out
+            const src = slots.get(e.base + '\u0000' + e.lang);
+            if (!src) return true; // slot absent from the accepted record — still pending
+            if (typeof src === 'string' && src.startsWith(REF_SCHEME) && missing.has(src.slice(REF_SCHEME.length))) {
+                return true; // record accepted but the blob is missing server-side — still pending
+            }
+            return false; // confirmed on the server → done
+        });
+        if (kept.length !== before) {
+            if (kept.length) all[projectId] = kept; else delete all[projectId];
+            persistPendingUploads();
+        }
+    }).catch(() => {});
+}
+
+// Re-apply pending entries into a (fresh-from-server) project record. Pure data
+// operation — no DOM, no Image decoding — so it also works for closed projects.
+// Server-truth rule: an entry only fills an EMPTY slot, unless it is FRESH
+// (uploaded minutes ago — the user's own replacement that must not be lost).
+// Returns { changed, keep }: keep = entries still awaiting confirmation.
+function applyPendingUploadsToRecord(rec, list) {
+    let changed = false;
+    const now = Date.now();
+    const keep = [];
+    for (const e of (list || [])) {
+        if (now - e.ts > PENDING_UPLOAD_MAX_AGE_MS) {
+            console.warn('Upload en attente abandonné (trop ancien):', e.name, e.lang);
+            continue;
+        }
+        let s = null;
+        for (const sc of (rec.screenshots || [])) {
+            const b = (typeof getBaseFilename === 'function') ? getBaseFilename(sc.name || '') : (sc.name || '');
+            if (b === e.base) { s = sc; break; }
+        }
+        if (!s) {
+            // The screenshot this upload created doesn't exist server-side → recreate
+            // it from the project defaults (same shape as createNewScreenshot).
+            const d = rec.defaults || {};
+            const clone = (o) => o ? JSON.parse(JSON.stringify(o)) : undefined;
+            s = {
+                src: '', name: e.name || e.base, deviceType: undefined, localizedImages: {},
+                background: clone(d.background), screenshot: clone(d.screenshot), text: clone(d.text),
+                elements: [], popouts: [], overrides: {}
+            };
+            rec.screenshots = rec.screenshots || [];
+            rec.screenshots.push(s);
+        }
+        s.localizedImages = s.localizedImages || {};
+        const slot = s.localizedImages[e.lang];
+        const fresh = (now - e.ts) < PENDING_UPLOAD_FRESH_MS;
+        if (slot && slot.src && !fresh) continue; // server's copy wins for stale entries
+        if (!slot || !slot.src || slot.src !== e.src) {
+            s.localizedImages[e.lang] = { src: e.src, name: e.name || e.base };
+            changed = true;
+        }
+        keep.push(e); // pending until a push confirms it
     }
+    return { changed, keep };
+}
+
+// Re-apply + push the pending entries of one project (record-level). Returns true
+// if a push was scheduled.
+async function reapplyPendingUploads(projectId) {
+    try {
+        const all = await getPendingUploads();
+        const list = all[projectId];
+        if (!list || !list.length) return false;
+        const rec = await RemoteStore.get(projectId); // server is the only store
+        if (!rec) return false;
+        const res = applyPendingUploadsToRecord(rec, list);
+        if (res.keep.length) all[projectId] = res.keep; else delete all[projectId];
+        persistPendingUploads();
+        if (res.changed) {
+            const meta = projects.find(p => p.id === projectId);
+            scheduleRemotePush({ ...rec, name: meta ? meta.name : (rec.name || projectId) });
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.warn('Ré-application des uploads en attente échouée:', e);
+        return false;
+    }
+}
+
+// ===== Image compression =====
+// Screenshots are the bulk of what a project stores: a 40-language project keeps
+// 40 copies of every screen, so the bytes each one costs decide whether the
+// project weighs 20 MB or 500 MB. Imported images are therefore re-encoded
+// before they enter the project — to WebP (30-50% under the same-quality JPEG)
+// and, when they carry more pixels than any output size can show, downscaled.
+//
+// Preferences live in localStorage (per browser, not per project); the same
+// values are sent to the server when re-compressing images already stored (see
+// optimizeStoredImages).
+const IMAGE_OPT_DEFAULTS = {
+    quality: 0.82,
+    // Longest edge, in pixels. 2880 covers every stock App Store output size
+    // (mac-2880 = 2880, iphone-6.9 = 2868). Projects that render WIDER than that
+    // — a panorama spanning several screens, or a custom output size — raise it
+    // themselves, see effectiveMaxEdge(). 0 = keep whatever the file came with.
+    maxEdge: 2880,
+    format: 'auto', // 'auto' → WebP when the browser can encode it, else JPEG
+};
+
+// The largest edge at which THIS project can actually draw an image: its output
+// canvas, widened by the biggest panorama span in use. Downscaling below this is
+// the one way compression could soften an export (the export itself is always a
+// full-resolution PNG re-rendered from the canvas), so it is a hard floor under
+// the user's "maximum size" setting rather than something the setting can undercut.
+function projectRenderLongEdge() {
+    try {
+        const base = state.outputDevice === 'custom'
+            ? { width: state.customWidth || 1290, height: state.customHeight || 2796 }
+            : (deviceDimensions[state.outputDevice] || deviceDimensions['iphone-6.9']);
+        let span = 1;
+        for (const s of state.screenshots || []) {
+            const n = s && s.screenshot && s.screenshot.spanScreens;
+            if (n > span) span = n;
+        }
+        return Math.max(base.width * span, base.height);
+    } catch (e) { return 0; }
+}
+
+function effectiveMaxEdge(cfg) {
+    if (!cfg.maxEdge) return 0; // "keep original size"
+    return Math.max(cfg.maxEdge, projectRenderLongEdge());
+}
+
+function getImageOptSettings() {
+    const num = (v, d) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+    try {
+        return {
+            quality: Math.min(1, Math.max(0.3, num(localStorage.getItem('imageQuality'), IMAGE_OPT_DEFAULTS.quality))),
+            maxEdge: Math.max(0, num(localStorage.getItem('imageMaxEdge'), IMAGE_OPT_DEFAULTS.maxEdge)),
+            format: localStorage.getItem('imageFormat') || IMAGE_OPT_DEFAULTS.format,
+        };
+    } catch (e) { return { ...IMAGE_OPT_DEFAULTS }; }
+}
+
+// Canvas WebP encoding is not universal (older Safari silently hands back a PNG
+// instead), so probe it once and fall back to JPEG when it isn't there.
+let _canEncodeWebP = null;
+function canEncodeWebP() {
+    if (_canEncodeWebP !== null) return _canEncodeWebP;
+    try {
+        const c = document.createElement('canvas');
+        c.width = c.height = 1;
+        _canEncodeWebP = c.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+    } catch (e) { _canEncodeWebP = false; }
+    return _canEncodeWebP;
+}
+
+function targetImageMime(format) {
+    const wanted = format || getImageOptSettings().format;
+    if (wanted === 'jpeg') return 'image/jpeg';
+    return canEncodeWebP() ? 'image/webp' : 'image/jpeg';
+}
+
+// Downscale in halving steps. A single drawImage that shrinks by more than ~2x
+// samples too few source pixels and aliases badly (text in screenshots turns to
+// mush); halving repeatedly keeps it clean.
+function downscaleToCanvas(img, w, h) {
+    let srcW = img.naturalWidth || img.width;
+    let srcH = img.naturalHeight || img.height;
+    let src = img;
+    while (srcW > w * 2 && srcH > h * 2) {
+        const stepW = Math.max(w, Math.round(srcW / 2));
+        const stepH = Math.max(h, Math.round(srcH / 2));
+        const step = document.createElement('canvas');
+        step.width = stepW; step.height = stepH;
+        const sctx = step.getContext('2d');
+        sctx.imageSmoothingEnabled = true;
+        sctx.imageSmoothingQuality = 'high';
+        sctx.drawImage(src, 0, 0, stepW, stepH);
+        src = step; srcW = stepW; srcH = stepH;
+    }
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // Both target codecs are written opaque here (screenshots and background
+    // photos are), so flatten any alpha on white rather than losing it to black.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(src, 0, 0, w, h);
+    return out;
+}
+
+// Re-encode a data URL smaller: capped at `maxEdge` on the longest side and
+// written as WebP/JPEG. Vector and animated formats are passed through untouched
+// (a canvas round-trip would rasterize an SVG and drop every frame but the first
+// of a GIF), as is anything the re-encode fails to actually shrink.
+//
+// `allowRecompress` (default false) decides what happens to an image that is
+// ALREADY in a lossy format and small enough: by default it is left alone, so
+// repeated saves can't stack generation after generation of artefacts on it.
+function optimizeImageDataUrl(dataUrl, opts = {}) {
+    return new Promise((resolve) => {
+        if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return resolve(dataUrl);
+        if (/^data:image\/(svg|gif)/i.test(dataUrl)) return resolve(dataUrl);
+        const cfg = { ...getImageOptSettings(), ...opts };
+        const mime = targetImageMime(cfg.format);
+        const isLossy = /^data:image\/(jpeg|webp)/i.test(dataUrl);
+        const img = new Image();
+        img.onload = () => {
+            try {
+                const w0 = img.naturalWidth || img.width;
+                const h0 = img.naturalHeight || img.height;
+                if (!w0 || !h0) return resolve(dataUrl);
+                const longest = Math.max(w0, h0);
+                const cap = effectiveMaxEdge(cfg);
+                const scale = (cap > 0 && longest > cap) ? cap / longest : 1;
+                // Nothing to gain: already compressed and already small enough.
+                if (scale === 1 && isLossy && !cfg.allowRecompress) return resolve(dataUrl);
+                const w = Math.max(1, Math.round(w0 * scale));
+                const h = Math.max(1, Math.round(h0 * scale));
+                const canvas = downscaleToCanvas(img, w, h);
+                let out = canvas.toDataURL(mime, cfg.quality);
+                if (mime === 'image/webp' && out.indexOf('data:image/webp') !== 0) {
+                    out = canvas.toDataURL('image/jpeg', cfg.quality); // encoder lied — fall back
+                }
+                resolve(out && out.length < dataUrl.length ? out : dataUrl);
+            } catch (e) { resolve(dataUrl); }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
+// Compress an image the user just imported, before it enters the project — so
+// the editor holds (and later uploads) the small version, not the original.
+// Returns null when nothing changed or the result can't be decoded back.
+//
+// This is the one place that re-encodes an already-lossy file: import happens
+// exactly once per file, so converting the user's JPEG into the app's storage
+// format costs a single generation (and is dropped anyway if it doesn't come out
+// smaller). Every later save leaves it alone.
+async function optimizeImportedImage(dataUrl) {
+    let out;
+    try { out = await optimizeImageDataUrl(dataUrl, { allowRecompress: true }); } catch (e) { return null; }
+    if (!out || out === dataUrl) return null;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ src: out, image: img });
+        img.onerror = () => resolve(null); // keep the original rather than lose the file
+        img.src = out;
+    });
+}
+
+// Decode a data: URL to raw bytes + mime.
+function dataUrlToBytes(dataUrl) {
+    const comma = dataUrl.indexOf(',');
+    const header = dataUrl.slice(5, comma); // e.g. "image/jpeg;base64"
+    const mime = header.split(';')[0] || 'application/octet-stream';
+    const body = dataUrl.slice(comma + 1);
+    let bytes;
+    if (/;base64/i.test(header)) {
+        const bin = atob(body);
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } else {
+        bytes = new TextEncoder().encode(decodeURIComponent(body));
+    }
+    return { bytes, mime };
+}
+
+async function sha256Hex(bytes) {
+    const buf = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const EXT_FROM_MIME = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/bmp': 'bmp' };
+
+// data:URL -> blob name, for images confirmed present on the server (set after a
+// successful upload, or after fetching a blob from the server). Lets the heal
+// path map missing blob names back to bytes this session still holds.
+const refCache = new Map();
+const REF_SCHEME = 'appdisk://';
+
+// Externalize a project's images for upload: compress raster images (see
+// optimizeImageDataUrl — a no-op for anything already compressed and small
+// enough, so images that came in through the import path aren't touched twice),
+// replace every inline data:image URL with a content-hash reference
+// ("appdisk://<sha>.<ext>"), and collect the unique image blobs to upload as
+// binary. Identical images (e.g. the same screenshot across many languages) are
+// deduped to a single blob, so the project JSON stays tiny and the transfer is
+// small and fast — no more giant base64 payloads hitting body-size limits.
+async function externalizeForUpload(record) {
+    const clone = JSON.parse(JSON.stringify(record));
+    const blobs = new Map(); // name -> { bytes, mime }
+    const seen = new Map();  // original dataUrl -> ref (avoid recompressing duplicates)
+    const refs = new Map();  // original dataUrl -> blob name (committed to refCache on success)
+
+    const handle = async (val, keepFormat) => {
+        if (typeof val === 'string' && val.startsWith('data:image/')) {
+            const seenKey = (keepFormat ? 'k:' : 'c:') + val;
+            if (seen.has(seenKey)) return seen.get(seenKey);
+            const compressed = keepFormat ? val : await optimizeImageDataUrl(val);
+            const { bytes, mime } = dataUrlToBytes(compressed);
+            const hash = (await sha256Hex(bytes)).slice(0, 40);
+            const ext = EXT_FROM_MIME[mime] || 'png';
+            const name = hash + '.' + ext;
+            if (!blobs.has(name)) blobs.set(name, { bytes, mime });
+            const ref = REF_SCHEME + name;
+            seen.set(seenKey, ref);
+            refs.set(val, name);
+            return ref;
+        }
+        return val;
+    };
+    const walk = async (obj, keepFormat) => {
+        if (Array.isArray(obj)) {
+            for (let i = 0; i < obj.length; i++) {
+                const mapped = await handle(obj[i], keepFormat);
+                if (mapped !== obj[i]) obj[i] = mapped;
+                else if (obj[i] && typeof obj[i] === 'object') await walk(obj[i], keepFormat);
+            }
+        } else if (obj && typeof obj === 'object') {
+            for (const k of Object.keys(obj)) {
+                // Element/popout graphics can be transparent PNGs — never flatten
+                // them to JPEG. Only screenshots/backgrounds get compressed.
+                const childKeep = keepFormat || k === 'elements' || k === 'popouts';
+                const mapped = await handle(obj[k], childKeep);
+                if (mapped !== obj[k]) obj[k] = mapped;
+                else if (obj[k] && typeof obj[k] === 'object') await walk(obj[k], childKeep);
+            }
+        }
+    };
+    await walk(clone, false);
+    return {
+        record: clone,
+        blobs: Array.from(blobs, ([name, v]) => ({ name, bytes: v.bytes, mime: v.mime })),
+        refs,
+    };
+}
+
+// Session cache of resolved blobs (name -> data URL), so switching back to a
+// project doesn't re-fetch/re-decode. The browser also HTTP-caches the blobs
+// (immutable), so even a fresh page load only downloads each image once.
+const blobDataUrlCache = new Map();
+
+async function fetchBlobDataUrl(base, id, name) {
+    if (blobDataUrlCache.has(name)) return blobDataUrlCache.get(name);
+    try {
+        const r = await fetch(base + '/projects/' + id + '/blobs/' + name, { headers: RemoteStore._headers(false) });
+        if (!r.ok) return null;
+        const blob = await r.blob();
+        const dataUrl = await new Promise((res) => {
+            const fr = new FileReader();
+            fr.onload = () => res(fr.result);
+            fr.onerror = () => res(null);
+            fr.readAsDataURL(blob);
+        });
+        if (dataUrl) { blobDataUrlCache.set(name, dataUrl); refCache.set(dataUrl, name); }
+        return dataUrl;
+    } catch (e) { return null; }
+}
+
+// Fetch the unique blob names referenced by `targets` (parallel, bounded
+// concurrency so we don't fire hundreds of requests at once) and write each
+// resolved data URL back into its location. Shared by both resolvers below.
+async function applyResolvedRefs(base, id, targets) {
+    const names = [...new Set(targets.map(t => t.name))];
+    const resolved = new Map();
+    const CONCURRENCY = 8;
+    let i = 0;
+    const worker = async () => {
+        while (i < names.length) {
+            const name = names[i++];
+            const du = await fetchBlobDataUrl(base, id, name);
+            if (du) resolved.set(name, du);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, names.length) }, worker));
+    for (const t of targets) { const du = resolved.get(t.name); if (du) t.obj[t.key] = du; }
+}
+
+// Inverse of refify: replace EVERY "appdisk://<name>" ref with a data URL from the
+// server's blob store (parallel). Used for export, where all languages' bytes are
+// needed. Failed fetches leave the ref (image just won't show — offline). Mutates.
+async function resolveRefsInRecord(record) {
+    if (!record || typeof record !== 'object') return record;
+    const base = RemoteStore.baseUrl();
+    if (!base) return record; // no server reachable → can't resolve (offline)
+    const targets = [];
+    const walk = (obj) => {
+        const keys = Array.isArray(obj) ? obj.map((_, i) => i) : Object.keys(obj);
+        for (const k of keys) {
+            const v = obj[k];
+            if (typeof v === 'string' && v.startsWith(REF_SCHEME)) {
+                targets.push({ obj, key: k, name: v.slice(REF_SCHEME.length) });
+            } else if (v && typeof v === 'object') {
+                walk(v);
+            }
+        }
+    };
+    walk(record);
+    await applyResolvedRefs(base, encodeURIComponent(currentProjectId), targets);
+    return record;
+}
+
+// Turn an image source (data URL, "appdisk://<name>" ref, or http URL) into a URL
+// the browser can load directly. Refs become the server's blob URL (immutable,
+// HTTP-cached). Returns null if a ref can't be resolved (no server).
+function blobUrlForRef(src) {
+    if (typeof src !== 'string' || !src) return null;
+    if (src.startsWith('data:') || /^https?:\/\//i.test(src)) return src;
+    if (src.startsWith(REF_SCHEME)) {
+        const base = RemoteStore.baseUrl();
+        if (!base) return null;
+        // <img> loads can't send headers — pass the auth token (if any) as a query param.
+        const token = localStorage.getItem('mcpServerToken');
+        return base + '/projects/' + encodeURIComponent(currentProjectId) + '/blobs/' + src.slice(REF_SCHEME.length)
+            + (token ? '?token=' + encodeURIComponent(token) : '');
+    }
+    return src;
+}
+
+// Coalesce the re-renders triggered when several lazily-loaded images arrive at
+// once (e.g. on a language switch): batch them into a single repaint per frame.
+let _canvasRefreshQueued = false;
+function scheduleCanvasRefresh() {
+    if (_canvasRefreshQueued) return;
+    _canvasRefreshQueued = true;
+    const run = () => {
+        _canvasRefreshQueued = false;
+        updateCanvas();
+        try { updateSidePreviews(); } catch (e) {}
+    };
+    (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(run) : setTimeout(run, 16));
+}
+
+// Lazily decode a localized-image entry's bitmap (from the server blob URL or its
+// data URL), caching the Image on the entry. Returns the Image if already loaded,
+// else kicks off loading, returns null, and re-renders when it arrives. This is
+// what makes the app load "only what's shown" instead of every language up front.
+// `silent` skips the re-render (used when prefetching off-screen languages).
+function ensureEntryImage(entry, silent) {
+    if (!entry) return null;
+    if (entry.image) return entry.image;
+    // Don't retry a failed load on every render (getScreenshotImage runs each
+    // repaint — a 404/CORS failure would otherwise storm the server during a drag).
+    if (entry._loading || entry._failedSrc === entry.src) return null;
+    const url = blobUrlForRef(entry.src);
+    if (!url) return null;
+    entry._loading = true;
+    const img = new Image();
+    img.decoding = 'async';
+    if (!url.startsWith('data:')) img.crossOrigin = 'anonymous'; // keep canvas export-clean
+    img.onload = () => {
+        entry.image = img;
+        entry._loading = false;
+        entry._failedSrc = null;
+        if (!silent) scheduleCanvasRefresh();
+    };
+    img.onerror = () => { entry._loading = false; entry._failedSrc = entry.src; };
+    img.src = url;
+    return null;
+}
+
+// After the current language is shown, quietly pre-decode the NEXT language's
+// images in the background so switching to it is instant. Bounded to one language
+// (not all) to keep things light.
+let _prefetchTimer = null;
+function scheduleLanguagePrefetch() {
+    if (_prefetchTimer) clearTimeout(_prefetchTimer);
+    _prefetchTimer = setTimeout(() => {
+        _prefetchTimer = null;
+        const langs = state.projectLanguages || [];
+        if (langs.length < 2) return;
+        const idx = Math.max(0, langs.indexOf(state.currentLanguage));
+        const nextLang = langs[(idx + 1) % langs.length];
+        if (!nextLang || nextLang === state.currentLanguage) return;
+        for (const s of state.screenshots) {
+            const e = s.localizedImages && s.localizedImages[nextLang];
+            if (e && e.src && !e.image && !e._loading) ensureEntryImage(e, true /* silent */);
+        }
+    }, 1200);
+}
+
+// Resolve only what the INITIAL render needs: each screenshot's background +
+// elements + legacy src + the CURRENT language's image. Other languages stay as
+// refs and load lazily (getScreenshotImage → ensureEntryImage) when selected.
+// Parallel + bounded. Mutates record.
+async function resolveProjectRefs(record, lang) {
+    if (!record || typeof record !== 'object') return record;
+    const base = RemoteStore.baseUrl();
+    if (!base) return record;
+    const targets = [];
+    const addRef = (obj, key) => {
+        const v = obj && obj[key];
+        if (typeof v === 'string' && v.startsWith(REF_SCHEME)) targets.push({ obj, key, name: v.slice(REF_SCHEME.length) });
+    };
+    const order = [lang, ...(record.projectLanguages || []), 'en'];
+    for (const s of record.screenshots || []) {
+        addRef(s, 'src'); // legacy single image
+        if (s.background) addRef(s.background, 'image');
+        for (const el of (s.elements || [])) { addRef(el, 'src'); addRef(el, 'image'); }
+        const li = s.localizedImages;
+        if (li) {
+            const isRefEntry = (l) => li[l] && typeof li[l].src === 'string' && li[l].src.startsWith(REF_SCHEME);
+            const pick = order.find(isRefEntry) || Object.keys(li).find(isRefEntry);
+            if (pick) addRef(li[pick], 'src');
+        }
+    }
+    await applyResolvedRefs(base, encodeURIComponent(currentProjectId), targets);
+    return record;
+}
+
+const RemoteStore = {
+    baseUrl() {
+        // Fall back to the page-derived default (same origin → ".../mcp") when no
+        // URL is saved, so a fresh browser / private window still finds the
+        // server and its projects (localStorage isn't shared with incognito).
+        const saved = localStorage.getItem('mcpServerUrl');
+        const url = saved || (typeof defaultMcpUrl === 'function' ? defaultMcpUrl() : null);
+        if (!url) return null;
+        // Keep the configured path (e.g. ".../mcp"): the server mounts the REST
+        // API under both "/" and "/mcp", and a reverse proxy may only forward
+        // "/mcp/*" to it. We just append "/projects" to whatever is resolved.
+        return url.replace(/\/+$/, '');
+    },
+    isExplicit() { return !!localStorage.getItem('mcpServerUrl'); },
+    enabled() { return !!this.baseUrl(); },
+    _headers(json) {
+        const h = json ? { 'Content-Type': 'application/json' } : {};
+        const t = localStorage.getItem('mcpServerToken');
+        if (t) h['Authorization'] = 'Bearer ' + t;
+        return h;
+    },
+    async list() {
+        const b = this.baseUrl(); if (!b) return null;
+        try {
+            const r = await fetch(b + '/projects', { headers: this._headers(false) });
+            return r.ok ? await r.json() : null;
+        } catch (e) { return null; }
+    },
+    async get(id) {
+        const b = this.baseUrl(); if (!b) return null;
+        try {
+            // ?refs=1 → compact refs record (no inlined bytes). loadState resolves
+            // the image blobs from the server on demand (disk-only).
+            const r = await fetch(b + '/projects/' + encodeURIComponent(id) + '?refs=1', { headers: this._headers(false) });
+            if (!r.ok) return null;
+            const rec = await r.json();
+            if (rec && typeof rec.rev === 'number') remoteRev.set(id, rec.rev);
+            return rec;
+        } catch (e) { return null; }
+    },
+    // Disk the project's images take on the server (deduplicated: the same
+    // screenshot shared by 40 languages counts once). null when unavailable —
+    // an older server without the endpoint answers 404.
+    async storage(id) {
+        const b = this.baseUrl(); if (!b) return null;
+        try {
+            const r = await fetch(b + '/projects/' + encodeURIComponent(id) + '/storage', { headers: this._headers(false) });
+            return r.ok ? await r.json() : null;
+        } catch (e) { return null; }
+    },
+    // Ask the server to re-encode a project's stored images (smaller codec, and
+    // no more pixels than the output size can show). Returns the stats object,
+    // or { error } — this one can take a while on a big project, so the caller
+    // shows progress rather than a spinner-less wait.
+    async optimizeImages(id, opts) {
+        const b = this.baseUrl(); if (!b) return { error: 'no server' };
+        try {
+            const r = await fetch(b + '/projects/' + encodeURIComponent(id) + '/optimize', {
+                method: 'POST', headers: this._headers(true), body: JSON.stringify(opts || {})
+            });
+            if (r.status === 404 || r.status === 405) return { error: 'unsupported' };
+            const j = await r.json().catch(() => null);
+            if (!r.ok) return { error: (j && j.error) || ('HTTP ' + r.status) };
+            return j;
+        } catch (e) { return { error: String(e && e.message || e) }; }
+    },
+    // Serialize all pushes so two uploads never run at once: otherwise their
+    // progress writes to the single sync pill interleave and the "Envoi des
+    // images n/N" counter jumps around randomly. Also prevents overlapping
+    // pushes from racing on shared state.
+    _putChain: Promise.resolve(),
+    // Send one batch of blobs in a single request (binary framing). Returns true
+    // on success, false on a real failure, or 'no-batch-endpoint' when the server
+    // is too old (then the caller falls back to per-blob PUTs).
+    async _uploadBatch(eid, batch) {
+        const b = this.baseUrl(); if (!b) return false;
+        const header = JSON.stringify(batch.map(x => ({ name: x.name, size: x.bytes.length })));
+        const headerBytes = new TextEncoder().encode(header);
+        const head = new Uint8Array(4);
+        new DataView(head.buffer).setUint32(0, headerBytes.length, false);
+        const body = new Blob([head, headerBytes, ...batch.map(x => x.bytes)]);
+        let r;
+        try {
+            r = await fetch(b + '/projects/' + eid + '/blobs/batch', {
+                method: 'POST', headers: { ...this._headers(false), 'Content-Type': 'application/octet-stream' }, body
+            });
+        } catch (e) { return false; }
+        if (r.status === 404 || r.status === 405) return 'no-batch-endpoint';
+        if (!r.ok) return false;
+        try { const j = await r.json(); return !j.errors || j.errors.length === 0; } catch (e) { return true; }
+    },
+    // Upload blobs grouped into few batches (one round-trip per ~40 MB / 40 images
+    // instead of one per image), with a per-blob PUT fallback for old servers.
+    // items: [{ name, bytes, mime }]. onProgress(done, total). Returns true/false.
+    async uploadBlobs(id, items, onProgress) {
+        const b = this.baseUrl(); if (!b) return false;
+        if (!items.length) return true;
+        const eid = encodeURIComponent(id);
+        const MAX_BYTES = 40 * 1024 * 1024, MAX_COUNT = 40;
+        let done = 0, useBatch = true, i = 0;
+        const total = items.length;
+        const putOne = async (it) => {
+            const r = await fetch(b + '/projects/' + eid + '/blobs/' + it.name, {
+                method: 'PUT', headers: { ...this._headers(false), 'Content-Type': it.mime || 'application/octet-stream' }, body: it.bytes
+            });
+            return r.ok;
+        };
+        while (i < items.length) {
+            const batch = [];
+            let size = 0;
+            while (i < items.length && batch.length < MAX_COUNT && (batch.length === 0 || size + items[i].bytes.length <= MAX_BYTES)) {
+                batch.push(items[i]); size += items[i].bytes.length; i++;
+            }
+            if (useBatch) {
+                const res = await this._uploadBatch(eid, batch);
+                if (res === 'no-batch-endpoint') {
+                    useBatch = false; // old server — PUT this batch one by one, then continue
+                    for (const it of batch) { if (!(await putOne(it))) return false; done++; if (onProgress) onProgress(done, total); }
+                    continue;
+                }
+                if (!res) return false;
+                done += batch.length; if (onProgress) onProgress(done, total);
+            } else {
+                for (const it of batch) { if (!(await putOne(it))) return false; done++; if (onProgress) onProgress(done, total); }
+            }
+        }
+        return true;
+    },
+    put(record) {
+        const task = () => this._put(record);
+        const next = this._putChain.then(task, task);
+        this._putChain = next.catch(() => {}); // keep the chain alive on failure
+        return next;
+    },
+    async _put(record) {
+        const b = this.baseUrl(); if (!b || !record || !record.id) return false;
+        const id = encodeURIComponent(record.id);
+        this._lastPutConflict = false;
+        _remotePushInFlight = true;
+        try {
+            setSyncStatus('syncing', 'Préparation des images…');
+            const { record: refRecord, blobs, refs } = await externalizeForUpload(record);
+
+            // Ask which image blobs the server still needs (dedup across pushes).
+            let toUpload = blobs;
+            try {
+                const r = await fetch(b + '/projects/' + id + '/blobs/check', {
+                    method: 'POST', headers: this._headers(true), body: JSON.stringify({ names: blobs.map(x => x.name) })
+                });
+                if (r.ok) {
+                    const missing = new Set((await r.json()).missing || []);
+                    toUpload = blobs.filter(x => missing.has(x.name));
+                }
+            } catch (e) { /* fall back to uploading all */ }
+
+            // Upload missing image blobs — batched (few round-trips), raw binary.
+            if (toUpload.length) {
+                const ok = await this.uploadBlobs(record.id, toUpload, (d, t) => {
+                    setSyncStatus('syncing', 'Envoi des images… ' + d + '/' + t);
+                });
+                if (!ok) {
+                    setSyncStatus('error', 'Échec de l’envoi des images');
+                    return false;
+                }
+            }
+
+            // Finally PUT the tiny references-only project record.
+            setSyncStatus('syncing', 'Enregistrement du projet…');
+            // Base revision computed HERE, at send time — not when the save was
+            // scheduled. Pushes are serialized (_putChain), so by now any earlier
+            // push has resolved and currentProjectRev is up to date. Using the live
+            // rev avoids a stale base that would 409 against our OWN earlier push
+            // (the false "modifié ailleurs" when edits outrun the network).
+            const baseRev = (record.id === currentProjectId)
+                ? currentProjectRev
+                : (remoteRev.has(record.id) ? remoteRev.get(record.id)
+                   : (typeof record.rev === 'number' ? record.rev : undefined));
+            if (baseRev != null) refRecord.rev = baseRev; else delete refRecord.rev;
+            const headers = this._headers(true);
+            if (baseRev != null) headers['If-Match'] = String(baseRev);
+            const r = await fetch(b + '/projects/' + id, {
+                method: 'PUT', headers, body: JSON.stringify(refRecord)
+            });
+            if (r.status === 409) {
+                // Someone else (Claude/MCP, another tab) wrote a newer revision.
+                // The SERVER is the source of truth: adopt its copy. Pending uploads
+                // are NOT lost — reloadProjectFromServer re-applies the ledger into
+                // the fresh server record and schedules their push.
+                this._lastPutConflict = true;
+                setSyncStatus('syncing', 'Projet modifié ailleurs — synchronisation…');
+                await reloadProjectFromServer(record.id);
+                setSyncStatus('ok', 'Synchronisé depuis le serveur');
+                return false;
+            }
+            if (r.ok) {
+                // Confirmed on the server — remember which bytes map to which blob
+                // (drives the self-heal path).
+                for (const [dataUrl, name] of refs) refCache.set(dataUrl, name);
+                let missingRefs = [];
+                try {
+                    const j = await r.json();
+                    if (j && typeof j.rev === 'number') {
+                        // Adopt the new revision so our next push isn't seen as stale.
+                        remoteRev.set(record.id, j.rev);
+                        if (record.id === currentProjectId) currentProjectRev = j.rev;
+                    }
+                    if (j && Array.isArray(j.missingRefs)) missingRefs = j.missingRefs;
+                } catch (e) { /* response without body — ignore */ }
+
+                // The server verified every image reference of the accepted record.
+                // If any blob is missing on its disk, re-upload the bytes we still
+                // hold (this session's push, or the resolved-blob cache) — and warn
+                // LOUDLY about anything we cannot repair: silence is how images
+                // used to "disappear".
+                if (missingRefs.length) {
+                    const still = await this._healMissingBlobs(record.id, missingRefs, refs);
+                    if (still.length) {
+                        const labels = labelRefsInRecord(refRecord, still);
+                        console.warn('Images référencées introuvables sur le serveur:', still, labels);
+                        setSyncStatus('error', '⚠ ' + still.length + ' image(s) introuvable(s) sur le serveur'
+                            + (labels.length ? ' — ' + labels.slice(0, 3).join(', ') + (labels.length > 3 ? '…' : '') : ''));
+                    } else {
+                        setSyncStatus('ok', 'Enregistré (images réparées sur le serveur)');
+                    }
+                    confirmPendingUploads(record.id, refRecord, still);
+                    return true;
+                }
+                confirmPendingUploads(record.id, refRecord, []);
+            }
+            setSyncStatus(r.ok ? 'ok' : 'error', r.ok ? 'Enregistré sur le serveur' : 'Échec de l’enregistrement (HTTP ' + r.status + ')');
+            return r.ok;
+        } catch (e) {
+            console.warn('MCP project push failed:', e);
+            setSyncStatus('error', 'Serveur injoignable');
+            return false;
+        } finally {
+            _remotePushInFlight = false;
+        }
+    },
+    // Re-upload blobs the server reported missing, from any bytes this browser
+    // still holds: this push's dataUrl→name map, or the session blob cache
+    // (name→dataUrl, filled whenever a ref was resolved for display). Returns
+    // the names that could NOT be repaired.
+    async _healMissingBlobs(projectId, missingNames, pushRefs) {
+        const b = this.baseUrl(); if (!b) return missingNames;
+        const byName = new Map();
+        try { for (const [dataUrl, name] of (pushRefs || [])) byName.set(name, dataUrl); } catch (e) {}
+        try { for (const [name, dataUrl] of blobDataUrlCache) if (!byName.has(name)) byName.set(name, dataUrl); } catch (e) {}
+        const stillMissing = [];
+        for (const name of missingNames) {
+            const dataUrl = byName.get(name);
+            if (!dataUrl) { stillMissing.push(name); continue; }
+            try {
+                const { bytes, mime } = dataUrlToBytes(dataUrl);
+                const r = await fetch(b + '/projects/' + encodeURIComponent(projectId) + '/blobs/' + name, {
+                    method: 'PUT', headers: { ...this._headers(false), 'Content-Type': mime }, body: bytes
+                });
+                if (!r.ok) stillMissing.push(name);
+            } catch (e) { stillMissing.push(name); }
+        }
+        return stillMissing;
+    },
+    async del(id) {
+        const b = this.baseUrl(); if (!b) return false;
+        try {
+            const r = await fetch(b + '/projects/' + encodeURIComponent(id), { method: 'DELETE', headers: this._headers(false) });
+            return r.ok;
+        } catch (e) { return false; }
+    },
+};
+
+// Human labels ("screen-3.png (de)") for blob refs inside a record — so a warning
+// about a missing image tells the user WHICH screenshot/language is affected.
+function labelRefsInRecord(refRecord, names) {
+    const wanted = new Set(names || []);
+    const labels = [];
+    (refRecord.screenshots || []).forEach((s, i) => {
+        const li = s.localizedImages || {};
+        Object.keys(li).forEach(lang => {
+            const src = li[lang] && li[lang].src;
+            if (typeof src === 'string' && src.startsWith(REF_SCHEME) && wanted.has(src.slice(REF_SCHEME.length))) {
+                labels.push((s.name || ('Screen ' + (i + 1))) + ' (' + lang + ')');
+            }
+        });
+        const bg = s.background && s.background.image;
+        if (typeof bg === 'string' && bg.startsWith(REF_SCHEME) && wanted.has(bg.slice(REF_SCHEME.length))) {
+            labels.push('fond de ' + (s.name || ('Screen ' + (i + 1))));
+        }
+    });
+    return labels;
+}
+
+// Ids of projects known to live on the server's disk. Empty when no server is
+// configured or it's unreachable.
+let remoteProjectIds = new Set();
+
+// True while loadState() is still hydrating screenshots (images load async, after
+// the promise resolves). saveState() is suppressed during this window so the
+// transient empty state is never pushed to the server.
+let projectLoading = false;
+// Monotonic token: every loadState() call bumps it and captures its own value.
+// When loads overlap (e.g. importing a 2nd project while the 1st is still
+// hydrating), only the LATEST load may touch state / clear projectLoading / save
+// — a stale load's async image callbacks must do nothing, or they would clobber
+// the new project with the old one's (or an empty) state. (Was a data-loss bug.)
+let loadStateSeq = 0;
+function setProjectLoading(v) {
+    projectLoading = v;
+    if (v) {
+        // Safety net: never stay blocked if image loads never complete.
+        clearTimeout(setProjectLoading._t);
+        setProjectLoading._t = setTimeout(() => { projectLoading = false; _reloadingFromServer = false; }, 8000);
+    } else {
+        clearTimeout(setProjectLoading._t);
+    }
+}
+
+// Floating indicator shown while a project is being saved to the server's disk.
+// state: 'syncing' | 'ok' | 'error' | 'idle'.
+// ===== Blocking upload overlay =====
+// Shown from the moment files enter the app until the SERVER confirms the save
+// ("c'est soit sur le serveur, soit ça ne l'est pas du tout"). The user waits;
+// the duplicate-image dialog renders above it (higher z-index) and stays usable.
+let _uploadOverlayVisible = false;
+function showUploadProgress(status, detail) {
+    if (typeof document === 'undefined') return;
+    _uploadOverlayVisible = true;
+    const m = document.getElementById('upload-progress-modal');
+    const s = document.getElementById('upload-progress-status');
+    const d = document.getElementById('upload-progress-detail');
+    if (s && status != null) s.textContent = status;
+    if (d) d.textContent = detail || '';
+    if (m) m.classList.add('visible');
+}
+function hideUploadProgress() {
+    if (typeof document === 'undefined') return;
+    _uploadOverlayVisible = false;
+    const m = document.getElementById('upload-progress-modal');
+    if (m) m.classList.remove('visible');
+}
+
+function setSyncStatus(state, msg) {
+    if (typeof document === 'undefined') return;
+    // While the blocking upload overlay is up, mirror the push progress messages
+    // ("Envoi des images… 3/12", "Enregistrement du projet…") into it.
+    if (_uploadOverlayVisible && msg) {
+        const d = document.getElementById('upload-progress-detail');
+        if (d) d.textContent = msg;
+    }
+    let el = document.getElementById('sync-pill');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'sync-pill';
+        (document.body || document.documentElement).appendChild(el);
+    }
+    el.className = 'sync-pill ' + state;
+    el.innerHTML = (state === 'syncing' ? '<span class="sync-spinner"></span>' : '')
+        + '<span>' + (msg || '') + '</span>';
+    clearTimeout(setSyncStatus._t);
+    if (state === 'idle') { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    if (state === 'ok' || state === 'error') {
+        setSyncStatus._t = setTimeout(() => { el.style.display = 'none'; }, state === 'ok' ? 1800 : 4500);
+    }
+}
+
+// Debounced push of a project to the server (coalesces rapid edits). Keyed PER
+// PROJECT id: scheduling a push for project B must not cancel project A's pending
+// push (a single shared timer used to drop A's push entirely — data could be left
+// un-synced after switching/importing projects).
+const _remotePushPending = new Map(); // id -> { timer, record }
+const _pushRetryCount = new Map();    // id -> consecutive failures
+
+// Run one scheduled push and handle its outcome (retry with backoff on transient
+// failure). Shared by the debounce timer and flushRemotePushNow. Resolves true
+// only when the SERVER confirmed the save.
+function _executeScheduledPush(id, rec) {
+    if (!rec) return Promise.resolve(false);
+    return RemoteStore.put(rec).then(ok => {
+        if (ok) {
+            _pushRetryCount.delete(id);
+            remoteProjectIds.add(rec.id); // track server-side existence (internal)
+            return true;
+        }
+        // A 409 is owned by the reload path (server wins + pending uploads
+        // re-applied + re-pushed there) — don't ALSO retry here.
+        if (RemoteStore._lastPutConflict) return false;
+        // Transient failure (network, server restart): retry with backoff
+        // from the FRESHEST cached copy, so an unconfirmed save can't sit
+        // silently un-synced until the next user edit.
+        const n = (_pushRetryCount.get(id) || 0) + 1;
+        _pushRetryCount.set(id, n);
+        if (n > 5) {
+            setSyncStatus('error', 'Synchronisation impossible — modifications NON enregistrées sur le serveur');
+            return false;
+        }
+        const delay = Math.min(60000, 5000 * Math.pow(2, n - 1));
+        setTimeout(() => {
+            if (_remotePushPending.has(id)) return; // a newer push got scheduled meanwhile
+            if (id === currentProjectId) {
+                // Rebuild from the live editor state (the only browser-side copy)
+                // and let saveState schedule the fresh push.
+                saveState();
+            } else {
+                // Not open in the editor — retry the same record snapshot.
+                scheduleRemotePush(rec);
+            }
+        }, delay);
+        return false;
+    });
+}
+
+function scheduleRemotePush(record) {
+    if (!RemoteStore.enabled() || !record || !record.id) return;
+    const id = record.id;
+    const entry = _remotePushPending.get(id) || {};
+    entry.record = record;
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+        _remotePushPending.delete(id);
+        _executeScheduledPush(id, entry.record);
+    }, 1500);
+    _remotePushPending.set(id, entry);
+}
+
+// Fire any debounced push for `id` immediately and resolve once it completed.
+// Resolves true when nothing was pending (already in sync) or the push succeeded.
+function flushRemotePushNow(id) {
+    const entry = _remotePushPending.get(id);
+    if (!entry) return Promise.resolve(true);
+    if (entry.timer) clearTimeout(entry.timer);
+    _remotePushPending.delete(id);
+    return _executeScheduledPush(id, entry.record);
+}
+
+// Block until the server has confirmed the project's pending save. A 409 round
+// (reload + pending-upload re-apply) schedules a follow-up push — loop a few
+// rounds so that follow-up is awaited too.
+async function waitForServerConfirmation(id, maxRounds = 3) {
+    if (!RemoteStore.enabled()) return true; // no server configured — nothing to wait for
+    for (let i = 0; i < maxRounds; i++) {
+        const ok = await flushRemotePushNow(id);
+        if (ok) return true;
+        if (!_remotePushPending.has(id)) return false; // failed with no follow-up scheduled
+    }
+    return false;
+}
+
+// A save is only DONE once the server confirmed it. Warn before closing while a
+// push is queued/in flight or uploads await confirmation: the server is the only
+// store, so anything unconfirmed exists nowhere else than this tab's memory.
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', (e) => {
+        let pendingUploads = false;
+        try { pendingUploads = !!(_pendingUploads && Object.keys(_pendingUploads).length); } catch (err) {}
+        if (_remotePushPending.size > 0 || _remotePushInFlight || pendingUploads) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+}
+
+// Load the project list from the server — THE ONLY PROJECT STORE. No browser
+// cache exists anymore: what the server lists is what exists, period. The sole
+// exception is a project living only in this session's memory (created while
+// offline / just now): it stays in the list and is created server-side by its
+// next save.
+async function syncWithRemote() {
+    if (!RemoteStore.enabled()) {
+        setSyncStatus('error', 'Aucun serveur configuré — rien ne sera enregistré');
+        return;
+    }
+    setSyncStatus('syncing', 'Synchronisation…');
+    const serverList = await RemoteStore.list();
+    if (serverList === null) {
+        console.warn('MCP project sync: server unreachable.');
+        setSyncStatus('error', 'Serveur injoignable — modifications non enregistrées');
+        return;
+    }
+
+    const next = serverList.map(p => ({ id: p.id, name: p.name, screenshotCount: p.screenshotCount || 0 }));
+    const serverIds = new Set(next.map(p => p.id));
+
+    // Keep session-only projects (not yet on the server) IF the editor actually
+    // holds content for them — their next save creates them server-side.
+    for (const p of projects) {
+        if (serverIds.has(p.id)) continue;
+        const isOpenWithContent = p.id === currentProjectId && state.screenshots.length > 0;
+        const hasQueuedWork = _remotePushPending.has(p.id) || !!_pendingUploads[p.id];
+        if (isOpenWithContent || hasQueuedWork) next.push(p);
+    }
+    projects = next;
+    if (!projects.length) projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
+    if (!projects.find(p => p.id === currentProjectId)) currentProjectId = projects[0].id;
+    remoteProjectIds = serverIds;
+    saveProjectsMeta();
+
+    // Resume any uploads from this session that were never server-confirmed.
+    try {
+        const all = await getPendingUploads();
+        for (const pid of Object.keys(all)) await reapplyPendingUploads(pid);
+    } catch (e) { console.warn('Reprise des uploads en attente échouée:', e); }
+
+    setSyncStatus('ok', 'Synchronisé');
+    startRemoteEventStream(); // (re)open the live update stream now the server is reachable
+}
+
+// Pull a project fresh from the server and, if it's the open one, reload it into
+// the editor. Used when the server holds newer data than this tab (a 409 on push,
+// or the freshness poll spotting a higher rev) so we converge on the server's
+// version instead of overwriting it.
+async function reloadProjectFromServer(id) {
+    if (!RemoteStore.enabled() || !id) return false;
+    const rec = await RemoteStore.get(id); // also updates remoteRev[id]
+    if (!rec) return false;
+    // Re-apply any not-yet-server-confirmed uploads into the fresh server copy
+    // BEFORE it reaches the editor. The server stays the source of truth for
+    // everything else; this only completes the save of the user's own files
+    // (they must never disappear because Claude/MCP wrote in between).
+    try {
+        const all = await getPendingUploads();
+        const list = all[id];
+        if (list && list.length) {
+            const res = applyPendingUploadsToRecord(rec, list);
+            if (res.keep.length) all[id] = res.keep; else delete all[id];
+            persistPendingUploads();
+            if (res.changed) {
+                const meta = projects.find(p => p.id === id);
+                scheduleRemotePush({ ...rec, name: meta ? meta.name : (rec.name || id) });
+            }
+        }
+    } catch (e) { console.warn('Ré-application des uploads en attente échouée:', e); }
+    if (id === currentProjectId) {
+        _reloadingFromServer = true;
+        try {
+            currentProjectRev = (typeof rec.rev === 'number') ? rec.rev : 0;
+            resetStateToDefaults();
+            await loadState(rec); // inject the record we just fetched — no second download
+            syncUIWithState();
+            updateScreenshotList();
+            updateGradientStopsUI();
+            updateProjectSelector();
+            updateCanvas();
+            resetHistory(); // the project content was replaced from the server
+            // If hydration is still running, leave the guard up: checkAllLoaded()
+            // clears it once images finish, so the freshly-downloaded data isn't
+            // echo-pushed straight back to the server.
+            if (!projectLoading) {
+                if (_saveStateTimer) { clearTimeout(_saveStateTimer); _saveStateTimer = null; }
+                _reloadingFromServer = false;
+            }
+        } catch (e) {
+            _reloadingFromServer = false;
+            throw e;
+        }
+    } else {
+        const p = projects.find(x => x.id === id);
+        if (p) { p.screenshotCount = rec.screenshots?.length || 0; saveProjectsMeta(); updateProjectSelector(); }
+    }
+    return true;
+}
+
+// Detect when the server's copy of the OPEN project is newer than this tab's base
+// rev (e.g. Claude/MCP pushed screenshots while we sat idle) and reload it, so a
+// later autosave can't silently overwrite that newer data. Runs cheaply on window
+// focus / tab visibility and on a slow background poll.
+let _freshnessChecking = false;
+async function checkRemoteFreshness() {
+    if (_freshnessChecking || _reloadingFromServer) return;
+    if (!RemoteStore.enabled() || !currentProjectId) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (_remotePushPending.has(currentProjectId)) return; // a local edit is queued; let it push first
+    _freshnessChecking = true;
+    try {
+        const list = await RemoteStore.list();
+        if (!list) return;
+        const sp = list.find(p => p.id === currentProjectId);
+        if (!sp || typeof sp.rev !== 'number') return;
+        if (sp.rev > (currentProjectRev || 0)) {
+            await reloadProjectFromServer(currentProjectId);
+            setSyncStatus('ok', 'Rechargé (modifié par Claude/MCP)');
+        }
+    } catch (e) {
+        /* network blip — try again on the next focus/poll */
+    } finally {
+        _freshnessChecking = false;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('focus', () => { checkRemoteFreshness(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkRemoteFreshness(); });
+    setInterval(() => { checkRemoteFreshness(); }, 30000);
+}
+
+// Subscribe to the server's live update stream (SSE). Any change — from Claude/MCP
+// or another tab — arrives here within milliseconds, so the open project reflects
+// it instantly without a manual refresh. EventSource auto-reconnects on drop; the
+// focus/visibility/poll checks above remain as a fallback if a proxy buffers SSE.
+function startRemoteEventStream() {
+    if (typeof EventSource === 'undefined') return;
+    const b = RemoteStore.enabled() ? RemoteStore.baseUrl() : null;
+    if (_remoteEventSource) { try { _remoteEventSource.close(); } catch (e) {} _remoteEventSource = null; }
+    if (!b) return;
+    let es;
+    // EventSource can't send headers — pass the auth token (if any) as a query param.
+    const token = localStorage.getItem('mcpServerToken');
+    try { es = new EventSource(b + '/events' + (token ? '?token=' + encodeURIComponent(token) : '')); }
+    catch (e) { return; }
+    _remoteEventSource = es;
+
+    es.addEventListener('saved', (e) => {
+        let d; try { d = JSON.parse(e.data); } catch (err) { return; }
+        if (!d || !d.id) return;
+        if (typeof d.rev === 'number') remoteRev.set(d.id, d.rev);
+        if (d.id !== currentProjectId) return;
+        // Ignore our own save (in flight or queued) — the PUT response carries the
+        // authoritative rev; a real conflict is still caught by the 409 path.
+        if (_remotePushInFlight || _reloadingFromServer || _remotePushPending.has(d.id)) return;
+        if (typeof d.rev === 'number' && d.rev > (currentProjectRev || 0)) {
+            setSyncStatus('syncing', 'Mise à jour de Claude/MCP…');
+            reloadProjectFromServer(currentProjectId).then(() => {
+                setSyncStatus('ok', 'Mis à jour (Claude/MCP)');
+            });
+        }
+    });
+
+    es.addEventListener('deleted', (e) => {
+        let d; try { d = JSON.parse(e.data); } catch (err) { return; }
+        if (!d || !d.id) return;
+        remoteProjectIds.delete(d.id);
+        remoteRev.delete(d.id);
+        // Server truth, live: the project no longer exists — drop it from the list.
+        // Skip if WE initiated the deletion (deleteProject already handles the UI).
+        if (projects.some(p => p.id === d.id) && !_remotePushInFlight) {
+            projects = projects.filter(p => p.id !== d.id);
+            if (!projects.length) projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
+            if (d.id === currentProjectId) {
+                currentProjectId = projects[0].id;
+                saveProjectsMeta();
+                switchProject(currentProjectId, { skipSave: true }).catch(() => {});
+                setSyncStatus('ok', 'Projet supprimé par Claude/MCP');
+            }
+        }
+        if (typeof updateProjectSelector === 'function') updateProjectSelector();
+    });
+
+    // On error EventSource reconnects on its own (honoring the server's retry hint).
 }
 
 // Update project selector dropdown
@@ -1440,8 +2791,10 @@ function updateProjectSelector() {
         const screenshotCount = project.id === currentProjectId ? state.screenshots.length : (project.screenshotCount || 0);
 
         option.innerHTML = `
-            <span class="project-option-name">${project.name}</span>
-            <span class="project-option-meta">${screenshotCount} screenshot${screenshotCount !== 1 ? 's' : ''}</span>
+            <span class="project-option-name">${mcpEscapeHtml(project.name)}</span>
+            <span class="project-option-right">
+                <span class="project-option-meta">${screenshotCount} screenshot${screenshotCount !== 1 ? 's' : ''}</span>
+            </span>
         `;
 
         option.addEventListener('click', (e) => {
@@ -1459,17 +2812,30 @@ function updateProjectSelector() {
 // Initialize
 async function init() {
     try {
-        await openDatabase();
-        await loadProjectsMeta();
-        await loadState();
+        deleteLegacyDatabase(); // older builds cached projects in IndexedDB — gone
+        loadProjectsMeta();     // just the current-project id (localStorage)
+        await syncWithRemote(); // fetch the project list from the ONLY store: the server
+        updateProjectSelector();
+        await loadState();      // fetch the open project from the server
         syncUIWithState();
         updateCanvas();
+        resetHistory();
     } catch (e) {
         console.error('Initialization error:', e);
         // Continue with defaults
         syncUIWithState();
         updateCanvas();
+        resetHistory();
     }
+    // Auto-connect to the MCP server so the connection status persists across
+    // reloads. Uses the resolved URL (saved, else auto-detected from the page
+    // origin) so a fresh/private window connects too. Silent on failure.
+    try {
+        const url = RemoteStore.baseUrl();
+        if (url && typeof connectMcpServer === 'function') {
+            connectMcpServer(url, localStorage.getItem('mcpServerToken') || '', { silent: !RemoteStore.isExplicit() });
+        }
+    } catch (e) { /* non-fatal */ }
 }
 
 // Set up event listeners immediately (don't wait for async init)
@@ -1485,9 +2851,243 @@ function initSync() {
     init();
 }
 
-// Save state to IndexedDB for current project
+// Save state — push the current project to the server (the only store)
+// Debounced persistence: writing the full project (which can be 100+ MB of
+// localized image data) on every render makes editing janky.
+// scheduleSaveState() coalesces writes; saveState() still forces an immediate,
+// reliable write (used on structural changes and flushed before unload).
+let _saveStateTimer = null;
+function scheduleSaveState() {
+    if (_saveStateTimer) clearTimeout(_saveStateTimer);
+    _saveStateTimer = setTimeout(() => { _saveStateTimer = null; saveState(); }, 700);
+}
+if (typeof window !== 'undefined') {
+    const flush = () => { if (_saveStateTimer) { clearTimeout(_saveStateTimer); _saveStateTimer = null; saveState(); } };
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+}
+
+// ============================================================================
+// Undo / Redo (history)
+// ============================================================================
+// Snapshot-based history of the editing state. A snapshot deep-clones the
+// editable slice of `state` but KEEPS decoded Image objects by reference (so
+// undo/redo never re-decodes images). Edits are coalesced: a burst of changes
+// (dragging a slider, typing) collapses into a single undo step after a short
+// idle, and the step records the state from BEFORE the burst.
+let _undoStack = [];
+let _redoStack = [];
+let _committedSnapshot = null;   // last committed state (what redo returns to)
+let _committedFp = null;         // cheap fingerprint of the committed state
+let _historyBaseline = null;     // state to undo TO for the in-progress burst
+let _historyTimer = null;
+let _historySuspended = false;   // true while applying undo/redo (don't record)
+const HISTORY_MAX = 80;
+const HISTORY_DEBOUNCE_MS = 450;
+
+// Deep clone plain data while preserving Image/Canvas elements by reference.
+function cloneKeepingImages(obj) {
+    if (obj == null || typeof obj !== 'object') return obj;
+    if (typeof HTMLImageElement !== 'undefined' && obj instanceof HTMLImageElement) return obj;
+    if (typeof HTMLCanvasElement !== 'undefined' && obj instanceof HTMLCanvasElement) return obj;
+    if (Array.isArray(obj)) return obj.map(cloneKeepingImages);
+    const out = {};
+    for (const k of Object.keys(obj)) out[k] = cloneKeepingImages(obj[k]);
+    return out;
+}
+
+// Transient lazy-load fields on localized-image entries (decoded bitmap, load
+// flags) must never enter history: they change from pure render events, and a
+// snapshot carrying `_loading: true` would block reloading forever after undo.
+function stripTransientImageFields(screenshots) {
+    for (const s of screenshots || []) {
+        const li = s && s.localizedImages;
+        if (!li) continue;
+        for (const lang of Object.keys(li)) {
+            const e = li[lang];
+            if (!e) continue;
+            delete e.image;
+            delete e._loading;
+            delete e._failedSrc;
+        }
+    }
+}
+
+function captureHistoryState() {
+    const snap = cloneKeepingImages({
+        selectedIndex: state.selectedIndex,
+        currentLanguage: state.currentLanguage,
+        outputDevice: state.outputDevice,
+        customWidth: state.customWidth,
+        customHeight: state.customHeight,
+        projectLanguages: state.projectLanguages,
+        defaults: state.defaults,
+        screenshots: state.screenshots,
+    });
+    stripTransientImageFields(snap.screenshots);
+    return snap;
+}
+
+// Cheap content fingerprint: image OBJECTS and transient lazy-load fields are
+// dropped, but src strings remain (collapsed to their length when huge), so
+// image swaps and every settings/text change are detected. Navigation-only
+// state (selected index, current language) is excluded on purpose.
+function historyFingerprint() {
+    try {
+        return JSON.stringify({
+            d: state.outputDevice,
+            w: state.customWidth, h: state.customHeight, langs: state.projectLanguages,
+            df: state.defaults,
+            s: state.screenshots,
+        }, (k, v) => {
+            if (k === '_loading' || k === '_failedSrc') return undefined;
+            if (k === 'image' && v === null) return undefined;
+            if (typeof HTMLImageElement !== 'undefined' && v instanceof HTMLImageElement) return undefined;
+            if (typeof HTMLCanvasElement !== 'undefined' && v instanceof HTMLCanvasElement) return undefined;
+            if (typeof v === 'string' && ((v.length > 256 && v.startsWith('data:')) || v.length > 10240)) return 'len:' + v.length;
+            return v;
+        });
+    } catch (e) { return String(Math.random()); }
+}
+
+function applyHistoryState(snap) {
+    const s = cloneKeepingImages(snap);
+    state.selectedIndex = s.selectedIndex;
+    state.currentLanguage = s.currentLanguage;
+    state.outputDevice = s.outputDevice;
+    state.customWidth = s.customWidth;
+    state.customHeight = s.customHeight;
+    state.projectLanguages = s.projectLanguages;
+    state.defaults = s.defaults;
+    state.screenshots = s.screenshots;
+    // Snapshots strip decoded bitmaps from localized entries — re-trigger lazy
+    // resolution (off-screen languages stay deferred), and keep the legacy
+    // single `image` field in sync with the current language.
+    state.screenshots.forEach(sc => {
+        const li = sc.localizedImages;
+        const cur = li && li[state.currentLanguage];
+        if (cur && cur.src && !cur.image) ensureEntryImage(cur);
+        sc.image = (cur && cur.image) ? cur.image : (sc.image || null);
+    });
+
+    _historySuspended = true;
+    try {
+        if (typeof syncUIWithState === 'function') syncUIWithState();
+        if (typeof updateScreenshotList === 'function') updateScreenshotList();
+        if (typeof updateGradientStopsUI === 'function') updateGradientStopsUI();
+        if (typeof renderPerScreenTextUI === 'function') { try { renderPerScreenTextUI(); } catch (e) {} }
+        if (typeof updateCanvas === 'function') updateCanvas();
+        // updateCanvas only SCHEDULES a debounced save; force it to run now, while
+        // still suspended, so the timer can't fire later (unsuspended) and record
+        // the undo/redo as a brand-new change.
+        saveState();
+    } finally {
+        _historySuspended = false;
+    }
+    _committedSnapshot = captureHistoryState();
+    _committedFp = historyFingerprint();
+    updateUndoRedoUI();
+}
+
+// Forget all history and treat the current state as the committed baseline.
+// Called after loading/switching/reloading a project.
+function resetHistory() {
+    _undoStack = [];
+    _redoStack = [];
+    _historyBaseline = null;
+    if (_historyTimer) { clearTimeout(_historyTimer); _historyTimer = null; }
+    _committedSnapshot = captureHistoryState();
+    _committedFp = historyFingerprint();
+    updateUndoRedoUI();
+}
+
+// Called (debounced) from saveState on every change. Records one undo step per
+// burst, holding the state from before the burst began.
+function recordHistoryDebounced() {
+    if (_historySuspended) return;
+    if (projectLoading) return; // hydration in progress — baseline isn't real yet
+    if (_committedSnapshot === null) { _committedSnapshot = captureHistoryState(); _committedFp = historyFingerprint(); }
+    if (_historyBaseline === null) _historyBaseline = _committedSnapshot;
+    if (_historyTimer) clearTimeout(_historyTimer);
+    _historyTimer = setTimeout(commitHistory, HISTORY_DEBOUNCE_MS);
+    updateUndoRedoUI();
+}
+
+function commitHistory() {
+    if (_historyTimer) { clearTimeout(_historyTimer); _historyTimer = null; }
+    if (projectLoading) return; // hydration in progress — baseline isn't real yet
+    if (_historyBaseline === null) return;
+    const baseline = _historyBaseline;
+    _historyBaseline = null;
+    const nowFp = historyFingerprint();
+    if (nowFp === _committedFp) return; // nothing actually changed
+    _undoStack.push(baseline);
+    if (_undoStack.length > HISTORY_MAX) _undoStack.shift();
+    _redoStack = [];
+    _committedSnapshot = captureHistoryState();
+    _committedFp = nowFp;
+    updateUndoRedoUI();
+}
+
+function canUndo() { return _undoStack.length > 0 || _historyBaseline !== null; }
+function canRedo() { return _redoStack.length > 0; }
+
+function undo() {
+    // Flush any in-progress burst so its step is on the stack first.
+    if (_historyTimer || _historyBaseline !== null) commitHistory();
+    if (_undoStack.length === 0) return;
+    const prev = _undoStack.pop();
+    _redoStack.push(_committedSnapshot);
+    applyHistoryState(prev);
+}
+
+function redo() {
+    if (_historyTimer || _historyBaseline !== null) commitHistory();
+    if (_redoStack.length === 0) return;
+    const next = _redoStack.pop();
+    _undoStack.push(_committedSnapshot);
+    if (_undoStack.length > HISTORY_MAX) _undoStack.shift();
+    applyHistoryState(next);
+}
+
+function updateUndoRedoUI() {
+    const u = document.getElementById('undo-btn');
+    const r = document.getElementById('redo-btn');
+    if (u) u.disabled = !canUndo();
+    if (r) r.disabled = !canRedo();
+}
+
+// Keyboard: Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z or Ctrl+Y = redo. Never hijack
+// undo while typing in a field (let the browser's native text undo work there)
+// — but range/color/checkbox inputs have no text undo, so allow it there. Also
+// stay out of the way while a modal is open.
+if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+        const key = (e.key || '').toLowerCase();
+        if (key !== 'z' && key !== 'y') return;
+        if (!(e.metaKey || e.ctrlKey)) return;
+        const t = document.activeElement;
+        const tag = t && t.tagName;
+        if (tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+        if (tag === 'INPUT') {
+            const type = (t.type || 'text').toLowerCase();
+            if (['text', 'search', 'number', 'url', 'email', 'tel', 'password'].includes(type)) return;
+        }
+        if (document.querySelector('.modal-overlay.visible')) return;
+        if (key === 'y' || (key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+        else if (key === 'z') { e.preventDefault(); undo(); }
+    });
+}
+
 function saveState() {
-    if (!db) return;
+    if (_saveStateTimer) { clearTimeout(_saveStateTimer); _saveStateTimer = null; }
+    // Don't persist a half-loaded project: loadState() resolves before its async
+    // image loads finish populating state.screenshots, so a save here would write
+    // an empty project to the server, destroying data.
+    if (projectLoading) return;
+    // While reloading the server's newer copy into the editor, don't echo it back
+    // out as a save (it would be a redundant push of identical data).
+    if (_reloadingFromServer) return;
 
     // Convert screenshots to base64 for storage, including per-screenshot settings and localized images
     const screenshotsToSave = state.screenshots.map(s => {
@@ -1525,6 +3125,7 @@ function saveState() {
     const stateToSave = {
         id: currentProjectId,
         formatVersion: 2, // Version 2: new 3D positioning formula
+        rev: currentProjectRev, // base rev for optimistic concurrency on the server
         screenshots: screenshotsToSave,
         selectedIndex: state.selectedIndex,
         outputDevice: state.outputDevice,
@@ -1542,13 +3143,17 @@ function saveState() {
         saveProjectsMeta();
     }
 
+    // Save = push to the server (debounced) — the one and only store.
+    // Deep-cloned NOW: the record is serialized 1.5s later, and live references
+    // would let edits made in the meantime leak into a payload claiming this rev.
     try {
-        const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
-        const store = transaction.objectStore(PROJECTS_STORE);
-        store.put(stateToSave);
+        scheduleRemotePush(JSON.parse(JSON.stringify({ ...stateToSave, name: project ? project.name : currentProjectId })));
     } catch (e) {
-        console.error('Error saving state:', e);
+        console.error('Error scheduling remote push:', e);
     }
+
+    // Record an undo step for this change (coalesced; skipped during undo/redo).
+    recordHistoryDebounced();
 }
 
 // Migrate 3D positions from old formula to new formula
@@ -1592,19 +3197,38 @@ function reconstructElementImages(elements) {
     });
 }
 
-// Load state from IndexedDB for current project
-function loadState() {
-    if (!db) return Promise.resolve();
+// Load state — fetch the current project from the server (the only store)
+function loadState(injectedRecord) {
+    // Claim this load synchronously, so any still-in-flight previous load goes
+    // stale the instant we're called (before its async image callbacks fire).
+    const myToken = ++loadStateSeq;
 
     return new Promise((resolve) => {
-        try {
-            const transaction = db.transaction([PROJECTS_STORE], 'readonly');
-            const store = transaction.objectStore(PROJECTS_STORE);
-            const request = store.get(currentProjectId);
-
-            request.onsuccess = () => {
-                const parsed = request.result;
+        (async () => {
+                // Any load started after us (newer token) makes us "stale".
+                const isStale = () => myToken !== loadStateSeq;
+                // SERVER-ONLY: the record comes from the server (or was injected by
+                // reloadProjectFromServer to avoid a double download). There is no
+                // browser-side store. No server / unknown project → fresh defaults.
+                let parsed = injectedRecord || null;
+                if (!parsed && RemoteStore.enabled()) {
+                    parsed = await RemoteStore.get(currentProjectId);
+                }
+                if (isStale()) { resolve(); return; } // superseded before the fetch returned
+                // Adopt the server revision this project is based on (0 if local-only
+                // or pre-rev), so the next push sends the correct base rev.
+                currentProjectRev = (parsed && typeof parsed.rev === 'number') ? parsed.rev : 0;
+                // Hold saves while we (a) pull disk-only image bytes from the
+                // server and (b) decode them, so nothing half-loaded is persisted.
+                setProjectLoading(!!(parsed && parsed.screenshots && parsed.screenshots.length));
                 if (parsed) {
+                    // Disk-only + fast load: resolve only the CURRENT language's
+                    // images (+ backgrounds/elements) now; other languages stay as
+                    // refs and load lazily on demand. Avoids fetching every language.
+                    await resolveProjectRefs(parsed, parsed.currentLanguage || state.currentLanguage || 'en');
+                    // A newer load superseded us during the await → abort without
+                    // touching state (it now belongs to the newer project).
+                    if (isStale()) { resolve(); return; }
                     // Check if this is an old-style project (no per-screenshot settings)
                     const isOldFormat = !parsed.defaults && (parsed.background || parsed.screenshot || parsed.text);
                     const hasScreenshotsWithoutSettings = parsed.screenshots?.some(s => !s.background && !s.screenshot && !s.text);
@@ -1645,6 +3269,7 @@ function loadState() {
                     }
 
                     if (parsed.screenshots && parsed.screenshots.length > 0) {
+                        setProjectLoading(true); // block saves until images finish loading
                         let loadedCount = 0;
                         const totalToLoad = parsed.screenshots.length;
 
@@ -1653,6 +3278,7 @@ function loadState() {
                             const hasLocalizedImages = s.localizedImages && Object.keys(s.localizedImages).length > 0;
 
                             if (!hasLocalizedImages && !s.src) {
+                                if (isStale()) return; // superseded by a newer load
                                 // Blank screen (no image)
                                 const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
                                 if (needs3DMigration) {
@@ -1673,70 +3299,72 @@ function loadState() {
                                 loadedCount++;
                                 checkAllLoaded();
                             } else if (hasLocalizedImages) {
-                                // New format: load all localized images
+                                // New format: load all localized images. A broken/slow
+                                // image must NOT stall loading — onerror still completes
+                                // (keeping src so the image data is never dropped).
                                 const langKeys = Object.keys(s.localizedImages);
                                 let langLoadedCount = 0;
                                 const localizedImages = {};
 
+                                const finishScreenshot = () => {
+                                    if (isStale()) return; // superseded by a newer load
+                                    const firstLang = Object.keys(localizedImages)[0];
+                                    const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
+                                    if (needs3DMigration) {
+                                        migrate3DPosition(screenshotSettings);
+                                    }
+                                    state.screenshots[index] = {
+                                        image: firstLang ? localizedImages[firstLang]?.image : null, // Legacy compat
+                                        name: s.name,
+                                        deviceType: s.deviceType,
+                                        localizedImages: localizedImages,
+                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        screenshot: screenshotSettings,
+                                        text: s.text || JSON.parse(JSON.stringify(migratedText)),
+                                        elements: reconstructElementImages(s.elements),
+                                        popouts: s.popouts || [],
+                                        overrides: s.overrides || {}
+                                    };
+                                    loadedCount++;
+                                    checkAllLoaded();
+                                };
+                                const langDone = () => { if (++langLoadedCount === langKeys.length) finishScreenshot(); };
+
                                 langKeys.forEach(lang => {
                                     const langData = s.localizedImages[lang];
-                                    if (langData?.src) {
+                                    const src = langData?.src;
+                                    if (src && src.startsWith(REF_SCHEME)) {
+                                        // Deferred ref (not the current language): keep the entry but
+                                        // DON'T decode now — it loads lazily on demand via
+                                        // getScreenshotImage(). This is the key to fast loading.
+                                        localizedImages[lang] = { image: null, src, name: langData.name || s.name };
+                                        langDone();
+                                    } else if (src) {
                                         const langImg = new Image();
+                                        langImg.decoding = 'async';
                                         langImg.onload = () => {
-                                            localizedImages[lang] = {
-                                                image: langImg,
-                                                src: langData.src,
-                                                name: langData.name || s.name
-                                            };
-                                            langLoadedCount++;
-
-                                            if (langLoadedCount === langKeys.length) {
-                                                // All language versions loaded
-                                                const firstLang = langKeys[0];
-                                                const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
-                                                if (needs3DMigration) {
-                                                    migrate3DPosition(screenshotSettings);
-                                                }
-                                                state.screenshots[index] = {
-                                                    image: localizedImages[firstLang]?.image, // Legacy compat
-                                                    name: s.name,
-                                                    deviceType: s.deviceType,
-                                                    localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
-                                                    screenshot: screenshotSettings,
-                                                    text: s.text || JSON.parse(JSON.stringify(migratedText)),
-                                                    elements: reconstructElementImages(s.elements),
-                                                    popouts: s.popouts || [],
-                                                    overrides: s.overrides || {}
-                                                };
-                                                loadedCount++;
-                                                checkAllLoaded();
-                                            }
+                                            localizedImages[lang] = { image: langImg, src, name: langData.name || s.name };
+                                            langDone();
                                         };
-                                        langImg.src = langData.src;
+                                        langImg.onerror = () => {
+                                            // Preserve src even if the bitmap fails to decode.
+                                            localizedImages[lang] = { image: null, src, name: langData.name || s.name };
+                                            langDone();
+                                        };
+                                        langImg.src = src;
                                     } else {
-                                        langLoadedCount++;
-                                        if (langLoadedCount === langKeys.length) {
-                                            loadedCount++;
-                                            checkAllLoaded();
-                                        }
+                                        langDone();
                                     }
                                 });
                             } else {
                                 // Old format: migrate to localized images
-                                const img = new Image();
-                                img.onload = () => {
-                                    // Detect language from filename, default to 'en'
+                                const finishOld = (img) => {
+                                    if (isStale()) return; // superseded by a newer load
                                     const detectedLang = typeof detectLanguageFromFilename === 'function'
                                         ? detectLanguageFromFilename(s.name || '')
                                         : 'en';
-
                                     const localizedImages = {};
-                                    localizedImages[detectedLang] = {
-                                        image: img,
-                                        src: s.src,
-                                        name: s.name
-                                    };
+                                    localizedImages[detectedLang] = { image: img, src: s.src, name: s.name };
 
                                     const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
                                     if (needs3DMigration) {
@@ -1757,16 +3385,35 @@ function loadState() {
                                     loadedCount++;
                                     checkAllLoaded();
                                 };
+                                const img = new Image();
+                                img.decoding = 'async';
+                                img.onload = () => finishOld(img);
+                                img.onerror = () => finishOld(null); // preserve src even if decode fails
                                 img.src = s.src;
                             }
                         });
 
                         function checkAllLoaded() {
+                            if (isStale()) return; // a newer load owns the state now
                             if (loadedCount === totalToLoad) {
+                                setProjectLoading(false); // images loaded — saves allowed again
                                 updateScreenshotList();
                                 syncUIWithState();
                                 updateGradientStopsUI();
                                 updateCanvas();
+                                if (_reloadingFromServer) {
+                                    // Hydration of the server's copy is done — drop the
+                                    // pending save it scheduled so the just-downloaded
+                                    // data isn't echo-pushed back to the server.
+                                    if (_saveStateTimer) { clearTimeout(_saveStateTimer); _saveStateTimer = null; }
+                                    _reloadingFromServer = false;
+                                }
+                                // Re-baseline undo history on the fully-hydrated state:
+                                // the resetHistory() callers run right after loadState()
+                                // resolves, BEFORE images populate state.screenshots, so
+                                // their baseline would capture an empty project.
+                                resetHistory();
+                                scheduleLanguagePrefetch(); // warm the next language in the background
 
                                 if (needsMigration && parsed.screenshots.length > 0) {
                                     showMigrationPrompt();
@@ -1782,7 +3429,13 @@ function loadState() {
                     }
 
                     state.selectedIndex = parsed.selectedIndex || 0;
-                    state.outputDevice = parsed.outputDevice || 'iphone-6.9';
+                    // Validate the key, don't just check it's non-empty: the
+                    // server stores outputDevice as an unconstrained string, so
+                    // a size written by a newer client would otherwise reach
+                    // getCanvasDimensions() and render at the fallback size
+                    // without anyone noticing.
+                    const loadedDevice = parsed.outputDevice;
+                    state.outputDevice = outputDeviceSize(loadedDevice) ? loadedDevice : 'iphone-6.9';
                     state.customWidth = parsed.customWidth || 1320;
                     state.customHeight = parsed.customHeight || 2868;
 
@@ -1806,16 +3459,10 @@ function loadState() {
                     updateScreenshotList();
                 }
                 resolve();
-            };
-
-            request.onerror = () => {
-                console.error('Error loading state:', request.error);
-                resolve();
-            };
-        } catch (e) {
+        })().catch((e) => {
             console.error('Error loading state:', e);
             resolve();
-        }
+        });
     });
 }
 
@@ -1875,6 +3522,14 @@ function resetStateToDefaults() {
             rotation: 0,
             perspective: 0,
             cornerRadius: 24,
+            deviceModel2D: 'iphone',
+            deviceMacFinish: 'silver',
+            deviceWatchFinish: 'midnight',
+            bezelEnabled: false,
+            spanScreens: 1,
+            use3D: false,
+            device3D: 'iphone',
+            rotation3D: { x: 0, y: 0, z: 0 },
             shadow: {
                 enabled: true,
                 color: '#000000',
@@ -1887,11 +3542,20 @@ function resetStateToDefaults() {
                 enabled: false,
                 color: '#1d1d1f',
                 width: 12,
-                opacity: 100
+                opacity: 100,
+                notch: 'none' // 'none' | 'island' | 'notch'
             }
         },
         text: {
             headlineEnabled: true,
+            headlineBgColor: '#000000',
+            headlineBgOpacity: 0, // 0 = no text background
+            subheadlineBgColor: '#000000',
+            subheadlineBgOpacity: 0,
+            subheadlineSpacing: 0, // extra px between title and subtitle
+            perScreenText: false,  // panorama: a separate text per screen panel
+            panelHeadlines: {},    // { lang: [text per panel] }
+            panelSubheadlines: {},
             headlines: { en: '' },
             headlineLanguages: ['en'],
             currentHeadlineLang: 'en',
@@ -1933,9 +3597,10 @@ function resetStateToDefaults() {
 }
 
 // Switch to a different project
-async function switchProject(projectId) {
-    // Save current project first
-    saveState();
+async function switchProject(projectId, { skipSave = false } = {}) {
+    // Save current project first (skipped when it was just deleted — saving
+    // would re-push it to the server)
+    if (!skipSave) saveState();
 
     currentProjectId = projectId;
     saveProjectsMeta();
@@ -1949,6 +3614,7 @@ async function switchProject(projectId) {
     updateGradientStopsUI();
     updateProjectSelector();
     updateCanvas();
+    resetHistory(); // undo history is per-project; start fresh
 }
 
 // Create a new project
@@ -1977,62 +3643,75 @@ async function deleteProject() {
         return;
     }
 
+    const deletedId = currentProjectId;
+
     // Remove from projects list
-    const index = projects.findIndex(p => p.id === currentProjectId);
+    const index = projects.findIndex(p => p.id === deletedId);
     if (index > -1) {
         projects.splice(index, 1);
     }
 
-    // Delete from IndexedDB
-    if (db) {
-        const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
-        const store = transaction.objectStore(PROJECTS_STORE);
-        store.delete(currentProjectId);
+    // Drop any pending (debounced) persistence of the deleted project so nothing
+    // can re-push it to the server after the delete.
+    if (_saveStateTimer) { clearTimeout(_saveStateTimer); _saveStateTimer = null; }
+    if (_historyTimer) { clearTimeout(_historyTimer); _historyTimer = null; }
+    _historyBaseline = null;
+    const pendingPush = _remotePushPending.get(deletedId);
+    if (pendingPush) {
+        if (pendingPush.timer) clearTimeout(pendingPush.timer);
+        _remotePushPending.delete(deletedId);
     }
 
-    // Switch to first available project
+    // Delete on the server — the only store (no-op if not configured).
+    RemoteStore.del(deletedId);
+    remoteProjectIds.delete(deletedId);
+    // Its pending uploads are moot now.
+    getPendingUploads().then(all => {
+        if (all[deletedId]) { delete all[deletedId]; persistPendingUploads(); }
+    }).catch(() => {});
+
+    // Switch to first available project (without saving the deleted one)
     saveProjectsMeta();
-    await switchProject(projects[0].id);
+    await switchProject(projects[0].id, { skipSave: true });
     updateProjectSelector();
 }
 
 async function duplicateProject(sourceProjectId, customName) {
-    if (!db) return;
+    // Server-only: read the source from the server, clone it under a new id and
+    // create it server-side. The clone's image refs point at the same content-
+    // addressed blobs, so no image bytes travel at all.
+    if (sourceProjectId === currentProjectId) saveState(); // flush latest edits
+    await waitForServerConfirmation(sourceProjectId);
+    const projectData = await RemoteStore.get(sourceProjectId);
+    if (!projectData) {
+        await showAppAlert('Impossible de lire le projet sur le serveur', 'error');
+        return;
+    }
 
-    const transaction = db.transaction([PROJECTS_STORE], 'readonly');
-    const store = transaction.objectStore(PROJECTS_STORE);
-    const request = store.get(sourceProjectId);
+    const newId = 'project_' + Date.now();
+    const sourceProject = projects.find(p => p.id === sourceProjectId);
+    const newName = customName || (sourceProject ? sourceProject.name : 'Project') + ' (Copy)';
 
-    return new Promise((resolve) => {
-        request.onsuccess = async () => {
-            const projectData = request.result;
-            if (!projectData) {
-                await showAppAlert('Could not read project data', 'error');
-                resolve();
-                return;
-            }
+    const clonedData = JSON.parse(JSON.stringify(projectData));
+    clonedData.id = newId;
+    delete clonedData.rev; // new project — fresh revision chain
 
-            const newId = 'project_' + Date.now();
-            const sourceProject = projects.find(p => p.id === sourceProjectId);
-            const newName = customName || (sourceProject ? sourceProject.name : 'Project') + ' (Copy)';
+    showUploadProgress('Duplication du projet…', newName);
+    try {
+        const ok = await RemoteStore.put({ ...clonedData, name: newName });
+        if (!ok) {
+            await showAppAlert('La duplication a échoué (serveur injoignable ?)', 'error');
+            return;
+        }
+    } finally {
+        hideUploadProgress();
+    }
 
-            const clonedData = JSON.parse(JSON.stringify(projectData));
-            clonedData.id = newId;
-
-            projects.push({ id: newId, name: newName, screenshotCount: clonedData.screenshots?.length || 0 });
-            saveProjectsMeta();
-
-            const writeTransaction = db.transaction([PROJECTS_STORE], 'readwrite');
-            const writeStore = writeTransaction.objectStore(PROJECTS_STORE);
-            writeStore.put(clonedData);
-
-            writeTransaction.oncomplete = async () => {
-                await switchProject(newId);
-                updateProjectSelector();
-                resolve();
-            };
-        };
-    });
+    projects.push({ id: newId, name: newName, screenshotCount: clonedData.screenshots?.length || 0 });
+    remoteProjectIds.add(newId);
+    saveProjectsMeta();
+    await switchProject(newId);
+    updateProjectSelector();
 }
 
 function duplicateScreenshot(index) {
@@ -2077,6 +3756,22 @@ function duplicateScreenshot(index) {
         img.src = original.image.src;
         clone.image = img;
     }
+
+    // Deep copy elements (reconstruct Image objects for graphics and icons)
+    clone.elements = (original.elements || []).map(el => {
+        const copy = JSON.parse(JSON.stringify({ ...el, image: undefined }));
+        if ((el.type === 'graphic' || el.type === 'icon') && el.image) {
+            copy.image = el.image;
+        }
+        copy.id = crypto.randomUUID();
+        return copy;
+    });
+
+    clone.popouts = (original.popouts || []).map(p => {
+        const copy = JSON.parse(JSON.stringify(p));
+        copy.id = crypto.randomUUID();
+        return copy;
+    });
 
     state.screenshots.splice(index + 1, 0, clone);
     state.selectedIndex = index + 1;
@@ -2267,6 +3962,9 @@ function syncUIWithState() {
     // Per-language layout toggle
     document.getElementById('per-language-layout-toggle').classList.toggle('active', txt.perLanguageLayout || false);
 
+    // Text zone toggle/sliders/overlay
+    if (typeof updateTextZoneUI === 'function') updateTextZoneUI();
+
     // Headline/Subheadline toggles
     const headlineEnabled = txt.headlineEnabled !== false; // default true for backwards compatibility
     const subheadlineEnabled = txt.subheadlineEnabled || false;
@@ -2277,8 +3975,17 @@ function syncUIWithState() {
     updateHeadlineLanguageUI();
     updateSubheadlineLanguageUI();
 
-    // 3D mode
-    const use3D = ss.use3D || false;
+    // 3D mode. Output sizes with no GLB model (Apple Watch) are 2D-only: hide
+    // the 3D button and clear the flag rather than silently rendering an
+    // iPhone in its place.
+    // Deliberately does not clear a stored use3D: syncUIWithState is a pure
+    // read of state into the UI, and every render path already ANDs with
+    // output3DSupported(). Leaving the flag alone also means a project that
+    // visits a watch size and comes back keeps its 3D setting.
+    const can3D = output3DSupported();
+    const btn3D = document.querySelector('#device-type-selector button[data-type="3d"]');
+    if (btn3D) btn3D.style.display = can3D ? '' : 'none';
+    const use3D = can3D && (ss.use3D || false);
     const device3D = ss.device3D || 'iphone';
     const rotation3D = ss.rotation3D || { x: 0, y: 0, z: 0 };
     document.querySelectorAll('#device-type-selector button').forEach(btn => {
@@ -3615,7 +5322,7 @@ function setupEventListeners() {
 
     // Add blank screen button
     document.getElementById('add-blank-btn').addEventListener('click', () => {
-        createNewScreenshot(null, null, 'Blank Screen', null, state.outputDevice);
+        createNewScreenshot(null, null, 'Blank Screen', null, outputDeviceFamilyLabel());
         state.selectedIndex = state.screenshots.length - 1;
         updateScreenshotList();
         syncUIWithState();
@@ -3729,6 +5436,14 @@ function setupEventListeners() {
         document.getElementById('project-name-input').focus();
     });
 
+    document.getElementById('duplicate-project-btn').addEventListener('click', async () => {
+        const project = projects.find(p => p.id === currentProjectId);
+        const baseName = project ? project.name : 'Project';
+        saveState(); // flush pending edits so the copy includes the latest images/settings
+        await duplicateProject(currentProjectId, baseName + ' (Copy)');
+        await showAppAlert('Project duplicated with all screenshots, images and settings.', 'success');
+    });
+
     document.getElementById('delete-project-btn').addEventListener('click', async () => {
         if (projects.length <= 1) {
             await showAppAlert('Cannot delete the only project', 'info');
@@ -3783,61 +5498,304 @@ function setupEventListeners() {
         document.getElementById('delete-project-modal').classList.remove('visible');
     });
 
-    // Export project backup
-    document.getElementById('export-project-btn').addEventListener('click', async () => {
-        if (!db) return;
-        try {
-            const dump = {};
-            for (const name of db.objectStoreNames) {
-                const tx = db.transaction(name, 'readonly');
-                const store = tx.objectStore(name);
-                dump[name] = await new Promise((resolve) => {
-                    const req = store.getAll();
-                    req.onsuccess = () => resolve(req.result);
-                    req.onerror = () => resolve([]);
-                });
+    // Export the CURRENT project as a ZIP backup: a project.json manifest plus the
+    // images stored as separate files under images/ (re-importable). Storing
+    // images as files instead of inline base64 keeps the archive smaller and lets
+    // you inspect/reuse the originals.
+    const EXT_TO_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', bmp: 'image/bmp' };
+
+    function dataUrlToBytes(dataUrl) {
+        const comma = dataUrl.indexOf(',');
+        const header = dataUrl.slice(5, comma); // e.g. "image/png;base64"
+        const mime = header.split(';')[0] || 'image/png';
+        const ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+        const body = dataUrl.slice(comma + 1);
+        let bytes;
+        if (/;base64/i.test(header)) {
+            const bin = atob(body);
+            bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        } else {
+            bytes = new TextEncoder().encode(decodeURIComponent(body));
+        }
+        return { bytes, ext };
+    }
+
+    // Deep-walk, replacing every embedded data:image URL with a "zip:images/…"
+    // reference and storing the bytes in the archive (identical images dedupe).
+    function externalizeImages(obj, zip, ctx) {
+        const handle = (val, set) => {
+            if (typeof val === 'string' && val.startsWith('data:image/')) {
+                let ref = ctx.seen.get(val);
+                if (!ref) {
+                    const { bytes, ext } = dataUrlToBytes(val);
+                    const path = 'images/img_' + (ctx.n++) + '.' + ext;
+                    zip.file(path, bytes);
+                    ref = 'zip:' + path;
+                    ctx.seen.set(val, ref);
+                }
+                set(ref);
+            } else if (val && typeof val === 'object') {
+                externalizeImages(val, zip, ctx);
             }
-            const json = JSON.stringify(dump, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
+        };
+        if (Array.isArray(obj)) obj.forEach((v, i) => handle(v, nv => { obj[i] = nv; }));
+        else for (const k of Object.keys(obj)) handle(obj[k], nv => { obj[k] = nv; });
+    }
+
+    // Streaming import: upload each image straight from the ZIP (or a legacy
+    // inline data URL) to a binary blob, replacing it with an "appdisk://" ref.
+    // Bounded memory — one image at a time — so a 500 MB backup never becomes one
+    // giant in-memory object, and the final record PUT carries refs only (tiny),
+    // never tripping the server's JSON-body limit.
+    function collectImageSources(obj, out) {
+        if (Array.isArray(obj)) { for (const v of obj) collectImageSources(v, out); }
+        else if (obj && typeof obj === 'object') { for (const k of Object.keys(obj)) collectImageSources(obj[k], out); }
+        else if (typeof obj === 'string' && (obj.startsWith('zip:') || obj.startsWith('data:image/'))) out.add(obj);
+    }
+    function replaceStrings(obj, map) {
+        const keys = Array.isArray(obj) ? obj.map((_, i) => i) : Object.keys(obj);
+        for (const k of keys) {
+            const v = obj[k];
+            if (typeof v === 'string') { if (map.has(v)) obj[k] = map.get(v); }
+            else if (v && typeof v === 'object') replaceStrings(v, map);
+        }
+    }
+    function httpErrorHint(status) {
+        if (status === 413) return ' (fichier trop volumineux pour le serveur)';
+        if (status === 507) return ' — STOCKAGE SERVEUR NON PERSISTANT : le volume n’est pas monté, corrigez le déploiement avant d’importer';
+        return '';
+    }
+    // fetch with a hard timeout + retries. A stalled upload (server restart,
+    // proxy cut) must FAIL with a message — never hang the import forever.
+    async function fetchRetry(url, opts, { timeoutMs = 90000, tries = 3 } = {}) {
+        let lastErr;
+        for (let attempt = 1; attempt <= tries; attempt++) {
+            const ctl = new AbortController();
+            const t = setTimeout(() => ctl.abort(), timeoutMs);
+            try {
+                const r = await fetch(url, { ...opts, signal: ctl.signal });
+                clearTimeout(t);
+                if (r.ok) return r;
+                if (r.status === 413 || r.status === 507) return r; // permanent — don't retry
+                lastErr = new Error('HTTP ' + r.status);
+            } catch (e) {
+                clearTimeout(t);
+                lastErr = (e && e.name === 'AbortError') ? new Error('délai dépassé (' + (timeoutMs / 1000) + 's)') : e;
+            }
+            if (attempt < tries) await new Promise(res => setTimeout(res, 2000 * attempt));
+        }
+        throw lastErr || new Error('échec réseau');
+    }
+    async function uploadImportBlob(projectId, bytes, ext, name) {
+        const base = RemoteStore.baseUrl();
+        if (!base) throw new Error('aucun serveur configuré');
+        const e = (ext || 'png').toLowerCase();
+        const mime = EXT_TO_MIME[e] || 'application/octet-stream';
+        const r = await fetchRetry(base + '/projects/' + encodeURIComponent(projectId) + '/blobs/' + name, {
+            method: 'PUT', headers: { ...RemoteStore._headers(false), 'Content-Type': mime }, body: bytes
+        });
+        if (!r.ok) throw new Error('upload image HTTP ' + r.status + httpErrorHint(r.status));
+        return REF_SCHEME + name;
+    }
+    async function importRecordToServer(data, zip, label) {
+        const base = RemoteStore.baseUrl();
+        if (!base) throw new Error('aucun serveur configuré');
+        const sources = new Set();
+        collectImageSources(data, sources);
+        const list = Array.from(sources);
+        const map = new Map();
+
+        // One image in memory at a time, in two passes.
+        // Pass 1 — hash: read each image's bytes, compute its content-addressed
+        // name, DISCARD the bytes (re-read from the ZIP on upload). Knowing every
+        // name up front lets blobs/check tell us which blobs the server already
+        // has, so a re-import after a failure RESUMES instead of restarting.
+        const readBytes = async (src) => {
+            if (src.startsWith('zip:')) {
+                const f = zip && zip.file(src.slice(4));
+                if (!f) return null; // missing in archive — leave as-is; server verify flags it
+                return { bytes: await f.async('uint8array'), ext: (src.slice(4).split('.').pop() || 'png').toLowerCase() };
+            }
+            const r = dataUrlToBytes(src);
+            return { bytes: r.bytes, ext: r.ext };
+        };
+        const items = [];
+        for (let i = 0; i < list.length; i++) {
+            const src = list[i];
+            showUploadProgress('Préparation des images… (' + (i + 1) + '/' + list.length + ')', label || '');
+            const read = await readBytes(src);
+            if (!read) continue;
+            const name = (await sha256Hex(read.bytes)).slice(0, 40) + '.' + (read.ext || 'png').toLowerCase();
+            items.push({ src, ext: read.ext, name }); // bytes NOT kept
+        }
+        let missing = new Set(items.map(it => it.name));
+        try {
+            const r = await fetchRetry(base + '/projects/' + encodeURIComponent(data.id) + '/blobs/check', {
+                method: 'POST', headers: RemoteStore._headers(true),
+                body: JSON.stringify({ names: items.map(it => it.name) })
+            }, { timeoutMs: 30000 });
+            if (r.ok) missing = new Set((await r.json()).missing || []);
+        } catch (e) { /* can't check — upload everything */ }
+
+        // Already-present blobs resume for free.
+        for (const it of items) if (!missing.has(it.name)) map.set(it.src, REF_SCHEME + it.name);
+
+        // Pass 2 — upload the missing blobs in BATCHES (few round-trips). Bytes are
+        // re-read from the ZIP per batch so peak memory stays ~one batch (≤40 MB),
+        // never the whole project.
+        const toUpload = items.filter(it => missing.has(it.name));
+        const eid = encodeURIComponent(data.id);
+        const MAX_BYTES = 40 * 1024 * 1024, MAX_COUNT = 40;
+        let done = 0, useBatch = true, idx = 0;
+        const total = toUpload.length;
+        while (idx < toUpload.length) {
+            const batch = [];
+            let size = 0;
+            while (idx < toUpload.length && batch.length < MAX_COUNT) {
+                const it = toUpload[idx];
+                const read = await readBytes(it.src);
+                if (!read) { idx++; continue; }
+                if (batch.length > 0 && size + read.bytes.length > MAX_BYTES) break; // send what we have; re-read this one next batch
+                const mime = EXT_TO_MIME[(it.ext || 'png').toLowerCase()] || 'application/octet-stream';
+                batch.push({ name: it.name, bytes: read.bytes, mime, src: it.src, ext: it.ext });
+                size += read.bytes.length; idx++;
+            }
+            if (!batch.length) continue;
+            showUploadProgress('Import des images… (' + (done + 1) + '–' + (done + batch.length) + '/' + total + ')', label || '');
+            let res = useBatch ? await RemoteStore._uploadBatch(eid, batch) : 'fallback';
+            if (res === 'no-batch-endpoint' || res === 'fallback') {
+                useBatch = false; // old server (or chosen fallback): PUT one by one
+                for (const x of batch) { await uploadImportBlob(data.id, x.bytes, x.ext, x.name); map.set(x.src, REF_SCHEME + x.name); }
+            } else if (!res) {
+                throw new Error('upload du lot d’images échoué');
+            } else {
+                for (const x of batch) map.set(x.src, REF_SCHEME + x.name);
+            }
+            done += batch.length;
+        }
+        replaceStrings(data, map);
+        showUploadProgress('Enregistrement du projet…', label || '');
+        const r = await fetchRetry(base + '/projects/' + encodeURIComponent(data.id), {
+            method: 'PUT', headers: RemoteStore._headers(true), body: JSON.stringify(data)
+        });
+        if (!r.ok) throw new Error('enregistrement du projet HTTP ' + r.status + httpErrorHint(r.status));
+        return true;
+    }
+
+    document.getElementById('export-project-btn').addEventListener('click', async () => {
+        try {
+            saveState(); // flush pending edits so the latest images/settings reach the server
+            await waitForServerConfirmation(currentProjectId);
+            const rec = await RemoteStore.get(currentProjectId); // the server is the only store
+            if (!rec) { await showAppAlert('No project data to export.', 'error'); return; }
+            const meta = projects.find(p => p.id === currentProjectId);
+            const name = meta ? meta.name : 'Project';
+
+            const zip = new JSZip();
+            const recClone = JSON.parse(JSON.stringify(rec));
+            // Disk-only: the stored record holds "appdisk://" refs — pull the real
+            // image bytes back from the server (all languages) before archiving.
+            await resolveRefsInRecord(recClone);
+            externalizeImages(recClone, zip, { seen: new Map(), n: 0 });
+            const manifest = {
+                type: 'appscreen-project-backup',
+                version: 2, // v2 = ZIP with images stored as files
+                exportedAt: new Date().toISOString(),
+                name,
+                data: recClone
+            };
+            zip.file('project.json', JSON.stringify(manifest));
+            const blob = await zip.generateAsync({ type: 'blob' });
+
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'appscreen-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+            const safe = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'project';
+            a.download = `appscreen-${safe}-${new Date().toISOString().slice(0, 10)}.zip`;
             a.click();
-            URL.revokeObjectURL(a.href);
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         } catch (e) {
             console.error('Export failed:', e);
-            alert('Export failed: ' + e.message);
+            await showAppAlert('Export failed: ' + e.message, 'error');
         }
     });
 
-    // Import project backup
+    // Import project backup (ZIP with images, or legacy JSON).
     const importInput = document.getElementById('import-project-input');
     document.getElementById('import-project-btn').addEventListener('click', () => {
         importInput.click();
     });
     importInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
-        if (!file || !db) return;
+        if (!file) return;
+        if (!RemoteStore.enabled()) {
+            await showAppAlert('Aucun serveur configuré — impossible d’importer un projet.', 'error');
+            importInput.value = '';
+            return;
+        }
         try {
-            const text = await file.text();
-            const dump = JSON.parse(text);
-            for (const storeName of Object.keys(dump)) {
-                if (!db.objectStoreNames.contains(storeName)) continue;
-                const tx = db.transaction(storeName, 'readwrite');
-                const store = tx.objectStore(storeName);
-                for (const record of dump[storeName]) {
-                    store.put(record);
-                }
-                await new Promise((resolve, reject) => {
-                    tx.oncomplete = resolve;
-                    tx.onerror = () => reject(tx.error);
-                });
+            let manifest;
+            let zip = null;
+            const isZip = /\.zip$/i.test(file.name) || file.type === 'application/zip';
+            if (isZip) {
+                zip = await JSZip.loadAsync(file);
+                const pj = zip.file('project.json');
+                if (!pj) throw new Error('project.json not found in the ZIP');
+                manifest = JSON.parse(await pj.async('string'));
+                // NOTE: images stay as "zip:" refs — importRecordToServer streams
+                // each one straight to a blob (no giant in-memory inline step).
+            } else {
+                manifest = JSON.parse(await file.text());
             }
-            alert('Import complete! Reloading...');
-            location.reload();
+
+            if (manifest && manifest.type === 'appscreen-project-backup' && manifest.data) {
+                // Import as a NEW project, created directly ON THE SERVER (the
+                // only store). Never overwrites; re-importable; portable.
+                const newId = 'project_' + Date.now();
+                const data = manifest.data;
+                data.id = newId;
+                delete data.rev; // fresh revision chain on the server
+                let name = manifest.name || 'Imported Project';
+                if (projects.some(p => p.name === name)) name += ' (Imported)';
+                data.name = name;
+                showUploadProgress('Import du projet…', name);
+                try {
+                    await importRecordToServer(data, zip, name);
+                } finally {
+                    hideUploadProgress();
+                }
+                projects.push({ id: newId, name, screenshotCount: (data.screenshots && data.screenshots.length) || 0 });
+                remoteProjectIds.add(newId);
+                saveProjectsMeta();
+                await switchProject(newId);
+                updateProjectSelector();
+                await showAppAlert(`Imported "${name}" with all screenshots, images and settings.`, 'success');
+            } else {
+                // Legacy full-IndexedDB dump: import each project record to the server.
+                const dump = manifest;
+                const records = Array.isArray(dump && dump.projects) ? dump.projects : null;
+                if (!records || !records.length) throw new Error('format de sauvegarde non reconnu');
+                showUploadProgress('Import des projets…', '');
+                try {
+                    for (let i = 0; i < records.length; i++) {
+                        const rec = records[i];
+                        if (!rec || !Array.isArray(rec.screenshots)) continue;
+                        showUploadProgress('Import des projets… (' + (i + 1) + '/' + records.length + ')', rec.name || rec.id || '');
+                        rec.id = 'project_' + Date.now() + '_' + i;
+                        delete rec.rev;
+                        rec.name = rec.name || ('Imported ' + (i + 1));
+                        await importRecordToServer(rec, null, rec.name);
+                    }
+                } finally {
+                    hideUploadProgress();
+                }
+                await showAppAlert('Backup imported. Reloading…', 'success');
+                location.reload();
+            }
         } catch (e) {
             console.error('Import failed:', e);
-            alert('Import failed: ' + e.message);
+            hideUploadProgress();
+            await showAppAlert('Import échoué : ' + (e && e.message ? e.message : e), 'error');
         }
         importInput.value = '';
     });
@@ -4027,6 +5985,12 @@ function setupEventListeners() {
         saveSettings();
     });
 
+    // Re-encode images already stored on the server (settings → Image compression)
+    const optimizeBtn = document.getElementById('optimize-images-btn');
+    if (optimizeBtn) optimizeBtn.addEventListener('click', () => { optimizeStoredImages('current'); });
+    const optimizeAllBtn = document.getElementById('optimize-images-all-btn');
+    if (optimizeAllBtn) optimizeAllBtn.addEventListener('click', () => { optimizeStoredImages('all'); });
+
     // Theme selector buttons
     document.querySelectorAll('#theme-selector button').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -4053,6 +6017,21 @@ function setupEventListeners() {
             }
         });
     });
+
+    // MCP server: connect button
+    const mcpConnectBtn = document.getElementById('mcp-connect-btn');
+    if (mcpConnectBtn) {
+        mcpConnectBtn.addEventListener('click', () => {
+            const url = normalizeMcpUrl(document.getElementById('settings-mcp-url').value.trim());
+            const token = document.getElementById('settings-mcp-token').value.trim();
+            // Reflect the corrected URL back into the field.
+            document.getElementById('settings-mcp-url').value = url;
+            // Persist immediately so a successful connection survives reloads.
+            if (url) localStorage.setItem('mcpServerUrl', url); else localStorage.removeItem('mcpServerUrl');
+            if (token) localStorage.setItem('mcpServerToken', token); else localStorage.removeItem('mcpServerToken');
+            connectMcpServer(url, token);
+        });
+    }
 
     document.getElementById('settings-modal').addEventListener('click', (e) => {
         if (e.target.id === 'settings-modal') {
@@ -4084,7 +6063,17 @@ function setupEventListeners() {
             e.stopPropagation();
             document.querySelectorAll('.output-size-menu .device-option').forEach(o => o.classList.remove('selected'));
             opt.classList.add('selected');
+            const prevDevice = state.outputDevice;
             state.outputDevice = opt.dataset.device;
+
+            // Moving to/from the Apple Watch is a 3× jump in canvas size, so the
+            // absolute text sizes and the 2D device model both have to follow.
+            rescaleTextForOutput(prevDevice, state.outputDevice);
+            if (isWatchOutput() !== isWatchOutput(prevDevice)) {
+                if (isWatchOutput()) adoptWatchDeviceModel(); else dropWatchDeviceModel(state.outputDevice);
+                if (typeof syncDeviceTextExtras === 'function') syncDeviceTextExtras();
+                syncUIWithState();
+            }
 
             // Update trigger text
             document.getElementById('output-size-name').textContent = opt.querySelector('.device-option-name').textContent;
@@ -4121,6 +6110,8 @@ function setupEventListeners() {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
             document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            // Show/hide the text-zone overlay with the Text tab.
+            if (typeof updateTextZoneUI === 'function') updateTextZoneUI();
             // Save active tab to localStorage
             localStorage.setItem('activeTab', tab.dataset.tab);
         });
@@ -4264,14 +6255,27 @@ function setupEventListeners() {
     bgImageUpload.addEventListener('click', () => bgImageInput.click());
     bgImageInput.addEventListener('change', (e) => {
         if (e.target.files[0]) {
+            const fileName = e.target.files[0].name;
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
-                img.onload = () => {
+                img.onload = async () => {
                     setBackground('image', img);
                     document.getElementById('bg-image-preview').src = event.target.result;
                     document.getElementById('bg-image-preview').style.display = 'block';
                     updateCanvas();
+                    // Block until the server confirmed the background image.
+                    showUploadProgress('Enregistrement sur le serveur…', fileName);
+                    try {
+                        saveState();
+                        await waitForServerConfirmation(currentProjectId);
+                    } finally {
+                        hideUploadProgress();
+                    }
+                };
+                img.onerror = () => {
+                    _importFailures.push(fileName);
+                    reportImportFailures();
                 };
                 img.src = event.target.result;
             };
@@ -4559,6 +6563,9 @@ function setupEventListeners() {
         updateCanvas();
     });
 
+    // Text zone (auto-fit rectangle) toggle, sliders and draggable overlay.
+    setupTextZoneControls();
+
     document.getElementById('subheadline-text').addEventListener('input', (e) => {
         const text = getTextSettings();
         if (!text.subheadlines) text.subheadlines = { en: '' };
@@ -4620,6 +6627,8 @@ function setupEventListeners() {
     // Device type selector (2D/3D)
     document.querySelectorAll('#device-type-selector button').forEach(btn => {
         btn.addEventListener('click', () => {
+            // No GLB model for this output size (Apple Watch) — stay in 2D.
+            if (btn.dataset.type === '3d' && !output3DSupported()) return;
             document.querySelectorAll('#device-type-selector button').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
@@ -4997,14 +7006,22 @@ function updateSubheadlineLanguageUI() {
 // Translate modal functions
 let currentTranslateTarget = null;
 
+// Full set of App Store Connect localizations (39).
 const languageNames = {
-    'en': 'English (US)', 'en-gb': 'English (UK)', 'de': 'German', 'fr': 'French',
-    'es': 'Spanish', 'it': 'Italian', 'pt': 'Portuguese', 'pt-br': 'Portuguese (BR)',
+    'en': 'English (US)', 'en-au': 'English (Australia)', 'en-ca': 'English (Canada)',
+    'en-gb': 'English (UK)', 'de': 'German', 'fr': 'French', 'fr-ca': 'French (Canada)',
+    'es': 'Spanish (Spain)', 'es-mx': 'Spanish (Mexico)', 'it': 'Italian',
+    'pt': 'Portuguese (Portugal)', 'pt-br': 'Portuguese (Brazil)',
     'nl': 'Dutch', 'ru': 'Russian', 'ja': 'Japanese', 'ko': 'Korean',
     'zh': 'Chinese (Simplified)', 'zh-tw': 'Chinese (Traditional)', 'ar': 'Arabic',
     'hi': 'Hindi', 'tr': 'Turkish', 'pl': 'Polish', 'sv': 'Swedish',
     'da': 'Danish', 'no': 'Norwegian', 'fi': 'Finnish', 'th': 'Thai',
-    'vi': 'Vietnamese', 'id': 'Indonesian', 'uk': 'Ukrainian'
+    'vi': 'Vietnamese', 'id': 'Indonesian', 'uk': 'Ukrainian',
+    'ca': 'Catalan', 'cs': 'Czech', 'el': 'Greek', 'he': 'Hebrew',
+    'hr': 'Croatian', 'hu': 'Hungarian', 'ms': 'Malay', 'ro': 'Romanian', 'sk': 'Slovak',
+    'sl': 'Slovenian', 'bn': 'Bangla', 'gu': 'Gujarati', 'kn': 'Kannada',
+    'ml': 'Malayalam', 'mr': 'Marathi', 'or': 'Odia', 'pa': 'Punjabi',
+    'ta': 'Tamil', 'te': 'Telugu', 'ur': 'Urdu'
 };
 
 function openTranslateModal(target) {
@@ -5786,6 +7803,136 @@ function initTheme() {
 // Apply theme immediately (before async init)
 initTheme();
 
+// ===== Stored-image compression (settings modal) =====
+
+function formatBytes(n) {
+    if (!isFinite(n) || n <= 0) return '0 MB';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function setOptimizeStatus(msg, cls) {
+    const el = document.getElementById('optimize-images-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'settings-key-status' + (cls ? ' ' + cls : '');
+}
+
+// "N images · 214.3 MB" for the open project, so the setting above it has a
+// number to argue with.
+async function refreshStorageReadout() {
+    const el = document.getElementById('settings-storage-readout');
+    if (!el) return;
+    if (!RemoteStore.enabled()) { el.textContent = 'No server connected'; return; }
+    el.textContent = 'Measuring…';
+    const s = await RemoteStore.storage(currentProjectId);
+    if (!s) { el.textContent = 'Unavailable (server too old?)'; return; }
+    el.textContent = s.images + ' image' + (s.images === 1 ? '' : 's') + ' · ' + formatBytes(s.bytes)
+        + (s.missing ? ' · ' + s.missing + ' missing' : '');
+}
+
+// Re-encode the images ALREADY stored on the server. Everything happens
+// server-side (the browser never downloads the originals) — it rewrites each
+// project's refs to the new blobs and the usual GC reclaims the old bytes.
+async function optimizeStoredImages(scope) {
+    const btn = document.getElementById('optimize-images-btn');
+    const allBtn = document.getElementById('optimize-images-all-btn');
+    if (!RemoteStore.enabled()) {
+        setOptimizeStatus('Connect an MCP server first — it is where the images live.', 'error');
+        return;
+    }
+    const cfg = readImageOptSettingsFromUI();
+    const targets = scope === 'all'
+        ? projects.map(p => p.id)
+        : [currentProjectId];
+    const label = scope === 'all'
+        ? 'all ' + targets.length + ' project' + (targets.length === 1 ? '' : 's')
+        : 'this project';
+    const ok = await showAppConfirm(
+        'Re-encode the images of ' + label + ' at ' + Math.round(cfg.quality * 100) + '% quality'
+        + (cfg.maxEdge ? ', capped at ' + cfg.maxEdge + ' px' : '')
+        + '? Images are replaced by smaller versions — this cannot be undone.',
+        'Optimize', 'Cancel');
+    if (!ok) return;
+
+    if (btn) btn.disabled = true;
+    if (allBtn) allBtn.disabled = true;
+    // The open project must be fully on the server before we ask the server to
+    // rewrite it, or the push that lands afterwards would carry the old images
+    // back up.
+    showUploadProgress('Optimisation des images…', 'Enregistrement des modifications en cours…');
+    try {
+        saveState();
+        await waitForServerConfirmation(currentProjectId);
+
+        const opts = {
+            quality: Math.round(cfg.quality * 100),
+            // A browser that can't encode WebP can't decode it either, so don't
+            // let the server rewrite this user's images into a format they
+            // wouldn't be able to open.
+            format: (cfg.format === 'jpeg' || !canEncodeWebP()) ? 'jpeg' : 'webp',
+            maxEdge: cfg.maxEdge || 0,
+        };
+        let before = 0, after = 0, rewritten = 0, images = 0, failed = 0;
+        const errors = [];
+        for (let i = 0; i < targets.length; i++) {
+            const meta = projects.find(p => p.id === targets[i]);
+            showUploadProgress('Optimisation des images…',
+                (targets.length > 1 ? '(' + (i + 1) + '/' + targets.length + ') ' : '') + (meta ? meta.name : targets[i]));
+            const res = await RemoteStore.optimizeImages(targets[i], opts);
+            if (!res || res.error) {
+                errors.push((meta ? meta.name : targets[i]) + ': '
+                    + (res && res.error === 'unsupported' ? 'server too old for this feature' : (res && res.error) || 'failed'));
+                continue;
+            }
+            before += res.beforeBytes || 0;
+            after += res.afterBytes || 0;
+            rewritten += res.rewritten || 0;
+            images += res.images || 0;
+            failed += res.failed || 0;
+        }
+
+        // The server rewrote the record under us — take its version.
+        if (rewritten) await reloadProjectFromServer(currentProjectId);
+
+        const saved = Math.max(0, before - after);
+        const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
+        const errorText = errors.slice(0, 3).join(' · ') + (errors.length > 3 ? ' · +' + (errors.length - 3) + ' more' : '');
+        if (errors.length && !rewritten) {
+            setOptimizeStatus(errorText, 'error');
+        } else {
+            setOptimizeStatus(
+                rewritten
+                    ? '✓ ' + rewritten + '/' + images + ' image' + (images === 1 ? '' : 's') + ' re-encoded — '
+                      + formatBytes(before) + ' → ' + formatBytes(after) + ' (−' + pct + '%)'
+                      + (failed ? ' · ' + failed + ' skipped (unreadable)' : '')
+                      + (errors.length ? ' · ' + errorText : '')
+                    : 'Already optimal — nothing to re-encode.',
+                errors.length ? 'error' : 'success');
+        }
+        await refreshStorageReadout();
+    } catch (e) {
+        setOptimizeStatus('Failed: ' + (e && e.message || e), 'error');
+    } finally {
+        hideUploadProgress();
+        if (btn) btn.disabled = false;
+        if (allBtn) allBtn.disabled = false;
+    }
+}
+
+function readImageOptSettingsFromUI() {
+    const q = parseFloat(document.getElementById('settings-image-quality')?.value);
+    const m = parseInt(document.getElementById('settings-image-maxedge')?.value, 10);
+    const f = document.getElementById('settings-image-format')?.value;
+    const d = getImageOptSettings();
+    return {
+        quality: isFinite(q) ? q : d.quality,
+        maxEdge: isFinite(m) ? m : d.maxEdge,
+        format: f || d.format,
+    };
+}
+
 function openSettingsModal() {
     // Load saved provider
     const savedProvider = getSelectedProvider();
@@ -5833,6 +7980,46 @@ function openSettingsModal() {
         btn.classList.toggle('active', btn.dataset.theme === savedTheme);
     });
 
+    // Load saved MCP server config and reflect last known connection state
+    const mcpUrlInput = document.getElementById('settings-mcp-url');
+    const mcpTokenInput = document.getElementById('settings-mcp-token');
+    let savedMcpUrl = localStorage.getItem('mcpServerUrl');
+    // Self-heal a stale saved URL (e.g. https://host:3000/mcp from before the fix).
+    if (savedMcpUrl) {
+        const fixed = normalizeMcpUrl(savedMcpUrl);
+        if (fixed !== savedMcpUrl) {
+            savedMcpUrl = fixed;
+            localStorage.setItem('mcpServerUrl', fixed);
+        }
+    }
+    if (mcpUrlInput) mcpUrlInput.value = savedMcpUrl || defaultMcpUrl();
+    if (mcpTokenInput) {
+        mcpTokenInput.value = localStorage.getItem('mcpServerToken') || '';
+        mcpTokenInput.type = 'password';
+    }
+    if (mcpState && mcpState.connected) {
+        setMcpStatus('connected', `Connected to ${mcpState.info} · ${mcpState.tools.length} tools`);
+        renderMcpTools(mcpState.tools);
+    } else {
+        setMcpStatus('', savedMcpUrl ? 'Saved — click Connect to test.' : 'Auto-detected from this page — click Connect.');
+        const toolsEl = document.getElementById('mcp-tools-list');
+        if (toolsEl) toolsEl.innerHTML = '';
+    }
+
+    // Image compression preferences (+ what the open project currently weighs)
+    const imgCfg = getImageOptSettings();
+    const pick = (id, value, fallback) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.value = String(value);
+        if (!sel.value) sel.value = String(fallback); // stored value isn't an option anymore
+    };
+    pick('settings-image-quality', imgCfg.quality, IMAGE_OPT_DEFAULTS.quality);
+    pick('settings-image-maxedge', imgCfg.maxEdge, IMAGE_OPT_DEFAULTS.maxEdge);
+    pick('settings-image-format', imgCfg.format, IMAGE_OPT_DEFAULTS.format);
+    setOptimizeStatus('');
+    refreshStorageReadout();
+
     document.getElementById('settings-modal').classList.add('visible');
 }
 
@@ -5852,6 +8039,18 @@ function saveSettings() {
     // Save selected provider
     const selectedProvider = document.querySelector('input[name="ai-provider"]:checked').value;
     localStorage.setItem('aiProvider', selectedProvider);
+
+    // Save MCP server config
+    const mcpUrl = normalizeMcpUrl((document.getElementById('settings-mcp-url')?.value || '').trim());
+    const mcpToken = (document.getElementById('settings-mcp-token')?.value || '').trim();
+    if (mcpUrl) localStorage.setItem('mcpServerUrl', mcpUrl); else localStorage.removeItem('mcpServerUrl');
+    if (mcpToken) localStorage.setItem('mcpServerToken', mcpToken); else localStorage.removeItem('mcpServerToken');
+
+    // Image compression preferences (applied to every image imported from now on)
+    const imgCfg = readImageOptSettingsFromUI();
+    localStorage.setItem('imageQuality', String(imgCfg.quality));
+    localStorage.setItem('imageMaxEdge', String(imgCfg.maxEdge));
+    localStorage.setItem('imageFormat', imgCfg.format);
 
     // Save all API keys and models
     let allValid = true;
@@ -5893,6 +8092,159 @@ function saveSettings() {
     }
 }
 
+// ===== MCP server connection (browser MCP client over Streamable HTTP) =====
+
+// Last known connection state (runtime only).
+let mcpState = { connected: false, tools: [], url: '', info: '' };
+
+// Derive a sensible default MCP server URL from the page's own origin:
+//  - Served over HTTPS (production / Cloudflare Tunnel / reverse proxy): assume the
+//    server sits behind the same origin on the standard port → https://<host>/mcp
+//    (no :3000 — Cloudflare doesn't proxy port 3000 anyway).
+//  - Served over HTTP (local dev / LAN, e.g. http://192.168.x.x:8000): the server's
+//    default port is 3000 → http://<host>:3000/mcp
+// Falls back to localhost for file:// or when the host can't be determined.
+function defaultMcpUrl() {
+    try {
+        const loc = window.location;
+        const host = loc.hostname;
+        if (host) {
+            if (loc.protocol === 'https:') {
+                return `https://${host}/mcp`;
+            }
+            return `http://${host}:3000/mcp`;
+        }
+    } catch (e) { /* ignore */ }
+    return 'http://localhost:3000/mcp';
+}
+
+// Auto-correct a known-broken MCP URL: HTTPS on port 3000 is never a real
+// deployment (3000 is a dev HTTP port, and Cloudflare won't proxy it) — drop the
+// port so it targets 443. Leaves everything else untouched. Used on display and
+// on input so a stale saved value like https://host:3000/mcp self-heals.
+function normalizeMcpUrl(url) {
+    if (!url) return url;
+    try {
+        const u = new URL(url);
+        if (u.protocol === 'https:' && u.port === '3000') {
+            u.port = '';
+            return u.toString();
+        }
+    } catch (e) { /* not a URL — leave as typed */ }
+    return url;
+}
+
+function mcpEscapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+// Parse a JSON-RPC reply that may come back as plain JSON or as an SSE stream
+// (event: message\n data: {...}). Returns the parsed message object.
+function mcpParseResponse(text) {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{')) return JSON.parse(trimmed);
+    let last = null;
+    for (const line of trimmed.split(/\r?\n/)) {
+        const m = line.match(/^data:\s?(.*)$/);
+        if (m && m[1]) {
+            try { last = JSON.parse(m[1]); } catch (e) { /* ignore non-JSON data lines */ }
+        }
+    }
+    if (!last) throw new Error('Could not parse server response.');
+    return last;
+}
+
+async function mcpRpc(url, token, method, params) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream'
+    };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params: params || {} })
+    });
+    if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.text()).slice(0, 200); } catch (e) {}
+        throw new Error(`HTTP ${res.status}` + (detail ? ` — ${detail}` : ''));
+    }
+    const msg = mcpParseResponse(await res.text());
+    if (msg.error) throw new Error(msg.error.message || JSON.stringify(msg.error));
+    return msg.result;
+}
+
+function setMcpStatus(state, msg) {
+    const dot = document.getElementById('mcp-status-dot');
+    const status = document.getElementById('mcp-connection-status');
+    if (dot) {
+        dot.className = 'mcp-status-dot' + (state ? ' ' + state : '');
+        dot.title = msg || (state || 'Not connected');
+    }
+    if (status) {
+        status.textContent = msg || '';
+        const cls = state === 'connected' ? ' success'
+            : state === 'error' ? ' error'
+            : state === 'connecting' ? ' connecting' : '';
+        status.className = 'settings-key-status' + cls;
+    }
+}
+
+function renderMcpTools(tools) {
+    const el = document.getElementById('mcp-tools-list');
+    if (!el) return;
+    el.innerHTML = (tools || []).map(t => `
+        <div class="mcp-tool-item">
+            <div class="mcp-tool-name">${mcpEscapeHtml(t.name)}</div>
+            ${t.description ? `<div class="mcp-tool-desc">${mcpEscapeHtml(t.description)}</div>` : ''}
+        </div>`).join('');
+}
+
+// Initiate the MCP connection: handshake + list tools.
+// opts.silent: don't show a scary error if it fails (used for auto-connect to an
+// auto-detected server that may not exist).
+async function connectMcpServer(url, token, opts = {}) {
+    const toolsEl = document.getElementById('mcp-tools-list');
+    if (!url) {
+        if (!opts.silent) setMcpStatus('error', 'Enter a server URL first.');
+        return;
+    }
+    setMcpStatus('connecting', 'Connecting…');
+    if (toolsEl) toolsEl.innerHTML = '';
+    try {
+        const init = await mcpRpc(url, token, 'initialize', {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'appscreen-web', version: '1.0.0' }
+        });
+        const info = init && init.serverInfo
+            ? `${init.serverInfo.name} v${init.serverInfo.version}`
+            : 'server';
+        const list = await mcpRpc(url, token, 'tools/list', {});
+        const tools = (list && list.tools) || [];
+        mcpState = { connected: true, tools, url, info };
+        setMcpStatus('connected', `Connected to ${info} · ${tools.length} tools`);
+        renderMcpTools(tools);
+        // Now that a server is connected, load its project list (the only store)
+        // and refresh the selector.
+        syncWithRemote().then(() => updateProjectSelector()).catch(() => {});
+    } catch (e) {
+        mcpState = { connected: false, tools: [], url, info: '' };
+        if (opts.silent) {
+            setMcpStatus('', 'Not connected');
+            return;
+        }
+        let hint = String((e && e.message) || e);
+        if (/Failed to fetch|NetworkError|load failed/i.test(hint)) {
+            hint = 'Could not reach the server. Check the URL, that the server is running, and CORS / mixed content (an HTTPS page cannot call an http:// server except on localhost).';
+        }
+        setMcpStatus('error', hint);
+    }
+}
+
 // Helper function to set text value for current screenshot
 function setTextValue(key, value) {
     setTextSetting(key, value);
@@ -5924,6 +8276,192 @@ function loadTextUIFromScreenshot() {
 // Load text UI from default settings
 function loadTextUIFromGlobal() {
     updateTextUI(state.defaults.text);
+}
+
+// ===== Text zone (auto-fit rectangle) =====
+// The zone lives on the container text (like autoFit) so it applies to the whole
+// screen's text block, including every panorama panel.
+function getTextZone() {
+    try {
+        const t = (typeof getContainerText === 'function') ? getContainerText() : null;
+        return (t && t.textZone) ? t.textZone : null;
+    } catch (e) { return null; }
+}
+
+// Keep the zone rectangle inside the canvas: clamp size, then position so the box
+// always stays fully on-screen.
+function clampTextZone(z) {
+    z.width = Math.max(5, Math.min(100, z.width));
+    z.height = Math.max(5, Math.min(100, z.height));
+    z.x = Math.max(0, Math.min(100 - z.width, z.x));
+    z.y = Math.max(0, Math.min(100 - z.height, z.y));
+}
+
+function isTextTabActive() {
+    const tab = document.getElementById('tab-text');
+    return !!(tab && tab.classList.contains('active'));
+}
+
+// Sync the toggle, sliders and the on-canvas overlay with the current zone state.
+function updateTextZoneUI() {
+    const z = getTextZone();
+    const toggle = document.getElementById('text-zone-toggle');
+    const controls = document.getElementById('text-zone-controls');
+    const overlay = document.getElementById('text-zone-overlay');
+    if (!toggle || !z) return;
+    const enabled = !!z.enabled;
+    toggle.classList.toggle('active', enabled);
+    if (controls) controls.style.display = enabled ? '' : 'none';
+
+    const uniformToggle = document.getElementById('text-zone-uniform-toggle');
+    if (uniformToggle) uniformToggle.classList.toggle('active', z.uniform !== false);
+
+    const fillToggle = document.getElementById('text-zone-fill-toggle');
+    if (fillToggle) fillToggle.classList.toggle('active', !!z.fill);
+
+    const setSlider = (id, val) => {
+        const s = document.getElementById(id);
+        const v = document.getElementById(id + '-value');
+        if (s) s.value = Math.round(val);
+        if (v) v.textContent = Math.round(val) + '%';
+    };
+    setSlider('text-zone-x', z.x);
+    setSlider('text-zone-y', z.y);
+    setSlider('text-zone-w', z.width);
+    setSlider('text-zone-h', z.height);
+
+    if (overlay) {
+        const show = enabled && isTextTabActive() && state.screenshots.length > 0;
+        overlay.style.display = show ? '' : 'none';
+        if (show) {
+            overlay.style.left = z.x + '%';
+            overlay.style.top = z.y + '%';
+            overlay.style.width = z.width + '%';
+            overlay.style.height = z.height + '%';
+        }
+    }
+}
+
+function setupTextZoneControls() {
+    const toggle = document.getElementById('text-zone-toggle');
+    if (!toggle) return;
+
+    toggle.addEventListener('click', () => {
+        const z = getTextZone();
+        if (!z) return;
+        z.enabled = !z.enabled;
+        updateTextZoneUI();
+        updateCanvas();
+    });
+
+    const uniformToggle = document.getElementById('text-zone-uniform-toggle');
+    if (uniformToggle) {
+        uniformToggle.addEventListener('click', () => {
+            const z = getTextZone();
+            if (!z) return;
+            z.uniform = (z.uniform === false); // toggle (undefined counts as on)
+            updateTextZoneUI();
+            updateCanvas();
+        });
+    }
+
+    const fillToggle = document.getElementById('text-zone-fill-toggle');
+    if (fillToggle) {
+        fillToggle.addEventListener('click', () => {
+            const z = getTextZone();
+            if (!z) return;
+            z.fill = !z.fill;
+            updateTextZoneUI();
+            updateCanvas();
+        });
+    }
+
+    const bindSlider = (id, key) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', (e) => {
+            const z = getTextZone();
+            if (!z) return;
+            z[key] = parseInt(e.target.value, 10) || 0;
+            clampTextZone(z);
+            updateTextZoneUI();
+            updateCanvas();
+        });
+    };
+    bindSlider('text-zone-x', 'x');
+    bindSlider('text-zone-y', 'y');
+    bindSlider('text-zone-w', 'width');
+    bindSlider('text-zone-h', 'height');
+
+    setupTextZoneOverlayDrag();
+}
+
+// Drag to move and corner-handles to resize the zone directly on the preview.
+function setupTextZoneOverlayDrag() {
+    const overlay = document.getElementById('text-zone-overlay');
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (!overlay || !wrapper) return;
+
+    let mode = null;       // 'move' | 'nw' | 'ne' | 'sw' | 'se'
+    let startRect = null;  // wrapper bounds at drag start
+    let startPt = null;    // pointer start {x, y}
+    let startZone = null;  // zone snapshot at drag start
+
+    const onMove = (e) => {
+        const z = getTextZone();
+        if (!mode || !z || !startRect) return;
+        const dxPct = ((e.clientX - startPt.x) / startRect.width) * 100;
+        const dyPct = ((e.clientY - startPt.y) / startRect.height) * 100;
+        if (mode === 'move') {
+            z.x = startZone.x + dxPct;
+            z.y = startZone.y + dyPct;
+        } else {
+            let left = startZone.x;
+            let top = startZone.y;
+            let right = startZone.x + startZone.width;
+            let bottom = startZone.y + startZone.height;
+            if (mode.includes('w')) left = startZone.x + dxPct;
+            if (mode.includes('e')) right = startZone.x + startZone.width + dxPct;
+            if (mode.includes('n')) top = startZone.y + dyPct;
+            if (mode.includes('s')) bottom = startZone.y + startZone.height + dyPct;
+            const MIN = 5;
+            if (right - left < MIN) { if (mode.includes('w')) left = right - MIN; else right = left + MIN; }
+            if (bottom - top < MIN) { if (mode.includes('n')) top = bottom - MIN; else bottom = top + MIN; }
+            z.x = left; z.y = top; z.width = right - left; z.height = bottom - top;
+        }
+        clampTextZone(z);
+        updateTextZoneUI();
+        updateCanvas();
+        e.preventDefault();
+    };
+
+    const onUp = () => {
+        if (!mode) return;
+        mode = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+    };
+
+    const start = (e, m) => {
+        const z = getTextZone();
+        if (!z || !z.enabled) return;
+        mode = m;
+        startRect = wrapper.getBoundingClientRect();
+        startPt = { x: e.clientX, y: e.clientY };
+        startZone = { x: z.x, y: z.y, width: z.width, height: z.height };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('pointerdown', (e) => {
+        if (e.target.classList.contains('tz-handle')) return; // handled below
+        start(e, 'move');
+    });
+    overlay.querySelectorAll('.tz-handle').forEach((h) => {
+        h.addEventListener('pointerdown', (e) => start(e, h.dataset.handle));
+    });
 }
 
 // Update all text UI elements
@@ -5969,6 +8507,9 @@ function updateTextUI(text) {
         const key = 'subheadline' + style.charAt(0).toUpperCase() + style.slice(1);
         btn.classList.toggle('active', text[key] || false);
     });
+
+    // Text zone toggle/sliders/overlay
+    if (typeof updateTextZoneUI === 'function') updateTextZoneUI();
 }
 
 function applyPositionPreset(preset) {
@@ -5980,7 +8521,16 @@ function applyPositionPreset(preset) {
         'tilt-left': { scale: 65, x: 50, y: 60, rotation: -8, perspective: 0 },
         'tilt-right': { scale: 65, x: 50, y: 60, rotation: 8, perspective: 0 },
         'perspective': { scale: 65, x: 50, y: 50, rotation: 0, perspective: 15 },
-        'float-bottom': { scale: 55, x: 50, y: 70, rotation: 0, perspective: 0 }
+        'float-bottom': { scale: 55, x: 50, y: 70, rotation: 0, perspective: 0 },
+        // Trending App Store layouts
+        'hero': { scale: 88, x: 50, y: 66, rotation: 0, perspective: 0 },          // big device, headline on top
+        'showcase-bottom': { scale: 82, x: 50, y: 135, rotation: 0, perspective: 0 }, // headline top, device bleeds off bottom
+        'showcase-top': { scale: 82, x: 50, y: -35, rotation: 0, perspective: 0 },    // headline bottom, device bleeds off top
+        'tilt-left-strong': { scale: 62, x: 50, y: 62, rotation: -14, perspective: 0 },
+        'tilt-right-strong': { scale: 62, x: 50, y: 62, rotation: 14, perspective: 0 },
+        'perspective-left': { scale: 65, x: 50, y: 50, rotation: 0, perspective: -15 },
+        'minimal': { scale: 48, x: 50, y: 52, rotation: 0, perspective: 0 },          // small, lots of negative space
+        'full-bleed': { scale: 100, x: 50, y: 50, rotation: 0, perspective: 0 }       // device fills the frame
     };
 
     const p = presets[preset];
@@ -6016,9 +8566,20 @@ function handleFilesFromDesktop(filesData) {
 }
 
 async function processDesktopFilesSequentially(filesData) {
-    for (const fileData of filesData) {
-        await processDesktopImageFile(fileData);
+    if (!filesData.length) return;
+    showUploadProgress('Import des images…', '');
+    try {
+        for (let i = 0; i < filesData.length; i++) {
+            showUploadProgress('Import des images… (' + (i + 1) + '/' + filesData.length + ')', filesData[i].name || '');
+            await processDesktopImageFile(filesData[i]);
+        }
+        showUploadProgress('Enregistrement sur le serveur…', '');
+        saveState();
+        await waitForServerConfirmation(currentProjectId);
+    } finally {
+        hideUploadProgress();
     }
+    await reportImportFailures();
 }
 
 // Import screenshots via Tauri native file dialog
@@ -6051,12 +8612,21 @@ async function processDesktopImageFile(fileData) {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = async () => {
-            // Detect device type based on aspect ratio
+            // Detect device type based on aspect ratio. Watch panels are tiny
+            // (the largest is 422x514) and their ratio overlaps the iPad's, so
+            // size has to be checked before the ratio.
             const ratio = img.width / img.height;
             let deviceType = 'iPhone';
-            if (ratio > 0.6) {
+            if (Math.max(img.width, img.height) <= 560) {
+                deviceType = 'Apple Watch';
+            } else if (ratio > 0.6) {
                 deviceType = 'iPad';
             }
+
+            // Compress before the image enters the project (see processImageFile).
+            const optimized = await optimizeImportedImage(fileData.dataUrl);
+            const useImg = optimized ? optimized.image : img;
+            const useSrc = optimized ? optimized.src : fileData.dataUrl;
 
             // Detect language from filename
             const detectedLang = detectLanguageFromFilename(fileData.name);
@@ -6067,29 +8637,29 @@ async function processDesktopImageFile(fileData) {
             if (existingIndex !== -1) {
                 // Found a screenshot with matching base filename
                 const existingScreenshot = state.screenshots[existingIndex];
-                const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.image;
+                const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.src;
 
                 if (hasExistingLangImage) {
                     // There's already an image for this language - show dialog
                     const choice = await showDuplicateDialog({
                         existingIndex: existingIndex,
                         detectedLang: detectedLang,
-                        newImage: img,
-                        newSrc: fileData.dataUrl,
+                        newImage: useImg,
+                        newSrc: useSrc,
                         newName: fileData.name
                     });
 
                     if (choice === 'replace') {
-                        addLocalizedImage(existingIndex, detectedLang, img, fileData.dataUrl, fileData.name);
+                        addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, fileData.name);
                     } else if (choice === 'create') {
-                        createNewScreenshot(img, fileData.dataUrl, fileData.name, detectedLang, deviceType);
+                        createNewScreenshot(useImg, useSrc, fileData.name, detectedLang, deviceType);
                     }
                 } else {
                     // No image for this language yet - just add it silently
-                    addLocalizedImage(existingIndex, detectedLang, img, fileData.dataUrl, fileData.name);
+                    addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, fileData.name);
                 }
             } else {
-                createNewScreenshot(img, fileData.dataUrl, fileData.name, detectedLang, deviceType);
+                createNewScreenshot(useImg, useSrc, fileData.name, detectedLang, deviceType);
             }
 
             // Update 3D texture if in 3D mode
@@ -6100,14 +8670,53 @@ async function processDesktopImageFile(fileData) {
             updateCanvas();
             resolve();
         };
+        // Same decode-failure guard as processImageFile: never hang the batch.
+        img.onerror = () => {
+            _importFailures.push(fileData.name || 'image');
+            resolve();
+        };
         img.src = fileData.dataUrl;
     });
 }
 
+// Files whose import failed (unreadable / undecodable — e.g. HEIC in some
+// browsers). Collected per batch and surfaced: a file that never made it into
+// the project must NEVER fail silently.
+let _importFailures = [];
+
+async function reportImportFailures() {
+    if (!_importFailures.length) return;
+    const list = _importFailures.slice();
+    _importFailures = [];
+    const msg = list.length === 1
+        ? 'Ce fichier n’a pas pu être importé (format non supporté ?) : ' + list[0]
+        : list.length + ' fichiers n’ont pas pu être importés (format non supporté ?) : ' + list.join(', ');
+    console.warn('Import failures:', list);
+    if (typeof showAppAlert === 'function') await showAppAlert(msg, 'error');
+}
+
 async function processFilesSequentially(files) {
-    for (const file of files) {
-        await processImageFile(file);
+    if (!files.length) return;
+    showUploadProgress('Import des images…', '');
+    try {
+        for (let i = 0; i < files.length; i++) {
+            showUploadProgress('Import des images… (' + (i + 1) + '/' + files.length + ')', files[i].name);
+            await processImageFile(files[i]);
+        }
+        // The upload is only DONE once the server confirmed it — flush the
+        // debounced save/push and keep the user waiting until the response.
+        showUploadProgress('Enregistrement sur le serveur…', '');
+        saveState();
+        const ok = await waitForServerConfirmation(currentProjectId);
+        if (!ok && RemoteStore.enabled() && !RemoteStore._lastPutConflict) {
+            if (typeof showAppAlert === 'function') {
+                await showAppAlert('L’envoi au serveur a échoué — nouvelle tentative automatique en arrière-plan.', 'error');
+            }
+        }
+    } finally {
+        hideUploadProgress();
     }
+    await reportImportFailures();
 }
 
 async function processImageFile(file) {
@@ -6116,12 +8725,23 @@ async function processImageFile(file) {
         reader.onload = async (e) => {
             const img = new Image();
             img.onload = async () => {
-                // Detect device type based on aspect ratio
+                // Detect device type based on aspect ratio. Watch panels are
+                // tiny (the largest is 422x514) and their ratio overlaps the
+                // iPad's, so size has to be checked before the ratio.
                 const ratio = img.width / img.height;
                 let deviceType = 'iPhone';
-                if (ratio > 0.6) {
+                if (Math.max(img.width, img.height) <= 560) {
+                    deviceType = 'Apple Watch';
+                } else if (ratio > 0.6) {
                     deviceType = 'iPad';
                 }
+
+                // Compress BEFORE the image enters the project, so the editor
+                // holds — and later uploads — the small version, not the
+                // multi-megabyte original. Falls back to the original untouched.
+                const optimized = await optimizeImportedImage(e.target.result);
+                const useImg = optimized ? optimized.image : img;
+                const useSrc = optimized ? optimized.src : e.target.result;
 
                 // Detect language from filename
                 const detectedLang = detectLanguageFromFilename(file.name);
@@ -6132,31 +8752,31 @@ async function processImageFile(file) {
                 if (existingIndex !== -1) {
                     // Found a screenshot with matching base filename
                     const existingScreenshot = state.screenshots[existingIndex];
-                    const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.image;
+                    const hasExistingLangImage = existingScreenshot.localizedImages?.[detectedLang]?.src;
 
                     if (hasExistingLangImage) {
                         // There's already an image for this language - show dialog
                         const choice = await showDuplicateDialog({
                             existingIndex: existingIndex,
                             detectedLang: detectedLang,
-                            newImage: img,
-                            newSrc: e.target.result,
+                            newImage: useImg,
+                            newSrc: useSrc,
                             newName: file.name
                         });
 
                         if (choice === 'replace') {
-                            addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                            addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, file.name);
                         } else if (choice === 'create') {
-                            createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                            createNewScreenshot(useImg, useSrc, file.name, detectedLang, deviceType);
                         }
                         // 'ignore' does nothing
                     } else {
                         // No image for this language yet - just add it silently
-                        addLocalizedImage(existingIndex, detectedLang, img, e.target.result, file.name);
+                        addLocalizedImage(existingIndex, detectedLang, useImg, useSrc, file.name);
                     }
                 } else {
                     // No duplicate - create new screenshot
-                    createNewScreenshot(img, e.target.result, file.name, detectedLang, deviceType);
+                    createNewScreenshot(useImg, useSrc, file.name, detectedLang, deviceType);
                 }
 
                 // Update 3D texture if in 3D mode
@@ -6167,7 +8787,18 @@ async function processImageFile(file) {
                 updateCanvas();
                 resolve();
             };
+            // CRITICAL: without onerror, one undecodable file (HEIC, corrupt…)
+            // left this promise pending FOREVER and silently swallowed every
+            // remaining file of the batch — "files disappearing" at import time.
+            img.onerror = () => {
+                _importFailures.push(file.name);
+                resolve();
+            };
             img.src = e.target.result;
+        };
+        reader.onerror = () => {
+            _importFailures.push(file.name);
+            resolve();
         };
         reader.readAsDataURL(file);
     });
@@ -6181,6 +8812,8 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
             src: src,
             name: name
         };
+        // Pending-upload ledger: this file is only "saved" once the server confirms it.
+        if (typeof trackPendingUpload === 'function') trackPendingUpload(lang || 'en', name, src);
     }
 
     // Auto-add language to project if not already present
@@ -6191,6 +8824,10 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
     const textDefaults = normalizeTextSettings(state.defaults.text);
     state.defaults.text = textDefaults;
 
+    // Newly created screens default to Auto-fit text on (per-screen setting).
+    const newText = JSON.parse(JSON.stringify(textDefaults));
+    newText.autoFit = true;
+
     // Each screenshot gets its own copy of all settings from defaults
     state.screenshots.push({
         image: img || null, // Keep for legacy compatibility
@@ -6199,7 +8836,7 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         localizedImages: localizedImages,
         background: JSON.parse(JSON.stringify(state.defaults.background)),
         screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
-        text: JSON.parse(JSON.stringify(textDefaults)),
+        text: newText,
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),
         popouts: [],
         // Legacy overrides for backwards compatibility
@@ -6333,7 +8970,7 @@ function updateScreenshotList() {
                     <rect x="3" y="3" width="18" height="18" rx="2"/>
                 </svg>
               </div>`
-            : `<img class="screenshot-thumb" src="${thumbSrc}" alt="${screenshot.name}">`;
+            : `<img class="screenshot-thumb" src="${thumbSrc}" alt="${mcpEscapeHtml(screenshot.name)}">`;
 
         item.innerHTML = `
             <div class="drag-handle">
@@ -6345,7 +8982,7 @@ function updateScreenshotList() {
             </div>
             ${thumbHtml}
             <div class="screenshot-info">
-                <div class="screenshot-name">${screenshot.name}</div>
+                <div class="screenshot-name">${mcpEscapeHtml(screenshot.name)}</div>
                 <div class="screenshot-device">${isTransferTarget ? 'Click source to copy style' : screenshot.deviceType}${langFlagsHtml}</div>
             </div>
             ${buttonsHtml}
@@ -6563,6 +9200,9 @@ function updateScreenshotList() {
 
     // Update project selector to reflect current screenshot count
     updateProjectSelector();
+
+    // Keep the "duplicate design from…" source list in sync with the views.
+    if (typeof refreshCopyDesignSource === 'function') refreshCopyDesignSource();
 }
 
 function cancelTransfer() {
@@ -6661,10 +9301,10 @@ function applyStyleToAll() {
         target.text.headlines = targetHeadlines;
         target.text.subheadlines = targetSubheadlines;
 
-        // Deep copy elements
+        // Deep copy elements (reconstruct Image objects for graphics and icons)
         target.elements = (source.elements || []).map(el => {
             const copy = JSON.parse(JSON.stringify({ ...el, image: undefined }));
-            if (el.type === 'graphic' && el.image) {
+            if ((el.type === 'graphic' || el.type === 'icon') && el.image) {
                 copy.image = el.image;
             }
             copy.id = crypto.randomUUID();
@@ -6688,24 +9328,30 @@ function replaceScreenshot(index) {
     const screenshot = state.screenshots[index];
     if (!screenshot) return;
 
-    // Create a hidden file input
+    // Create a hidden file input (removing any orphaned instance first)
+    const orphan = document.getElementById('replace-screenshot-input');
+    if (orphan) orphan.remove();
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
+    fileInput.id = 'replace-screenshot-input';
     fileInput.accept = 'image/*';
     fileInput.style.display = 'none';
     document.body.appendChild(fileInput);
 
+    // Clean up if the picker is dismissed without choosing a file
+    fileInput.addEventListener('cancel', () => fileInput.remove());
+
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) {
-            document.body.removeChild(fileInput);
+            fileInput.remove();
             return;
         }
 
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
-            img.onload = () => {
+            img.onload = async () => {
                 // Get the current language
                 const lang = state.currentLanguage;
 
@@ -6719,6 +9365,8 @@ function replaceScreenshot(index) {
                     src: event.target.result,
                     name: file.name
                 };
+                // Pending-upload ledger: a replacement must not be lost either.
+                if (typeof trackPendingUpload === 'function') trackPendingUpload(lang, file.name, event.target.result);
 
                 // Also update legacy image field for compatibility
                 screenshot.image = img;
@@ -6726,13 +9374,24 @@ function replaceScreenshot(index) {
                 // Update displays
                 updateScreenshotList();
                 updateCanvas();
-                saveState();
+                // Block until the server confirmed the replacement.
+                showUploadProgress('Enregistrement sur le serveur…', file.name);
+                try {
+                    saveState();
+                    await waitForServerConfirmation(currentProjectId);
+                } finally {
+                    hideUploadProgress();
+                }
+            };
+            img.onerror = () => {
+                _importFailures.push(file.name);
+                reportImportFailures();
             };
             img.src = event.target.result;
         };
         reader.readAsDataURL(file);
 
-        document.body.removeChild(fileInput);
+        fileInput.remove();
     });
 
     // Trigger file dialog
@@ -6768,7 +9427,8 @@ function updateGradientStopsUI() {
 
         div.querySelector('input[type="number"]').addEventListener('input', (e) => {
             const currentBg = getBackground();
-            currentBg.gradient.stops[index].position = parseInt(e.target.value);
+            const pos = parseInt(e.target.value);
+            if (!Number.isNaN(pos)) currentBg.gradient.stops[index].position = pos;
             // Deselect preset when manually changing positions
             document.querySelectorAll('.preset-swatch').forEach(s => s.classList.remove('selected'));
             updateCanvas();
@@ -6790,15 +9450,132 @@ function updateGradientStopsUI() {
     });
 }
 
-function getCanvasDimensions() {
-    if (state.outputDevice === 'custom') {
-        return { width: state.customWidth, height: state.customHeight };
-    }
-    return deviceDimensions[state.outputDevice];
+// Text and overlay-element sizes are stored in absolute canvas pixels, so they
+// only make sense against the canvas they were chosen on. An Apple Watch canvas
+// is a third the width of a phone's, which is a big enough jump that a 100px
+// headline goes from a comfortable 7.6% of the width to an unusable 24%. When
+// the user moves in or out of the watch family, rescale those sizes so the
+// design they already have survives the move. (Deliberately limited to that
+// boundary: every other output size is within a factor of two of a phone, and
+// silently rewriting sizes on an iPhone→iPad switch would be a surprise.)
+function rescaleTextForOutput(prevKey, nextKey) {
+    if (isWatchOutput(prevKey) === isWatchOutput(nextKey)) return;
+    const a = outputDeviceSize(prevKey), b = outputDeviceSize(nextKey);
+    if (!a || !b || !a.width || !b.width) return;
+    const f = b.width / a.width;
+    if (!isFinite(f) || f <= 0) return;
+    const SIZE_KEYS = ['headlineSize', 'subheadlineSize', 'subheadlineSpacing'];
+    const scaleText = (t) => {
+        if (!t || typeof t !== 'object') return;
+        SIZE_KEYS.forEach(k => {
+            if (typeof t[k] === 'number' && t[k] > 0) t[k] = Math.max(8, Math.round(t[k] * f));
+        });
+        Object.values(t.languageSettings || {}).forEach(scaleText);
+        (t.panelTexts || []).forEach(scaleText);
+    };
+    scaleText(state.defaults && state.defaults.text);
+    (state.screenshots || []).forEach(s => {
+        scaleText(s.text);
+        (s.elements || []).forEach(el => {
+            if (typeof el.fontSize === 'number' && el.fontSize > 0) {
+                el.fontSize = Math.max(8, Math.round(el.fontSize * f));
+            }
+        });
+    });
+    (state.defaults && state.defaults.elements || []).forEach(el => {
+        if (typeof el.fontSize === 'number' && el.fontSize > 0) {
+            el.fontSize = Math.max(8, Math.round(el.fontSize * f));
+        }
+    });
 }
 
+// Picking a watch output size means the mockup should be a watch: switch the
+// 2D model over so the bezel, corner radius and notch match. This mirrors the
+// model→size link the Device Model buttons already have, in the other
+// direction. Only runs when moving INTO the watch family, so re-picking a
+// different watch size never clobbers deliberate per-screen choices.
+function adoptWatchDeviceModel() {
+    const radius = deviceModelRadius('watch', 104);
+    const adopt = (ss) => {
+        if (!ss) return;
+        ss.deviceModel2D = 'watch';
+        ss.cornerRadius = radius;
+        ss.use3D = false;
+        // The App Store takes no panoramic watch screenshots, and the Span
+        // Screens control is hidden for watch output — so a span left over
+        // from a phone project would be stuck on with no way to clear it.
+        ss.spanScreens = 1;
+        if (ss.frame) ss.frame.notch = 'none';
+    };
+    (state.screenshots || []).forEach(s => adopt(s.screenshot));
+    adopt(state.defaults && state.defaults.screenshot);
+}
+
+// …and the other way: leaving the watch family would otherwise leave a watch
+// case wrapped around a phone- or tablet-shaped canvas. Only screens still set
+// to the watch model are touched, they take the model of whatever family the
+// canvas moved to, and the notch is left alone rather than guessed at.
+function dropWatchDeviceModel(nextKey) {
+    const model = outputDeviceModel2D(nextKey);
+    if (model === 'watch') return;
+    const radius = deviceModelRadius(model, 52);
+    const drop = (ss) => {
+        if (!ss || ss.deviceModel2D !== 'watch') return;
+        ss.deviceModel2D = model;
+        ss.cornerRadius = radius;
+    };
+    (state.screenshots || []).forEach(s => drop(s.screenshot));
+    drop(state.defaults && state.defaults.screenshot);
+}
+
+// DEVICE_2D_RADIUS lives in appstore-features.js, which loads after app.js —
+// safe to read from a function body, never at module scope.
+function deviceModelRadius(model, fallback) {
+    return (typeof DEVICE_2D_RADIUS !== 'undefined' && DEVICE_2D_RADIUS[model]) || fallback;
+}
+
+// A few renderer defaults are stored in absolute canvas pixels, tuned against a
+// phone canvas: shadow blur/offset, and how far text auto-fit is allowed to
+// shrink. On an Apple Watch canvas they are ~3x too big, so scale them by how
+// much narrower the canvas is. Keyed off ONE screen's width (baseWidth), not
+// the panorama-multiplied total, so a spanned screen doesn't lose the
+// compensation. 700 sits below every other stock output size (the smallest is
+// web-feature at 1024), so nothing but the watch is affected.
+function smallCanvasScale(dims) {
+    const w = (dims && (dims.baseWidth || dims.width)) || 0;
+    return w > 0 && w < 700 ? w / 1320 : 1;
+}
+
+function getCanvasDimensions(index) {
+    const base = state.outputDevice === 'custom'
+        ? { width: state.customWidth, height: state.customHeight }
+        : (deviceDimensions[state.outputDevice] || deviceDimensions['iphone-6.9']);
+    // Panorama: a screenshot can span N output slots → render at N× width.
+    const i = index === undefined ? state.selectedIndex : index;
+    const ss = state.screenshots[i];
+    const span = (ss && ss.screenshot && ss.screenshot.spanScreens) || 1;
+    return { width: base.width * span, height: base.height, span: span, baseWidth: base.width };
+}
+
+// Coalesce renders to at most one per animation frame. Many UI handlers (slider
+// drags especially) call updateCanvas() many times within a single frame; each
+// call used to do a full-resolution main render PLUS up to 4 side-preview
+// renders. Now repeated calls collapse into a single render on the next frame.
+let _canvasRenderScheduled = false;
 function updateCanvas() {
-    saveState(); // Persist state on every update
+    scheduleSaveState(); // Persist state (debounced — see scheduleSaveState)
+    if (_canvasRenderScheduled) return;
+    _canvasRenderScheduled = true;
+    requestAnimationFrame(() => {
+        _canvasRenderScheduled = false;
+        renderCanvasNow();
+    });
+}
+
+// Synchronous full render. Call directly only when the result must be applied in
+// the same tick (e.g. the slide transition sets skip-render flags synchronously).
+function renderCanvasNow() {
+    if (typeof window !== 'undefined') window.__imgRect = { has: false };
     const dims = getCanvasDimensions();
     canvas.width = dims.width;
     canvas.height = dims.height;
@@ -6827,14 +9604,15 @@ function updateCanvas() {
         const img = screenshot ? getScreenshotImage(screenshot) : null;
         const ss = getScreenshotSettings();
         const use3D = ss.use3D || false;
-        if (use3D && img && typeof renderThreeJSToCanvas === 'function' && phoneModelLoaded) {
+        if (use3D && output3DSupported() && img && typeof renderThreeJSToCanvas === 'function' && phoneModelLoaded) {
             // In 3D mode, update the screen texture and render the phone model
             if (typeof updateScreenTexture === 'function') {
                 updateScreenTexture();
             }
             renderThreeJSToCanvas(canvas, dims.width, dims.height);
-        } else if (!use3D) {
-            // In 2D mode, draw the screenshot normally
+        } else if (!use3D || !output3DSupported()) {
+            // 2D mode — and the fallback for a stored use3D on an output size
+            // with no 3D model, which would otherwise draw nothing at all.
             drawScreenshot();
         }
     }
@@ -6851,8 +9629,40 @@ function updateCanvas() {
     // Elements above text
     drawElements(ctx, dims, 'above-text');
 
-    // Update side previews
-    updateSidePreviews();
+    // Update side previews — debounced while editing the current screenshot
+    // (neighbours don't change), immediate when the selection/layout changes.
+    scheduleSidePreviews();
+}
+
+// Side previews show the NEIGHBOURING screenshots, which are unaffected by edits
+// to the current one — so re-rendering all four every frame during a slider drag
+// is wasted work (and they each run the full pipeline, noise loop included). Only
+// render them right away when the selection or output layout actually changes;
+// otherwise coalesce to a single trailing render once edits settle.
+let _sidePreviewTimer = null;
+let _lastSidePreviewKey = null;
+function scheduleSidePreviews() {
+    const key = state.selectedIndex + '|' + state.screenshots.length + '|' +
+                state.outputDevice + '|' + state.customWidth + 'x' + state.customHeight;
+    if (key !== _lastSidePreviewKey) {
+        _lastSidePreviewKey = key;
+        if (_sidePreviewTimer) { clearTimeout(_sidePreviewTimer); _sidePreviewTimer = null; }
+        updateSidePreviews();
+        return;
+    }
+    if (_sidePreviewTimer) clearTimeout(_sidePreviewTimer);
+    _sidePreviewTimer = setTimeout(() => { _sidePreviewTimer = null; updateSidePreviews(); }, 180);
+}
+
+// How many real pixels a preview needs: its CSS size, times the display's pixel
+// ratio (capped at 2 — beyond that nobody can tell, and the buffer cost is
+// quadratic). Previews used to be rasterized at full export resolution and then
+// squeezed into a ~400px box by CSS.
+function previewRenderScale() {
+    const dims = getCanvasDimensions();
+    const cssScale = Math.min(400 / dims.width, 700 / dims.height);
+    const dpr = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    return Math.min(1, cssScale * dpr);
 }
 
 function updateSidePreviews() {
@@ -6862,8 +9672,10 @@ function updateSidePreviews() {
     const maxPreviewHeight = 700;
     const previewScale = Math.min(maxPreviewWidth / dims.width, maxPreviewHeight / dims.height);
 
-    // Initialize Three.js if any screenshot uses 3D mode (needed for side previews)
-    const any3D = state.screenshots.some(s => s.screenshot?.use3D);
+    // Initialize Three.js if any screenshot uses 3D mode (needed for side
+    // previews) — unless this output size has no 3D model at all, in which case
+    // a stale use3D flag would spin up the renderer for nothing.
+    const any3D = output3DSupported() && state.screenshots.some(s => s.screenshot?.use3D);
     if (any3D && typeof showThreeJS === 'function') {
         showThreeJS(true);
 
@@ -6893,7 +9705,7 @@ function updateSidePreviews() {
         sidePreviewLeft.style.right = `calc(50% + ${sideOffset}px)`;
         // Skip render if already pre-rendered during slide transition
         if (!skipSidePreviewRender) {
-            renderScreenshotToCanvas(prevIndex, canvasLeft, ctxLeft, dims, previewScale);
+            renderScreenshotToCanvas(prevIndex, canvasLeft, ctxLeft, getCanvasDimensions(prevIndex), previewScale, previewRenderScale());
         }
         // Click to select previous with animation
         sidePreviewLeft.onclick = () => {
@@ -6909,7 +9721,7 @@ function updateSidePreviews() {
     if (farPrevIndex >= 0 && state.screenshots.length > 2) {
         sidePreviewFarLeft.classList.remove('hidden');
         sidePreviewFarLeft.style.right = `calc(50% + ${farSideOffset}px)`;
-        renderScreenshotToCanvas(farPrevIndex, canvasFarLeft, ctxFarLeft, dims, previewScale);
+        renderScreenshotToCanvas(farPrevIndex, canvasFarLeft, ctxFarLeft, getCanvasDimensions(farPrevIndex), previewScale, previewRenderScale());
     } else {
         sidePreviewFarLeft.classList.add('hidden');
     }
@@ -6921,7 +9733,7 @@ function updateSidePreviews() {
         sidePreviewRight.style.left = `calc(50% + ${sideOffset}px)`;
         // Skip render if already pre-rendered during slide transition
         if (!skipSidePreviewRender) {
-            renderScreenshotToCanvas(nextIndex, canvasRight, ctxRight, dims, previewScale);
+            renderScreenshotToCanvas(nextIndex, canvasRight, ctxRight, getCanvasDimensions(nextIndex), previewScale, previewRenderScale());
         }
         // Click to select next with animation
         sidePreviewRight.onclick = () => {
@@ -6937,7 +9749,7 @@ function updateSidePreviews() {
     if (farNextIndex < state.screenshots.length && state.screenshots.length > 2) {
         sidePreviewFarRight.classList.remove('hidden');
         sidePreviewFarRight.style.left = `calc(50% + ${farSideOffset}px)`;
-        renderScreenshotToCanvas(farNextIndex, canvasFarRight, ctxFarRight, dims, previewScale);
+        renderScreenshotToCanvas(farNextIndex, canvasFarRight, ctxFarRight, getCanvasDimensions(farNextIndex), previewScale, previewRenderScale());
     } else {
         sidePreviewFarRight.classList.add('hidden');
     }
@@ -6987,7 +9799,7 @@ function slideToScreenshot(newIndex, direction) {
             if (index < 0 || index >= state.screenshots.length) return null;
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
-            renderScreenshotToCanvas(index, tempCanvas, tempCtx, dims, previewScale);
+            renderScreenshotToCanvas(index, tempCanvas, tempCtx, getCanvasDimensions(index), previewScale, previewRenderScale());
             return { tempCanvas, targetCanvas };
         };
 
@@ -7023,9 +9835,10 @@ function slideToScreenshot(newIndex, direction) {
         // Skip side preview re-render since we already pre-rendered them
         skipSidePreviewRender = true;
 
-        // Now do a full updateCanvas for main preview, far sides, etc.
-        // Side previews won't flicker because we already drew to them
-        updateCanvas();
+        // Now do a full render for main preview, far sides, etc. Render NOW (not
+        // the debounced updateCanvas) so skipSidePreviewRender applies this tick
+        // and the pre-rendered side canvases aren't overwritten (which would flicker).
+        renderCanvasNow();
 
         // Reset flags
         skipSidePreviewRender = false;
@@ -7042,18 +9855,29 @@ function slideToScreenshot(newIndex, direction) {
     });
 }
 
-function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewScale) {
+// `renderScale` sizes the canvas's PIXEL BUFFER; `previewScale` only ever sized
+// its CSS box. Leaving the buffer at full output resolution meant a 96px matrix
+// thumbnail still allocated 1320×2868×4 bytes (~15 MB) and rasterized every
+// layer at export resolution — 40 languages × 9 screens was gigabytes of canvas
+// and minutes of work for a wall of thumbnails. The context is scaled to match,
+// so everything below still draws in output coordinates and needs no changes.
+// Omit it (or pass 1) for a full-resolution render, which is what exports do.
+function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewScale, renderScale) {
     const screenshot = state.screenshots[index];
     if (!screenshot) return;
+    if (typeof window !== 'undefined') window.__imgRect = { has: false };
 
     // Get localized image for current language
     const img = getScreenshotImage(screenshot);
 
-    // Set canvas size (this also clears the canvas)
-    targetCanvas.width = dims.width;
-    targetCanvas.height = dims.height;
+    // Set canvas size (this also clears the canvas AND resets the transform,
+    // so the scale has to be re-applied after it)
+    const rs = renderScale > 0 ? Math.min(1, renderScale) : 1;
+    targetCanvas.width = Math.max(1, Math.round(dims.width * rs));
+    targetCanvas.height = Math.max(1, Math.round(dims.height * rs));
     targetCanvas.style.width = (dims.width * previewScale) + 'px';
     targetCanvas.style.height = (dims.height * previewScale) + 'px';
+    if (rs !== 1) targetCtx.setTransform(rs, 0, 0, rs, 0, 0);
 
     // Clear canvas explicitly
     targetCtx.clearRect(0, 0, dims.width, dims.height);
@@ -7077,7 +9901,7 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     const use3D = settings.use3D || false;
 
     if (img) {
-        if (use3D && typeof renderThreeJSForScreenshot === 'function' && phoneModelLoaded) {
+        if (use3D && output3DSupported() && typeof renderThreeJSForScreenshot === 'function' && phoneModelLoaded) {
             // Render 3D phone model for this specific screenshot
             renderThreeJSForScreenshot(targetCanvas, dims.width, dims.height, index);
         } else {
@@ -7095,7 +9919,7 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
 
     // Draw text
     const txt = screenshot.text;
-    drawTextToContext(targetCtx, dims, txt);
+    drawTextWithPanorama(targetCtx, dims, txt);
 
     // Elements above text
     drawElementsToContext(targetCtx, dims, elements, 'above-text');
@@ -7168,7 +9992,12 @@ function drawBackgroundToContext(context, dims, bg) {
 }
 
 function drawNoiseToContext(context, dims, intensity) {
-    const imageData = context.getImageData(0, 0, dims.width, dims.height);
+    // getImageData/putImageData work in DEVICE pixels and ignore the context
+    // transform, so this has to follow the canvas's real buffer — which is
+    // smaller than `dims` whenever the caller passed a renderScale.
+    const w = context.canvas ? context.canvas.width : dims.width;
+    const h = context.canvas ? context.canvas.height : dims.height;
+    const imageData = context.getImageData(0, 0, w, h);
     const data = imageData.data;
     const noiseAmount = intensity / 100;
 
@@ -7202,6 +10031,9 @@ function drawScreenshotToContext(context, dims, img, settings) {
     const centerX = x + imgWidth / 2;
     const centerY = y + imgHeight / 2;
 
+    // Record the device rect for text auto-fit / overlap detection.
+    if (typeof window !== 'undefined') window.__imgRect = { x, y, w: imgWidth, h: imgHeight, has: true };
+
     context.save();
 
     // Apply transformations
@@ -7222,14 +10054,21 @@ function drawScreenshotToContext(context, dims, img, settings) {
     // Scale corner radius with image size
     const radius = (settings.cornerRadius || 0) * (imgWidth / 400);
 
+    // Shadow blur and offset are stored in absolute canvas pixels, tuned against
+    // a phone canvas. On an Apple Watch canvas (416px wide) the default blur of
+    // 40 is 10% of the width instead of 3%, which buries the device in a smear —
+    // so scale them down on canvases far smaller than a phone's. 700 sits below
+    // every other stock output size (the smallest is 1024), so nothing else moves.
+    const smallCanvas = smallCanvasScale(dims);
+
     // Draw shadow first (needs a filled shape, not clipped)
     if (settings.shadow && settings.shadow.enabled) {
         const shadowOpacity = settings.shadow.opacity / 100;
         const shadowColor = settings.shadow.color + Math.round(shadowOpacity * 255).toString(16).padStart(2, '0');
         context.shadowColor = shadowColor;
-        context.shadowBlur = settings.shadow.blur;
-        context.shadowOffsetX = settings.shadow.x;
-        context.shadowOffsetY = settings.shadow.y;
+        context.shadowBlur = settings.shadow.blur * smallCanvas;
+        context.shadowOffsetX = settings.shadow.x * smallCanvas;
+        context.shadowOffsetY = settings.shadow.y * smallCanvas;
 
         // Draw filled rounded rect for shadow
         context.fillStyle = '#000';
@@ -7266,6 +10105,26 @@ function drawScreenshotToContext(context, dims, img, settings) {
         drawDeviceFrameToContext(context, x, y, imgWidth, imgHeight, settings);
         context.restore();
     }
+
+    // Draw 2D device bezel + notch / Dynamic Island (independent of the border)
+    const hasNotch = settings.frame && settings.frame.notch && settings.frame.notch !== 'none';
+    if (settings.bezelEnabled || hasNotch) {
+        context.save();
+        context.translate(centerX, centerY);
+        if (settings.rotation !== 0) context.rotate(settings.rotation * Math.PI / 180);
+        if (settings.perspective !== 0) context.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
+        context.translate(-centerX, -centerY);
+        if (settings.bezelEnabled) drawDeviceBezel(
+            context, x, y, imgWidth, imgHeight, radius,
+            settings.deviceModel2D || 'iphone',
+            settings.deviceMacFinish || 'silver',
+            // The Ultra case shape follows the output size, not a user choice:
+            // 422×514 and 410×502 ARE the Ultra panels.
+            { finish: settings.deviceWatchFinish || 'midnight', ultra: /^watch-ultra/.test(state.outputDevice) }
+        );
+        if (hasNotch) drawNotchShape(context, x, y, imgWidth, imgHeight, radius, settings.frame.notch);
+        context.restore();
+    }
 }
 
 function drawDeviceFrameToContext(context, x, y, width, height, settings) {
@@ -7281,6 +10140,772 @@ function drawDeviceFrameToContext(context, x, y, width, height, settings) {
     context.roundRect(x - frameWidth / 2, y - frameWidth / 2, width + frameWidth, height + frameWidth, radius);
     context.stroke();
     context.globalAlpha = 1;
+}
+
+// Shared: draw an iPhone notch / Dynamic Island at the top-center of the screen,
+// clipped to the screen's rounded rect. Used by both render paths.
+function drawNotchShape(context, x, y, width, height, radius, style) {
+    if (!style || style === 'none') return;
+    context.save();
+    context.beginPath();
+    context.roundRect(x, y, width, height, radius);
+    context.clip();
+    context.fillStyle = '#000000';
+    if (style === 'island') {
+        const w = width * 0.30, h = width * 0.085;
+        context.beginPath();
+        context.roundRect(x + width / 2 - w / 2, y + width * 0.035, w, h, h / 2);
+        context.fill();
+    } else if (style === 'notch') {
+        const w = width * 0.50, h = width * 0.072, r = h * 0.55;
+        context.beginPath();
+        context.roundRect(x + width / 2 - w / 2, y - 1, w, h, [0, 0, r, r]);
+        context.fill();
+    } else if (style === 'punch') {
+        // Samsung-style centered punch-hole camera
+        const r = width * 0.018;
+        context.beginPath();
+        context.arc(x + width / 2, y + width * 0.04, r, 0, Math.PI * 2);
+        context.fill();
+    }
+    context.restore();
+}
+
+// Shared: draw a 2D device bezel/shell (iPhone, iPad, Samsung, Mac or Apple
+// Watch) around the screen. `watch` carries the watch-only extras: { finish,
+// ultra } — see drawWatchBezel.
+function drawDeviceBezel(context, x, y, width, height, radius, model, macFinish, watch) {
+    const isSamsung = model === 'samsung';
+    const isIpad = model === 'ipad';
+    const isMac = model === 'mac';
+    if (isMac) { drawMacBezel(context, x, y, width, height, radius, macFinish); return; }
+    if (model === 'watch') { drawWatchBezel(context, x, y, width, height, radius, watch); return; }
+    // iPad bezels are uniform and a touch thinner than iPhone; Samsung thinnest.
+    const bw = width * (isSamsung ? 0.020 : isIpad ? 0.024 : 0.028);
+    context.save();
+    // Main dark bezel ring
+    context.lineWidth = bw;
+    context.strokeStyle = isSamsung ? '#0b0b0d' : isIpad ? '#161618' : '#1d1d1f';
+    context.beginPath();
+    context.roundRect(x - bw / 2, y - bw / 2, width + bw, height + bw, radius + bw / 2);
+    context.stroke();
+    // Subtle metallic outer edge
+    context.lineWidth = Math.max(1, bw * (isIpad ? 0.16 : 0.14));
+    context.strokeStyle = isSamsung ? 'rgba(255,255,255,0.08)' : isIpad ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.20)';
+    context.beginPath();
+    context.roundRect(x - bw, y - bw, width + bw * 2, height + bw * 2, radius + bw);
+    context.stroke();
+    context.restore();
+}
+
+// Apple Watch case finishes. Sampled from Apple's own product renders: `hi` /
+// `mid` / `lo` are the top-highlight, body and bottom-shadow stops of the
+// vertical gradient down the metal, `edge` the specular catch-light on the
+// outer rim. Aluminium reads near-neutral with a hard highlight; the titanium
+// finishes are warmer and lower-contrast.
+const WATCH_FINISHES = {
+    midnight:  { hi: '#5f626a', mid: '#40434b', lo: '#2b2e35', edge: 'rgba(255,255,255,0.26)' },
+    starlight: { hi: '#ebe0d8', mid: '#c0b3ab', lo: '#a2958d', edge: 'rgba(255,255,255,0.60)' },
+    silver:    { hi: '#f7f7f9', mid: '#c3c4c3', lo: '#9d9d9b', edge: 'rgba(255,255,255,0.66)' },
+    gold:      { hi: '#fef7ee', mid: '#b0a297', lo: '#89745c', edge: 'rgba(255,255,255,0.52)' }
+};
+
+// Shared: draw an Apple Watch case around the screen.
+//
+// Every ratio below is measured from Apple's official device bezel artwork
+// (the 46mm and 42mm Series 11 renders agree to under 0.5%, so they are the
+// family constants; the Ultra is a genuinely different shape, not a scaled
+// Series case). The stack, outermost first, is: metal case → black glass ring
+// → screen content. The screen rect itself is never painted over — the case
+// and the glass are both drawn as even-odd rings — because the screenshot has
+// already been drawn by the time this runs.
+//
+// `opts` = { finish: keyof WATCH_FINISHES, ultra: boolean }.
+function drawWatchBezel(context, x, y, width, height, radius, opts) {
+    const o = opts || {};
+    const FIN = WATCH_FINISHES[o.finish] || WATCH_FINISHES.midnight;
+    const ultra = !!o.ultra;
+    const W = width, H = height;
+
+    // ---- Case geometry ----
+    // The Series case is centred on the screen with a uniform rim. The Ultra's
+    // rim is asymmetric (the crown guard fattens the right side), so its screen
+    // sits left of the case centre and the two edges are measured separately.
+    const caseW = (ultra ? 1.3128 : 1.19231) * W;
+    const caseH = (ultra ? 1.2140 : 1.15726) * H;
+    // Vertically the screen is centred on both models; horizontally only the
+    // Series is — the Ultra's crown guard fattens the right side, so its screen
+    // sits left of centre. Deriving caseY from caseH (rather than from caseW,
+    // as the source measurements express it) keeps the case centred whatever
+    // aspect the drawn screenshot happens to have.
+    const caseX = ultra ? x - 0.0939 * caseW : x - (caseW - W) / 2;
+    const caseY = y - (caseH - H) / 2;
+    const caseR = (ultra ? 0.2870 : 0.27419) * caseW;
+
+    // Black glass reaches beyond the active pixels before the metal starts —
+    // thinner at the top on the Series, uniform on the Ultra.
+    const glassSide = (ultra ? 0.0474 : 0.0649) * W;
+    const glassTop = (ultra ? 0.0474 : 0.0361) * W;
+    const glassX = x - glassSide;
+    const glassY = y - glassTop;
+    const glassW = W + glassSide * 2;
+    const glassH = H + glassTop + glassSide;
+    // The glass corner radius follows the SCREEN's, which the user can dial
+    // down to 0 — but the case radius is fixed, so a square-cornered glass
+    // rect would poke out through the case's rounded corners. Never let it
+    // round less than the case does, allowing for the metal between them.
+    const metalInset = Math.min(
+        glassX - caseX, glassY - caseY,
+        (caseX + caseW) - (glassX + glassW), (caseY + caseH) - (glassY + glassH)
+    );
+    const glassR = Math.max(radius + glassSide, caseR - Math.max(0, metalInset));
+
+    // rounded-rect subpath (no beginPath — these compose into even-odd fills)
+    const rr = (rx, ry, rw, rh, r) => {
+        const rad = Math.max(0, Math.min(r, rw / 2, rh / 2));
+        context.moveTo(rx + rad, ry);
+        context.arcTo(rx + rw, ry, rx + rw, ry + rh, rad);
+        context.arcTo(rx + rw, ry + rh, rx, ry + rh, rad);
+        context.arcTo(rx, ry + rh, rx, ry, rad);
+        context.arcTo(rx, ry, rx + rw, ry, rad);
+        context.closePath();
+    };
+
+    const metal = context.createLinearGradient(0, caseY, 0, caseY + caseH);
+    metal.addColorStop(0, FIN.hi);
+    metal.addColorStop(0.45, FIN.mid);
+    metal.addColorStop(1, FIN.lo);
+
+    context.save();
+
+    // ---- 1) Side hardware, drawn first so the case rounds over the seams ----
+    // The Digital Crown is the only part that protrudes on a face-on view (the
+    // side button measures flush on Apple's own render, so it is drawn as a
+    // hairline seam rather than a bump). On the Ultra even the crown sits
+    // almost flush inside its guard rail.
+    const crownH = (ultra ? 0.1683 : 0.15679) * caseH;
+    const crownY = caseY + (ultra ? 0.2853 : 0.23345) * caseH;
+    const crownOut = (ultra ? 0.0090 : 0.04839) * caseW;
+    const crownR = crownH * 0.11;
+
+    if (ultra) {
+        // Crown guard: a raised slab on the right edge spanning the crown.
+        const guardH = caseH * 0.30;
+        const guardY = caseY + caseH * 0.24;
+        context.fillStyle = metal;
+        context.beginPath();
+        rr(caseX + caseW - caseW * 0.06, guardY, caseW * 0.09, guardH, caseW * 0.03);
+        context.fill();
+    } else {
+        context.fillStyle = metal;
+        context.beginPath();
+        // Overlap the case edge so no seam shows once the ring is drawn over it.
+        rr(caseX + caseW - crownOut * 0.6, crownY, crownOut * 1.6, crownH, crownR);
+        context.fill();
+        // Grooved crown face: a couple of darker ridges read as knurling.
+        context.strokeStyle = 'rgba(0,0,0,0.30)';
+        context.lineWidth = Math.max(0.5, crownOut * 0.10);
+        for (let i = 1; i <= 2; i++) {
+            const gy = crownY + crownH * (i / 3);
+            context.beginPath();
+            context.moveTo(caseX + caseW, gy);
+            context.lineTo(caseX + caseW + crownOut, gy);
+            context.stroke();
+        }
+    }
+
+    // ---- 2) Metal case: an even-odd ring, screen + glass punched out ----
+    context.fillStyle = metal;
+    context.beginPath();
+    rr(caseX, caseY, caseW, caseH, caseR);
+    rr(glassX, glassY, glassW, glassH, glassR);
+    context.fill('evenodd');
+
+    // ---- 3) Black glass ring between the metal and the screen ----
+    context.fillStyle = '#0a0a0b';
+    context.beginPath();
+    rr(glassX, glassY, glassW, glassH, glassR);
+    rr(x, y, W, H, radius);
+    context.fill('evenodd');
+
+    // ---- 3b) Ultra hardware sits ON the case, not proud of it, so it goes
+    // on after the ring — drawn before, the ring would cover it.
+    if (ultra) {
+        // Digital Crown, recessed inside the guard rail.
+        context.fillStyle = metal;
+        context.beginPath();
+        rr(caseX + caseW - caseW * 0.055, crownY, caseW * 0.055 + crownOut, crownH, crownR);
+        context.fill();
+        context.strokeStyle = 'rgba(0,0,0,0.32)';
+        context.lineWidth = Math.max(0.5, caseW * 0.003);
+        for (let i = 1; i <= 2; i++) {
+            const gy = crownY + crownH * (i / 3);
+            context.beginPath();
+            context.moveTo(caseX + caseW - caseW * 0.05, gy);
+            context.lineTo(caseX + caseW + crownOut, gy);
+            context.stroke();
+        }
+        // Action button — Ultra only, on the LEFT edge, in International Orange.
+        const abH = 0.2724 * caseH;
+        const abY = caseY + 0.4471 * caseH;
+        const abW = caseW * 0.026;
+        context.fillStyle = '#e8631a';
+        context.beginPath();
+        rr(caseX - abW * 0.18, abY, abW * 1.18, abH, abW * 0.35);
+        context.fill();
+        context.fillStyle = 'rgba(0,0,0,0.22)';
+        context.beginPath();
+        rr(caseX + abW * 0.62, abY, abW * 0.38, abH, abW * 0.18);
+        context.fill();
+    }
+
+    // ---- 4) Edge treatments ----
+    // Specular catch-light just inside the outer case edge.
+    context.strokeStyle = FIN.edge;
+    context.lineWidth = Math.max(1, caseW * 0.006);
+    context.beginPath();
+    rr(caseX + context.lineWidth / 2, caseY + context.lineWidth / 2,
+       caseW - context.lineWidth, caseH - context.lineWidth, caseR);
+    context.stroke();
+
+    // Side-button seam (Series only — the Ultra's buttons live on the guard).
+    if (!ultra) {
+        context.strokeStyle = 'rgba(0,0,0,0.35)';
+        context.lineWidth = Math.max(1, caseW * 0.004);
+        const seamY = caseY + caseH * 0.52;
+        context.beginPath();
+        context.moveTo(caseX + caseW - caseW * 0.004, seamY - caseH * 0.055);
+        context.lineTo(caseX + caseW - caseW * 0.004, seamY + caseH * 0.055);
+        context.stroke();
+    }
+
+    // Contact shadow where the glass meets the screen, for a little depth.
+    context.save();
+    context.beginPath();
+    rr(x, y, W, H, radius);
+    context.clip();
+    context.strokeStyle = 'rgba(0,0,0,0.45)';
+    context.lineWidth = Math.max(1, W * 0.006);
+    context.beginPath();
+    rr(x + context.lineWidth / 2, y + context.lineWidth / 2,
+       W - context.lineWidth, H - context.lineWidth, radius);
+    context.stroke();
+    context.restore();
+
+    context.restore();
+}
+
+// Shared: draw a Mac (MacBook Pro-style) shell around the screen — a thin
+// aluminium-rimmed lid with a dark bezel frame (the screenshot shows through an
+// even-odd cutout, never grey metal) and a small camera dot, then a slim
+// aluminium base in slight perspective: a lit "open-lid" deck sliver, a two-tone
+// front lip with a finger-groove, and a soft contact shadow grounding it all.
+// `finish` selects the chassis colour: 'silver' (default) or 'space-black'.
+// All geometry scales off the screen so it stays proportional at any resolution.
+function drawMacBezel(context, x, y, width, height, radius, finish) {
+    // Per-finish aluminium palettes (the dark bezel itself stays black on both).
+    const FIN = finish === 'space-black' ? {
+        rim: ['#6f7278', '#44474c', '#26282b'],          // lid rim: top hi -> mid -> bottom
+        deck: ['#4c4f54', '#3c3f43', '#2d2f33'],         // open-lid deck sliver
+        lip: ['#565a60', '#474a4f', '#3a3d42', '#2f3236', '#26282c', '#34373b'], // front lip
+        lipSideRGB: '0,0,0', lipSideA: 0.45,             // corner falloff
+        grooveRGB: '0,0,0', grooveA: 0.55,               // finger-groove recess
+        grooveLight: 'rgba(205,209,215,0.32)',
+        edgeHi: 'rgba(255,255,255,0.3)',                 // crisp catch-lights
+    } : {
+        rim: ['#dfe2e6', '#aeb2b8', '#888c92'],
+        deck: ['#f1f2f4', '#dcdfe2', '#c3c6cb'],
+        lip: ['#f4f5f7', '#e0e3e6', '#c2c6cb', '#aaaeb4', '#9b9fa5', '#b0b4ba'],
+        lipSideRGB: '80,84,90', lipSideA: 0.32,
+        grooveRGB: '60,64,70', grooveA: 0.5,
+        grooveLight: 'rgba(245,247,250,0.55)',
+        edgeHi: 'rgba(255,255,255,0.7)',
+    };
+    context.save();
+
+    // ---- Proportions (all derived from screen width/height) ----
+    const bezel = width * 0.018;             // dark bezel thickness around screen
+    const lidLeft = x - bezel;
+    const lidTop = y - bezel;
+    const lidW = width + bezel * 2;
+    const lidH = height + bezel * 2;
+    const lidRadius = radius + bezel * 0.85;
+
+    // Base (laptop deck) geometry below the lid (kept under height*0.14 total)
+    const deckBandH = height * 0.03;         // lighter "keyboard deck" sliver + seam (open-lid hint)
+    const deckTopY = lidTop + lidH;          // top of the deck top-surface band
+    const lipTopY = deckTopY + deckBandH;    // top of the front aluminium lip
+    const lipH = height * 0.06;              // front lip height
+    const baseBottomY = lipTopY + lipH;      // bottom of laptop base
+    const baseOverhang = width * 0.075;      // base is wider than lid each side
+    const baseLeft = x - baseOverhang;
+    const baseRight = x + width + baseOverhang;
+    const baseW = baseRight - baseLeft;
+    const lipRadius = lipH * 0.5;
+    const cx = x + width / 2;
+
+    // helper: rounded-rect subpath (no beginPath, for even-odd composites)
+    function rrPath(rx, ry, rw, rh, rr) {
+      context.moveTo(rx + rr, ry);
+      context.arcTo(rx + rw, ry, rx + rw, ry + rh, rr);
+      context.arcTo(rx + rw, ry + rh, rx, ry + rh, rr);
+      context.arcTo(rx, ry + rh, rx, ry, rr);
+      context.arcTo(rx, ry, rx + rw, ry, rr);
+      context.closePath();
+    }
+
+    // ============================================================
+    // 1) CONTACT SHADOW under the whole machine
+    // ============================================================
+    context.save();
+    context.shadowColor = 'rgba(0,0,0,0.38)';
+    context.shadowBlur = height * 0.08;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = height * 0.05;
+    context.fillStyle = 'rgba(0,0,0,1)';
+    context.beginPath();
+    rrPath(baseLeft + baseW * 0.04, lipTopY, baseW * 0.92, lipH, lipRadius);
+    context.fill();
+    context.restore();
+
+    // reset shadow before crisp parts
+    context.shadowColor = 'transparent';
+    context.shadowBlur = 0;
+    context.shadowOffsetX = 0;
+    context.shadowOffsetY = 0;
+
+    // ============================================================
+    // 2) LID — aluminium outer rim + dark bezel FRAME (screen stays visible)
+    // ============================================================
+    // Thin aluminium rim around the whole lid (drawn as ring via even-odd)
+    const rim = bezel * 0.32;
+    const rimGrad = context.createLinearGradient(0, lidTop - rim, 0, lidTop + lidH + rim);
+    rimGrad.addColorStop(0, FIN.rim[0]);
+    rimGrad.addColorStop(0.5, FIN.rim[1]);
+    rimGrad.addColorStop(1, FIN.rim[2]);
+    context.fillStyle = rimGrad;
+    context.beginPath();
+    rrPath(lidLeft - rim, lidTop - rim, lidW + rim * 2, lidH + rim * 2, lidRadius + rim);
+    rrPath(lidLeft, lidTop, lidW, lidH, lidRadius);
+    context.fill('evenodd');
+
+    // Dark bezel ring: outer = lid rect, inner = screen rect (screenshot shows through)
+    const bezelGrad = context.createLinearGradient(0, lidTop, 0, lidTop + lidH);
+    bezelGrad.addColorStop(0, '#1a1b1f');
+    bezelGrad.addColorStop(0.5, '#0c0d0f');
+    bezelGrad.addColorStop(1, '#141517');
+    context.fillStyle = bezelGrad;
+    context.beginPath();
+    rrPath(lidLeft, lidTop, lidW, lidH, lidRadius);
+    rrPath(x, y, width, height, radius);
+    context.fill('evenodd');
+
+    // subtle inner shadow line just inside the screen edge for depth
+    context.save();
+    context.beginPath();
+    rrPath(x, y, width, height, radius);
+    context.clip();
+    context.strokeStyle = 'rgba(0,0,0,0.5)';
+    context.lineWidth = Math.max(1, bezel * 0.18);
+    context.beginPath();
+    rrPath(x + context.lineWidth * 0.5, y + context.lineWidth * 0.5,
+           width - context.lineWidth, height - context.lineWidth, radius);
+    context.stroke();
+    context.restore();
+
+    // Camera notch dot at top-center of bezel
+    const camR = Math.max(1, bezel * 0.16);
+    context.fillStyle = '#23262c';
+    context.beginPath();
+    context.arc(cx, lidTop + bezel * 0.5, camR, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = '#0c1418';
+    context.beginPath();
+    context.arc(cx, lidTop + bezel * 0.5, camR * 0.55, 0, Math.PI * 2);
+    context.fill();
+
+    // ============================================================
+    // 3) KEYBOARD-DECK TOP SURFACE SLIVER (the 3D "open lid" hint)
+    //    A lighter aluminium band seen in perspective (trapezoid widening
+    //    toward the wider base) PLUS a crisp dark seam where the lid bottom
+    //    edge meets it — that gap is what sells "the lid is open".
+    // ============================================================
+    // dark seam / gap directly under the lid (hinge shadow line)
+    const seamH = deckBandH * 0.34;
+    const seamGrad = context.createLinearGradient(0, deckTopY, 0, deckTopY + seamH);
+    seamGrad.addColorStop(0, 'rgba(15,16,18,0.92)');
+    seamGrad.addColorStop(1, 'rgba(70,73,78,0.25)');
+    context.fillStyle = seamGrad;
+    context.beginPath();
+    context.moveTo(lidLeft + lidRadius * 0.35, deckTopY);
+    context.lineTo(lidLeft + lidW - lidRadius * 0.35, deckTopY);
+    context.lineTo(lidLeft + lidW - lidRadius * 0.35 + width * 0.01, deckTopY + seamH);
+    context.lineTo(lidLeft + lidRadius * 0.35 - width * 0.01, deckTopY + seamH);
+    context.closePath();
+    context.fill();
+
+    // the bright top-surface band itself (flat-ish, lit from above)
+    const bandTopY = deckTopY + seamH;
+    const deckGrad = context.createLinearGradient(0, bandTopY, 0, lipTopY);
+    deckGrad.addColorStop(0, FIN.deck[0]);   // bright leading edge of the deck
+    deckGrad.addColorStop(0.55, FIN.deck[1]);
+    deckGrad.addColorStop(1, FIN.deck[2]);   // toward the front lip
+    context.fillStyle = deckGrad;
+    context.beginPath();
+    context.moveTo(lidLeft + lidRadius * 0.35 - width * 0.01, bandTopY);
+    context.lineTo(lidLeft + lidW - lidRadius * 0.35 + width * 0.01, bandTopY);
+    context.lineTo(baseRight - lipRadius, lipTopY);
+    context.lineTo(baseLeft + lipRadius, lipTopY);
+    context.closePath();
+    context.fill();
+
+    // crisp bright catch-light along the deck's leading (top) edge
+    context.strokeStyle = FIN.edgeHi;
+    context.lineWidth = Math.max(1, height * 0.0022);
+    context.beginPath();
+    context.moveTo(lidLeft + lidRadius * 0.35 - width * 0.01 + 2, bandTopY + context.lineWidth);
+    context.lineTo(lidLeft + lidW - lidRadius * 0.35 + width * 0.01 - 2, bandTopY + context.lineWidth);
+    context.stroke();
+
+    // ============================================================
+    // 4) FRONT ALUMINIUM LIP (two-tone, rounded front, finger groove)
+    //    Two-tone: bright top edge (catching overhead light) rolling into
+    //    a darker mid front face, then a soft brighter bounce near the floor.
+    // ============================================================
+    const lipGrad = context.createLinearGradient(0, lipTopY, 0, baseBottomY);
+    lipGrad.addColorStop(0, FIN.lip[0]);    // crisp top edge highlight
+    lipGrad.addColorStop(0.10, FIN.lip[1]);
+    lipGrad.addColorStop(0.34, FIN.lip[2]);
+    lipGrad.addColorStop(0.62, FIN.lip[3]); // front face (darker tone)
+    lipGrad.addColorStop(0.86, FIN.lip[4]);
+    lipGrad.addColorStop(1, FIN.lip[5]);    // soft bounce light at the rounded bottom
+    context.fillStyle = lipGrad;
+    context.beginPath();
+    rrPath(baseLeft, lipTopY, baseW, lipH, lipRadius);
+    context.fill();
+
+    // vertical falloff darkening toward the corners (cylindrical look)
+    const lipSide = context.createLinearGradient(baseLeft, 0, baseRight, 0);
+    lipSide.addColorStop(0, `rgba(${FIN.lipSideRGB},${FIN.lipSideA})`);
+    lipSide.addColorStop(0.12, `rgba(${FIN.lipSideRGB},0)`);
+    lipSide.addColorStop(0.88, `rgba(${FIN.lipSideRGB},0)`);
+    lipSide.addColorStop(1, `rgba(${FIN.lipSideRGB},${FIN.lipSideA})`);
+    context.fillStyle = lipSide;
+    context.beginPath();
+    rrPath(baseLeft, lipTopY, baseW, lipH, lipRadius);
+    context.fill();
+
+    // bright top highlight edge of the lip
+    context.strokeStyle = FIN.edgeHi;
+    context.lineWidth = Math.max(1, height * 0.0028);
+    context.beginPath();
+    context.moveTo(baseLeft + lipRadius, lipTopY + context.lineWidth * 0.7);
+    context.lineTo(baseRight - lipRadius, lipTopY + context.lineWidth * 0.7);
+    context.stroke();
+
+    // finger groove: a wide, shallow, soft scoop centered on the front lip.
+    // Two stacked soft fills (shadow above, highlight lip below) read as a recess.
+    const grooveW = width * 0.2;
+    const grooveTop = lipTopY + lipH * 0.12;
+    const grooveBot = baseBottomY - lipH * 0.04;
+    const grooveH = grooveBot - grooveTop;
+    // shadow of the scoop
+    const gShadow = context.createLinearGradient(0, grooveTop, 0, grooveBot);
+    gShadow.addColorStop(0, `rgba(${FIN.grooveRGB},0)`);
+    gShadow.addColorStop(0.35, `rgba(${FIN.grooveRGB},${FIN.grooveA})`);
+    gShadow.addColorStop(1, `rgba(${FIN.grooveRGB},0)`);
+    context.fillStyle = gShadow;
+    context.beginPath();
+    rrPath(cx - grooveW / 2, grooveTop, grooveW, grooveH, grooveH * 0.5);
+    context.fill();
+    // thin bright catch-light along the bottom of the scoop
+    context.strokeStyle = FIN.grooveLight;
+    context.lineWidth = Math.max(1, lipH * 0.05);
+    context.beginPath();
+    context.moveTo(cx - grooveW * 0.42, grooveBot - context.lineWidth);
+    context.lineTo(cx + grooveW * 0.42, grooveBot - context.lineWidth);
+    context.stroke();
+
+    context.restore();
+}
+
+// Shared: draw a rounded highlight box behind a single line of text.
+// baselineTop = true when the context baseline is 'top', false when 'bottom'.
+function drawTextHighlight(context, cx, y, textWidth, fontSize, baselineTop, color, alpha) {
+    if (!alpha || alpha <= 0 || textWidth <= 0) return;
+    const hpad = fontSize * 0.34, vpad = fontSize * 0.16, r = fontSize * 0.24;
+    const top = baselineTop ? y - vpad : y - fontSize - vpad;
+    const h = fontSize + vpad * 2;
+    context.save();
+    context.globalAlpha = alpha;
+    context.fillStyle = color;
+    context.beginPath();
+    context.roundRect(cx - textWidth / 2 - hpad, top, textWidth + hpad * 2, h, r);
+    context.fill();
+    context.restore();
+}
+
+// Panorama: build the text settings for screen `p`. Each panel has its own full
+// text object (style + content) in container.panelTexts; older projects fall back
+// to per-panel content (panelHeadlines/panelSubheadlines) over the shared style.
+function makePanelTxt(txt, p) {
+    if (Array.isArray(txt.panelTexts) && txt.panelTexts[p]) {
+        txt.panelTexts[p] = normalizeTextSettings(txt.panelTexts[p]);
+        const panel = txt.panelTexts[p];
+        syncPanelLanguage(panel, txt);
+        panel.autoFit = txt.autoFit;
+        panel.textZone = txt.textZone;
+        return panel;
+    }
+    const lang = txt.currentHeadlineLang || 'en';
+    const slang = txt.currentSubheadlineLang || 'en';
+    const ph = (txt.panelHeadlines && txt.panelHeadlines[lang] && txt.panelHeadlines[lang][p]) || '';
+    const ps = (txt.panelSubheadlines && txt.panelSubheadlines[slang] && txt.panelSubheadlines[slang][p]) || '';
+    return Object.assign({}, txt, {
+        headlines: Object.assign({}, txt.headlines, { [lang]: ph }),
+        subheadlines: Object.assign({}, txt.subheadlines, { [slang]: ps }),
+        perScreenText: false
+    });
+}
+
+// Draw text, honoring per-screen panorama text (one text block centered per panel).
+function drawTextWithPanorama(context, dims, txt) {
+    const span = dims.span || 1;
+    if (txt && txt.perScreenText && span > 1) {
+        const baseW = dims.baseWidth || (dims.width / span);
+        for (let p = 0; p < span; p++) {
+            context.save();
+            context.translate(p * baseW, 0);
+            drawTextToContext(context, { width: baseW, height: dims.height }, makePanelTxt(txt, p));
+            context.restore();
+        }
+    } else {
+        drawTextToContext(context, dims, txt);
+    }
+}
+
+// Measure the vertical extent {top, bottom} of the text block without drawing,
+// replaying drawTextToContext's layout maths. Returns null if no text.
+// Measures the vertical extent of the text block. `fontScale` shrinks the FONT
+// size only (used by auto-fit) — the wrap width stays full, so reducing it makes
+// the text reflow over the same width and just get shorter, never narrower.
+function textVerticalExtent(context, dims, txt, fontScale, wrapWidth) {
+    fontScale = fontScale || 1;
+    const headlineEnabled = txt.headlineEnabled !== false;
+    const subheadlineEnabled = txt.subheadlineEnabled || false;
+    const headlineLang = txt.currentHeadlineLang || 'en';
+    const subheadlineLang = txt.currentSubheadlineLang || 'en';
+    const headlineLayout = getEffectiveLayout(txt, headlineLang);
+    const subheadlineLayout = getEffectiveLayout(txt, subheadlineLang);
+    const layoutSettings = getEffectiveLayout(txt, getTextLayoutLanguage(txt));
+    const headline = headlineEnabled && txt.headlines ? (txt.headlines[headlineLang] || '') : '';
+    const subheadline = subheadlineEnabled && txt.subheadlines ? (txt.subheadlines[subheadlineLang] || '') : '';
+    if (!headline && !subheadline) return null;
+    const hSize = headlineLayout.headlineSize * fontScale;
+    const sSize = subheadlineLayout.subheadlineSize * fontScale;
+    const padding = dims.width * 0.08;
+    const ww = (typeof wrapWidth === 'number' && wrapWidth > 0) ? wrapWidth : (dims.width - padding * 2);
+    const isTop = layoutSettings.position === 'top';
+    const textY = isTop ? dims.height * (layoutSettings.offsetY / 100) : dims.height * (1 - layoutSettings.offsetY / 100);
+    let top = Infinity, bottom = -Infinity, currentY = textY;
+    if (headline) {
+        context.font = `${txt.headlineItalic ? 'italic' : 'normal'} ${txt.headlineWeight} ${hSize}px ${txt.headlineFont}`;
+        const lines = wrapText(context, headline, ww);
+        const lineHeight = hSize * (layoutSettings.lineHeight / 100);
+        if (!isTop) currentY -= (lines.length - 1) * lineHeight;
+        lines.forEach((_, i) => {
+            const y = currentY + i * lineHeight;
+            top = Math.min(top, isTop ? y : y - hSize);
+            bottom = Math.max(bottom, isTop ? y + hSize : y);
+        });
+        const lastLineY = currentY + (lines.length - 1) * lineHeight;
+        const gap = lineHeight - hSize;
+        currentY = (isTop ? lastLineY + hSize + gap : lastLineY + gap) + (txt.subheadlineSpacing || 0) * fontScale;
+    }
+    if (subheadline) {
+        context.font = `${txt.subheadlineItalic ? 'italic' : 'normal'} ${txt.subheadlineWeight || '400'} ${sSize}px ${txt.subheadlineFont || txt.headlineFont}`;
+        const lines = wrapText(context, subheadline, ww);
+        const subLineHeight = sSize * 1.4;
+        lines.forEach((_, i) => {
+            const y = currentY + i * subLineHeight;
+            top = Math.min(top, y);
+            bottom = Math.max(bottom, y + sSize);
+        });
+    }
+    if (!isFinite(top) || !isFinite(bottom)) return null;
+    return { top, bottom };
+}
+
+// Compute whether the text overflows its allotted space, and the scale needed to
+// fit it (1 = fits). The text must clear both the device image (last drawn rect in
+// window.__imgRect) AND the canvas edge, so big text is never clipped — it shrinks
+// to fit even when there is no device image on the screen.
+function computeTextFit(context, dims, txt) {
+    const rect = (typeof window !== 'undefined') ? window.__imgRect : null;
+    const ext = textVerticalExtent(context, dims, txt, 1);
+    if (!ext) return { scale: 1, fontScale: 1, overlaps: false };
+    const isTop = getEffectiveLayout(txt, getTextLayoutLanguage(txt)).position === 'top';
+    const gap = dims.height * 0.02;   // clearance from the device image
+    const edge = dims.height * 0.02;  // margin kept from the canvas edge
+    const hasDevice = !!(rect && rect.has);
+    const blockH = ext.bottom - ext.top;
+    // The text is anchored at a fixed edge (top of the block for 'top', bottom for
+    // 'bottom') and grows toward the opposite side. Space available is the distance
+    // from that anchor to the nearest limit: the device image or the canvas edge.
+    let avail;
+    if (isTop) {
+        let limit = dims.height - edge; // canvas bottom edge
+        if (hasDevice) limit = Math.min(limit, rect.y - gap); // device top edge
+        avail = limit - ext.top;
+    } else {
+        let limit = edge; // canvas top edge
+        if (hasDevice) limit = Math.max(limit, rect.y + rect.h + gap); // device bottom edge
+        avail = ext.bottom - limit;
+    }
+    const overlaps = blockH > 0 && blockH > avail;
+    if (!overlaps) return { scale: 1, fontScale: 1, overlaps: false };
+    // Find the largest font scale whose re-wrapped block fits the available height.
+    // (Smaller font reflows over the same full width, so the block only shrinks
+    // vertically — the width is preserved.)
+    // A phone canvas never needs to shrink text below 35%; a watch canvas is a
+    // third the width, so the same headline needs three times the headroom
+    // before it fits (cf. zoneFitForText's FLOOR of 0.1).
+    const FLOOR = smallCanvasScale(dims) < 1 ? 0.10 : 0.35;
+    let lo = FLOOR, hi = 1, best = FLOOR;
+    for (let i = 0; i < 8; i++) {
+        const mid = (lo + hi) / 2;
+        const e = textVerticalExtent(context, dims, txt, mid);
+        const h = e ? e.bottom - e.top : 0;
+        if (h <= avail) { best = mid; lo = mid; } else { hi = mid; }
+    }
+    return { scale: best, fontScale: best, overlaps: true };
+}
+
+// Characters wrapText() may break AFTER: CJK (incl. kana and fullwidth forms) and
+// Thai are written without spaces, so a long run of them is not a "word" that has
+// to fit on one line — the wrapper breaks them per character. Treating such a run
+// as one unbreakable word would shrink the whole block to a fraction of the size
+// that actually fits, and with "same size for all languages" that one language
+// would drag every other one down with it.
+const BREAKABLE_CHAR_RE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF\u0E00-\u0E7F]/;
+
+// Widest run of characters in `str` that must stay on one line: whitespace and
+// breakable (CJK/Thai) characters end a run, and each breakable character counts
+// as a run of its own.
+function widestUnbreakableRun(context, str) {
+    let max = 0;
+    let run = '';
+    const flush = () => {
+        if (run) { max = Math.max(max, context.measureText(run).width); run = ''; }
+    };
+    for (const ch of String(str)) {
+        if (/\s/.test(ch)) { flush(); continue; }
+        if (BREAKABLE_CHAR_RE.test(ch)) {
+            flush();
+            max = Math.max(max, context.measureText(ch).width);
+            continue;
+        }
+        run += ch;
+    }
+    flush();
+    return max;
+}
+
+// Largest pixel width of any single unbreakable word across the headline and
+// subheadline, measured at `fontScale`. Used by the text zone to keep words from
+// being broken mid-word: the zone shrinks until the widest word fits its width.
+function maxWordWidth(context, txt, fontScale) {
+    fontScale = fontScale || 1;
+    const headlineEnabled = txt.headlineEnabled !== false;
+    const subheadlineEnabled = txt.subheadlineEnabled || false;
+    const headlineLang = txt.currentHeadlineLang || 'en';
+    const subheadlineLang = txt.currentSubheadlineLang || 'en';
+    const headlineLayout = getEffectiveLayout(txt, headlineLang);
+    const subheadlineLayout = getEffectiveLayout(txt, subheadlineLang);
+    const headline = headlineEnabled && txt.headlines ? (txt.headlines[headlineLang] || '') : '';
+    const subheadline = subheadlineEnabled && txt.subheadlines ? (txt.subheadlines[subheadlineLang] || '') : '';
+    let maxW = 0;
+    const measureWords = (str) => {
+        maxW = Math.max(maxW, widestUnbreakableRun(context, str));
+    };
+    if (headline) {
+        context.font = `${txt.headlineItalic ? 'italic' : 'normal'} ${txt.headlineWeight} ${headlineLayout.headlineSize * fontScale}px ${txt.headlineFont}`;
+        measureWords(headline);
+    }
+    if (subheadline) {
+        context.font = `${txt.subheadlineItalic ? 'italic' : 'normal'} ${txt.subheadlineWeight || '400'} ${subheadlineLayout.subheadlineSize * fontScale}px ${txt.subheadlineFont || txt.headlineFont}`;
+        measureWords(subheadline);
+    }
+    return maxW;
+}
+
+// Font scale that makes the whole text block FILL the zone rectangle for the
+// language currently selected on `txt`: it reflows at the zone width and the font
+// grows or shrinks so the wrapped block is as large as possible while still fitting
+// the zone height, and the widest single word still fits the zone width on one line
+// (no mid-word break). So short text grows and wraps to fill the box; long text
+// shrinks.
+function zoneFitForText(context, dims, txt, zone) {
+    const zw = Math.max(1, dims.width * (zone.width / 100));
+    const zh = Math.max(1, dims.height * (zone.height / 100));
+    const FLOOR = 0.1, CEIL = 6;
+    const fitsHeight = (s) => {
+        const e = textVerticalExtent(context, dims, txt, s, zw);
+        return !e || (e.bottom - e.top) <= zh;
+    };
+    // Largest scale in [FLOOR, CEIL] whose re-wrapped block fits the zone height.
+    // A bigger font wraps into more (and taller) lines, so height-fit is monotonic
+    // in the scale and a binary search finds the tightest fit.
+    let best;
+    if (fitsHeight(CEIL)) {
+        best = CEIL;
+    } else {
+        let lo = FLOOR, hi = CEIL;
+        best = FLOOR;
+        for (let i = 0; i < 18; i++) {
+            const mid = (lo + hi) / 2;
+            if (fitsHeight(mid)) { best = mid; lo = mid; } else { hi = mid; }
+        }
+    }
+    // Never let a word overflow the zone width: cap the scale so the widest word
+    // still fits on one line. Word width scales linearly with the font, so this is a
+    // direct ratio — it both prevents mid-word breaks and bounds growth on a wide
+    // zone to where the longest word spans it.
+    const mw = maxWordWidth(context, txt, 1);
+    if (mw > 0) best = Math.min(best, zw / mw);
+    return Math.max(FLOOR, Math.min(CEIL, best));
+}
+
+// Font scale for the zone. By default ("uniform") the scale is the smallest that
+// fits EVERY project language, then applied to all of them — so the text stays
+// inside the zone and keeps a consistent size no matter the language. With uniform
+// off, each language is fitted independently (only the current one is measured).
+//
+// `fill` decides what happens when the text is SMALLER than the zone:
+//   off (default) — the configured font size is a ceiling: long text shrinks to
+//     fit, short text is left at its designed size. Screens keep a consistent
+//     typographic scale, which is what a set of store screenshots wants.
+//   on            — the text also grows until it reaches the edge of the box, so
+//     the rectangle is always exactly filled.
+// The cap applies to both branches, so a project behaves the same whether it has
+// one language or twenty.
+function computeZoneFit(context, dims, txt, zone) {
+    const cap = zone.fill ? Infinity : 1;
+    const langs = (typeof state !== 'undefined' && Array.isArray(state.projectLanguages))
+        ? state.projectLanguages : null;
+    if (zone.uniform !== false && langs && langs.length > 1) {
+        let best = cap;
+        for (const L of langs) {
+            const t = Object.assign({}, txt, {
+                currentHeadlineLang: L,
+                currentSubheadlineLang: L,
+                currentLayoutLang: L
+            });
+            best = Math.min(best, zoneFitForText(context, dims, t, zone));
+        }
+        return best;
+    }
+    return Math.min(cap, zoneFitForText(context, dims, txt, zone));
 }
 
 function drawTextToContext(context, dims, txt) {
@@ -7300,45 +10925,84 @@ function drawTextToContext(context, dims, txt) {
 
     if (!headline && !subheadline) return;
 
+    // Optional text zone: confine the headline + subheadline to a user-defined
+    // rectangle and shrink the font so the whole block fits inside it, never
+    // breaking a word across lines. When active it overrides the normal
+    // position/offset placement and the overlap auto-fit.
+    const zone = (txt.textZone && txt.textZone.enabled) ? txt.textZone : null;
+
+    // Auto-fit: reduce the FONT SIZE (not the width) so the text reflows over the
+    // same full width and only gets shorter, keeping it clear of the device and
+    // inside the canvas so it is never clipped.
+    let fontScale = 1;
+    if (zone) {
+        fontScale = computeZoneFit(context, dims, txt, zone);
+    } else if (txt && txt.autoFit) {
+        const fit = computeTextFit(context, dims, txt);
+        if (fit.overlaps && fit.fontScale < 0.999) fontScale = fit.fontScale;
+    }
+    const hSize = headlineLayout.headlineSize * fontScale;
+    const sSize = subheadlineLayout.subheadlineSize * fontScale;
+
     const padding = dims.width * 0.08;
-    const textY = layoutSettings.position === 'top'
-        ? dims.height * (layoutSettings.offsetY / 100)
-        : dims.height * (1 - layoutSettings.offsetY / 100);
+    // Wrap width and horizontal centre: the zone constrains both so the text
+    // reflows inside the zone and is centred within it.
+    const wrapWidth = zone ? Math.max(1, dims.width * (zone.width / 100)) : (dims.width - padding * 2);
+    const centerX = zone ? (dims.width * (zone.x / 100) + wrapWidth / 2) : (dims.width / 2);
+    // Vertical anchor: the zone centres the block inside the rectangle and always
+    // grows top→down; otherwise keep the existing top/bottom anchored behaviour.
+    const effPosition = zone ? 'top' : layoutSettings.position;
+    let textY;
+    if (zone) {
+        const ext = textVerticalExtent(context, dims, txt, fontScale, wrapWidth);
+        const blockH = ext ? (ext.bottom - ext.top) : 0;
+        const zoneTop = dims.height * (zone.y / 100);
+        const zoneH = dims.height * (zone.height / 100);
+        textY = zoneTop + Math.max(0, (zoneH - blockH) / 2);
+    } else {
+        textY = effPosition === 'top'
+            ? dims.height * (layoutSettings.offsetY / 100)
+            : dims.height * (1 - layoutSettings.offsetY / 100);
+    }
 
     context.textAlign = 'center';
-    context.textBaseline = layoutSettings.position === 'top' ? 'top' : 'bottom';
+    context.textBaseline = effPosition === 'top' ? 'top' : 'bottom';
 
     let currentY = textY;
 
     // Draw headline
     if (headline) {
         const fontStyle = txt.headlineItalic ? 'italic' : 'normal';
-        context.font = `${fontStyle} ${txt.headlineWeight} ${headlineLayout.headlineSize}px ${txt.headlineFont}`;
+        context.font = `${fontStyle} ${txt.headlineWeight} ${hSize}px ${txt.headlineFont}`;
         context.fillStyle = txt.headlineColor;
 
-        const lines = wrapText(context, headline, dims.width - padding * 2);
-        const lineHeight = headlineLayout.headlineSize * (layoutSettings.lineHeight / 100);
+        const lines = wrapText(context, headline, wrapWidth);
+        const lineHeight = hSize * (layoutSettings.lineHeight / 100);
 
         // For bottom positioning, offset currentY so lines draw correctly
-        if (layoutSettings.position === 'bottom') {
+        if (effPosition === 'bottom') {
             currentY -= (lines.length - 1) * lineHeight;
         }
 
         let lastLineY;
+        const hlBaselineTop = effPosition === 'top';
         lines.forEach((line, i) => {
             const y = currentY + i * lineHeight;
             lastLineY = y;
-            context.fillText(line, dims.width / 2, y);
+            if (txt.headlineBgOpacity > 0) {
+                drawTextHighlight(context, centerX, y, context.measureText(line).width, hSize, hlBaselineTop, txt.headlineBgColor || '#000000', txt.headlineBgOpacity / 100);
+            }
+            context.fillText(line, centerX, y);
 
             // Calculate text metrics for decorations
             const textWidth = context.measureText(line).width;
-            const fontSize = headlineLayout.headlineSize;
+            const fontSize = hSize;
             const lineThickness = Math.max(2, fontSize * 0.05);
-            const x = dims.width / 2 - textWidth / 2;
+            const x = centerX - textWidth / 2;
 
             // Draw underline
             if (txt.headlineUnderline) {
-                const underlineY = layoutSettings.position === 'top'
+                const underlineY = effPosition === 'top'
                     ? y + fontSize * 0.9
                     : y + fontSize * 0.1;
                 context.fillRect(x, underlineY, textWidth, lineThickness);
@@ -7346,7 +11010,7 @@ function drawTextToContext(context, dims, txt) {
 
             // Draw strikethrough
             if (txt.headlineStrikethrough) {
-                const strikeY = layoutSettings.position === 'top'
+                const strikeY = effPosition === 'top'
                     ? y + fontSize * 0.4
                     : y - fontSize * 0.4;
                 context.fillRect(x, strikeY, textWidth, lineThickness);
@@ -7356,42 +11020,47 @@ function drawTextToContext(context, dims, txt) {
         // Track where subheadline should start (below the bottom edge of headline)
         // The gap between headline and subheadline should be (lineHeight - fontSize)
         // This is the "extra" spacing beyond the text itself
-        const gap = lineHeight - headlineLayout.headlineSize;
-        if (layoutSettings.position === 'top') {
+        const gap = lineHeight - hSize;
+        if (effPosition === 'top') {
             // For top: lastLineY is top of last line, add fontSize to get bottom, then add gap
-            currentY = lastLineY + headlineLayout.headlineSize + gap;
+            currentY = lastLineY + hSize + gap;
         } else {
             // For bottom: lastLineY is already the bottom of last line, just add gap
             currentY = lastLineY + gap;
         }
+        currentY += (txt.subheadlineSpacing || 0) * fontScale; // extra title→subtitle spacing
     }
 
     // Draw subheadline (always below headline visually)
     if (subheadline) {
         const subFontStyle = txt.subheadlineItalic ? 'italic' : 'normal';
         const subWeight = txt.subheadlineWeight || '400';
-        context.font = `${subFontStyle} ${subWeight} ${subheadlineLayout.subheadlineSize}px ${txt.subheadlineFont || txt.headlineFont}`;
+        context.font = `${subFontStyle} ${subWeight} ${sSize}px ${txt.subheadlineFont || txt.headlineFont}`;
         context.fillStyle = hexToRgba(txt.subheadlineColor, txt.subheadlineOpacity / 100);
 
-        const lines = wrapText(context, subheadline, dims.width - padding * 2);
-        const subLineHeight = subheadlineLayout.subheadlineSize * 1.4;
+        const lines = wrapText(context, subheadline, wrapWidth);
+        const subLineHeight = sSize * 1.4;
 
         // Subheadline starts after headline with gap determined by headline lineHeight
         // For bottom position, switch to 'top' baseline so subheadline draws downward
         const subY = currentY;
-        if (layoutSettings.position === 'bottom') {
+        if (effPosition === 'bottom') {
             context.textBaseline = 'top';
         }
 
         lines.forEach((line, i) => {
             const y = subY + i * subLineHeight;
-            context.fillText(line, dims.width / 2, y);
+            if (txt.subheadlineBgOpacity > 0) {
+                drawTextHighlight(context, centerX, y, context.measureText(line).width, sSize, true, txt.subheadlineBgColor || '#000000', txt.subheadlineBgOpacity / 100);
+                context.fillStyle = hexToRgba(txt.subheadlineColor, txt.subheadlineOpacity / 100);
+            }
+            context.fillText(line, centerX, y);
 
             // Calculate text metrics for decorations
             const textWidth = context.measureText(line).width;
-            const fontSize = subheadlineLayout.subheadlineSize;
+            const fontSize = sSize;
             const lineThickness = Math.max(2, fontSize * 0.05);
-            const x = dims.width / 2 - textWidth / 2;
+            const x = centerX - textWidth / 2;
 
             // Draw underline (using 'top' baseline for subheadline)
             if (txt.subheadlineUnderline) {
@@ -7407,7 +11076,7 @@ function drawTextToContext(context, dims, txt) {
         });
 
         // Restore baseline if we changed it
-        if (layoutSettings.position === 'bottom') {
+        if (effPosition === 'bottom') {
             context.textBaseline = 'bottom';
         }
     }
@@ -7761,101 +11430,17 @@ function drawBackground() {
 }
 
 function drawScreenshot() {
+    // Single renderer for the main canvas, the side previews and the export:
+    // this used to be a hand-copied twin of drawScreenshotToContext that had
+    // drifted — it approximated the device's rounded corners with quadratic
+    // curves where the shared renderer uses real elliptical arcs, so the preview
+    // and the exported PNG disagreed on every corner and shadow edge.
     const dims = getCanvasDimensions();
     const screenshot = state.screenshots[state.selectedIndex];
     if (!screenshot) return;
-
-    // Use localized image based on current language
     const img = getScreenshotImage(screenshot);
     if (!img) return;
-
-    const settings = getScreenshotSettings();
-    const scale = settings.scale / 100;
-
-    // Calculate scaled dimensions
-    let imgWidth = dims.width * scale;
-    let imgHeight = (img.height / img.width) * imgWidth;
-
-    // If image is taller than canvas after scaling, adjust
-    if (imgHeight > dims.height * scale) {
-        imgHeight = dims.height * scale;
-        imgWidth = (img.width / img.height) * imgHeight;
-    }
-
-    // Ensure minimum movement range so position works even at 100% scale
-    const moveX = Math.max(dims.width - imgWidth, dims.width * 0.15);
-    const moveY = Math.max(dims.height - imgHeight, dims.height * 0.15);
-    const x = (dims.width - imgWidth) / 2 + (settings.x / 100 - 0.5) * moveX;
-    const y = (dims.height - imgHeight) / 2 + (settings.y / 100 - 0.5) * moveY;
-
-    // Center point for transformations
-    const centerX = x + imgWidth / 2;
-    const centerY = y + imgHeight / 2;
-
-    ctx.save();
-
-    // Apply transformations
-    ctx.translate(centerX, centerY);
-
-    // Apply rotation
-    if (settings.rotation !== 0) {
-        ctx.rotate(settings.rotation * Math.PI / 180);
-    }
-
-    // Apply perspective (simulated with scale transform)
-    if (settings.perspective !== 0) {
-        const perspectiveScale = 1 - Math.abs(settings.perspective) * 0.005;
-        ctx.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
-    }
-
-    ctx.translate(-centerX, -centerY);
-
-    // Draw rounded rectangle with screenshot
-    const radius = settings.cornerRadius * (imgWidth / 400); // Scale radius with image
-
-    // Draw shadow first (needs a filled shape, not clipped)
-    if (settings.shadow.enabled) {
-        const shadowColor = hexToRgba(settings.shadow.color, settings.shadow.opacity / 100);
-        ctx.shadowColor = shadowColor;
-        ctx.shadowBlur = settings.shadow.blur;
-        ctx.shadowOffsetX = settings.shadow.x;
-        ctx.shadowOffsetY = settings.shadow.y;
-
-        // Draw filled rounded rect for shadow
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        roundRect(ctx, x, y, imgWidth, imgHeight, radius);
-        ctx.fill();
-
-        // Reset shadow before drawing image
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-    }
-
-    // Clip and draw image
-    ctx.beginPath();
-    roundRect(ctx, x, y, imgWidth, imgHeight, radius);
-    ctx.clip();
-    ctx.drawImage(img, x, y, imgWidth, imgHeight);
-
-    ctx.restore();
-
-    // Draw device frame if enabled (needs separate transform context)
-    if (settings.frame.enabled) {
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        if (settings.rotation !== 0) {
-            ctx.rotate(settings.rotation * Math.PI / 180);
-        }
-        if (settings.perspective !== 0) {
-            ctx.transform(1, settings.perspective * 0.01, 0, 1, 0, 0);
-        }
-        ctx.translate(-centerX, -centerY);
-        drawDeviceFrame(x, y, imgWidth, imgHeight);
-        ctx.restore();
-    }
+    drawScreenshotToContext(ctx, dims, img, getScreenshotSettings());
 }
 
 function drawDeviceFrame(x, y, width, height) {
@@ -7875,137 +11460,10 @@ function drawDeviceFrame(x, y, width, height) {
 }
 
 function drawText() {
-    const dims = getCanvasDimensions();
-    const text = getTextSettings();
-
-    // Check enabled states (default headline to true for backwards compatibility)
-    const headlineEnabled = text.headlineEnabled !== false;
-    const subheadlineEnabled = text.subheadlineEnabled || false;
-
-    const headlineLang = text.currentHeadlineLang || 'en';
-    const subheadlineLang = text.currentSubheadlineLang || 'en';
-    const layoutLang = getTextLayoutLanguage(text);
-    const headlineLayout = getEffectiveLayout(text, headlineLang);
-    const subheadlineLayout = getEffectiveLayout(text, subheadlineLang);
-    const layoutSettings = getEffectiveLayout(text, layoutLang);
-
-    // Get current language text (only if enabled)
-    const headline = headlineEnabled && text.headlines ? (text.headlines[headlineLang] || '') : '';
-    const subheadline = subheadlineEnabled && text.subheadlines ? (text.subheadlines[subheadlineLang] || '') : '';
-
-    if (!headline && !subheadline) return;
-
-    const padding = dims.width * 0.08;
-    const textY = layoutSettings.position === 'top'
-        ? dims.height * (layoutSettings.offsetY / 100)
-        : dims.height * (1 - layoutSettings.offsetY / 100);
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = layoutSettings.position === 'top' ? 'top' : 'bottom';
-
-    let currentY = textY;
-
-    // Draw headline
-    if (headline) {
-        const fontStyle = text.headlineItalic ? 'italic' : 'normal';
-        ctx.font = `${fontStyle} ${text.headlineWeight} ${headlineLayout.headlineSize}px ${text.headlineFont}`;
-        ctx.fillStyle = text.headlineColor;
-
-        const lines = wrapText(ctx, headline, dims.width - padding * 2);
-        const lineHeight = headlineLayout.headlineSize * (layoutSettings.lineHeight / 100);
-
-        if (layoutSettings.position === 'bottom') {
-            currentY -= (lines.length - 1) * lineHeight;
-        }
-
-        let lastLineY;
-        lines.forEach((line, i) => {
-            const y = currentY + i * lineHeight;
-            lastLineY = y;
-            ctx.fillText(line, dims.width / 2, y);
-
-            // Calculate text metrics for decorations
-            // When textBaseline is 'top', y is at top of text; when 'bottom', y is at bottom
-            const textWidth = ctx.measureText(line).width;
-            const fontSize = headlineLayout.headlineSize;
-            const lineThickness = Math.max(2, fontSize * 0.05);
-            const x = dims.width / 2 - textWidth / 2;
-
-            // Draw underline
-            if (text.headlineUnderline) {
-                const underlineY = layoutSettings.position === 'top'
-                    ? y + fontSize * 0.9  // Below text when baseline is top
-                    : y + fontSize * 0.1; // Below text when baseline is bottom
-                ctx.fillRect(x, underlineY, textWidth, lineThickness);
-            }
-
-            // Draw strikethrough
-            if (text.headlineStrikethrough) {
-                const strikeY = layoutSettings.position === 'top'
-                    ? y + fontSize * 0.4  // Middle of text when baseline is top
-                    : y - fontSize * 0.4; // Middle of text when baseline is bottom
-                ctx.fillRect(x, strikeY, textWidth, lineThickness);
-            }
-        });
-
-        // Track where subheadline should start (below the bottom edge of headline)
-        // The gap between headline and subheadline should be (lineHeight - fontSize)
-        // This is the "extra" spacing beyond the text itself
-        const gap = lineHeight - headlineLayout.headlineSize;
-        if (layoutSettings.position === 'top') {
-            // For top: lastLineY is top of last line, add fontSize to get bottom, then add gap
-            currentY = lastLineY + headlineLayout.headlineSize + gap;
-        } else {
-            // For bottom: lastLineY is already the bottom of last line, just add gap
-            currentY = lastLineY + gap;
-        }
-    }
-
-    // Draw subheadline (always below headline visually)
-    if (subheadline) {
-        const subFontStyle = text.subheadlineItalic ? 'italic' : 'normal';
-        const subWeight = text.subheadlineWeight || '400';
-        ctx.font = `${subFontStyle} ${subWeight} ${subheadlineLayout.subheadlineSize}px ${text.subheadlineFont || text.headlineFont}`;
-        ctx.fillStyle = hexToRgba(text.subheadlineColor, text.subheadlineOpacity / 100);
-
-        const lines = wrapText(ctx, subheadline, dims.width - padding * 2);
-        const subLineHeight = subheadlineLayout.subheadlineSize * 1.4;
-
-        // Subheadline starts after headline with gap determined by headline lineHeight
-        // For bottom position, switch to 'top' baseline so subheadline draws downward
-        const subY = currentY;
-        if (layoutSettings.position === 'bottom') {
-            ctx.textBaseline = 'top';
-        }
-
-        lines.forEach((line, i) => {
-            const y = subY + i * subLineHeight;
-            ctx.fillText(line, dims.width / 2, y);
-
-            // Calculate text metrics for decorations
-            const textWidth = ctx.measureText(line).width;
-            const fontSize = subheadlineLayout.subheadlineSize;
-            const lineThickness = Math.max(2, fontSize * 0.05);
-            const x = dims.width / 2 - textWidth / 2;
-
-            // Draw underline (using 'top' baseline for subheadline)
-            if (text.subheadlineUnderline) {
-                const underlineY = y + fontSize * 0.9;
-                ctx.fillRect(x, underlineY, textWidth, lineThickness);
-            }
-
-            // Draw strikethrough
-            if (text.subheadlineStrikethrough) {
-                const strikeY = y + fontSize * 0.4;
-                ctx.fillRect(x, strikeY, textWidth, lineThickness);
-            }
-        });
-
-        // Restore baseline if we changed it
-        if (layoutSettings.position === 'bottom') {
-            ctx.textBaseline = 'bottom';
-        }
-    }
+    // Unified with the shared renderer so auto-fit, text background, spacing and
+    // per-screen panorama all behave identically on the main canvas and in
+    // previews/export.
+    drawTextWithPanorama(ctx, getCanvasDimensions(), getContainerText());
 }
 
 function drawNoise() {
@@ -8041,6 +11499,22 @@ function wrapText(ctx, text, maxWidth) {
     const lines = [];
     const rawLines = String(text).split(/\r?\n/);
 
+    // Break a single token that's wider than maxWidth at the character level
+    // (handles long compound words and scripts without spaces like CJK).
+    function breakLongWord(word, startLine) {
+        let currentLine = startLine;
+        for (const ch of word) {
+            const test = currentLine + ch;
+            if (ctx.measureText(test).width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = ch;
+            } else {
+                currentLine = test;
+            }
+        }
+        return currentLine;
+    }
+
     rawLines.forEach((rawLine) => {
         if (rawLine === '') {
             lines.push('');
@@ -8051,10 +11525,14 @@ function wrapText(ctx, text, maxWidth) {
         let currentLine = '';
 
         words.forEach(word => {
+            // If the word alone overflows, char-break it instead of overflowing.
+            if (ctx.measureText(word).width > maxWidth) {
+                if (currentLine) { lines.push(currentLine); currentLine = ''; }
+                currentLine = breakLongWord(word, '');
+                return;
+            }
             const testLine = currentLine + (currentLine ? ' ' : '') + word;
-            const metrics = ctx.measureText(testLine);
-
-            if (metrics.width > maxWidth && currentLine) {
+            if (ctx.measureText(testLine).width > maxWidth && currentLine) {
                 lines.push(currentLine);
                 currentLine = word;
             } else {
@@ -8078,19 +11556,109 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// ===== Off-screen export rendering =====
+// Exports used to drive the VISIBLE preview canvas: they moved
+// state.selectedIndex, called renderCanvasNow() and read the pixels back. That
+// made every exported frame pay for a full-size repaint AND for
+// scheduleSidePreviews(), which re-renders the four neighbouring previews
+// through the whole pipeline (noise loop included) each time the selection
+// changes — four extra full renders per screenshot, per language, that nobody
+// sees while a ZIP is being built.
+//
+// Rendering into a detached canvas instead skips all of it. It is the same
+// function the side previews use, so the output is pixel-identical to the
+// preview; only the destination changes.
+let _exportCanvas = null;
+let _exportCtx = null;
+function getExportSurface() {
+    if (!_exportCanvas) {
+        _exportCanvas = document.createElement('canvas');
+        _exportCtx = _exportCanvas.getContext('2d');
+    }
+    return { canvas: _exportCanvas, ctx: _exportCtx };
+}
+
+// Render one screenshot at full output resolution, off-screen, and return its
+// PNG panels (more than one only for panoramas).
+function renderScreenshotPanels(index) {
+    const { canvas: c, ctx: cx } = getExportSurface();
+    const dims = getCanvasDimensions(index);
+    renderScreenshotToCanvas(index, c, cx, dims, 1);
+    return sliceCanvasToPanels(c, dims.span || 1);
+}
+
+// Let the browser paint the progress modal between frames. A plain setTimeout(0)
+// costs a millisecond or two; the fixed 16 ms sleep this replaces was clamped up
+// to ~38 ms in practice, which on a 40-language export is minutes of waiting.
+function yieldToUI() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// Slice a (possibly panoramic) canvas into `span` equal vertical panels.
+// Returns an array of PNG data URLs, left-to-right.
+function sliceCanvasToPanels(srcCanvas, span) {
+    if (!span || span <= 1) return [srcCanvas.toDataURL('image/png')];
+    const panelW = Math.round(srcCanvas.width / span);
+    const urls = [];
+    for (let k = 0; k < span; k++) {
+        const c = document.createElement('canvas');
+        c.width = panelW;
+        c.height = srcCanvas.height;
+        const cx = c.getContext('2d');
+        cx.drawImage(srcCanvas, k * panelW, 0, panelW, srcCanvas.height, 0, 0, panelW, srcCanvas.height);
+        urls.push(c.toDataURL('image/png'));
+    }
+    return urls;
+}
+
+// Make sure every screenshot's image for `lang` (with the same fallback order as
+// getScreenshotImage) is decoded before we render to an export canvas — images
+// load lazily now, so a fresh language may not be in memory yet.
+async function ensureLanguageImagesLoaded(lang) {
+    const jobs = [];
+    for (const s of state.screenshots) {
+        const li = s.localizedImages;
+        if (!li) continue;
+        let entry = li[lang] && li[lang].src ? li[lang] : null;
+        if (!entry) {
+            for (const l of [...state.projectLanguages, ...Object.keys(li)]) {
+                if (li[l]?.src) { entry = li[l]; break; }
+            }
+        }
+        if (entry && entry.src && !entry.image && !entry._loading) {
+            jobs.push(new Promise((res) => {
+                const url = blobUrlForRef(entry.src);
+                if (!url) return res();
+                const img = new Image();
+                img.decoding = 'async';
+                if (!url.startsWith('data:')) img.crossOrigin = 'anonymous';
+                img.onload = () => { entry.image = img; res(); };
+                img.onerror = () => res();
+                img.src = url;
+            }));
+        }
+    }
+    if (jobs.length) await Promise.all(jobs);
+}
+
 async function exportCurrent() {
     if (state.screenshots.length === 0) {
         await showAppAlert('Please upload a screenshot first', 'info');
         return;
     }
 
-    // Ensure canvas is up-to-date (especially important for 3D mode)
-    updateCanvas();
+    // Make sure the current language's images are decoded (lazy loading), then render.
+    await ensureLanguageImagesLoaded(state.currentLanguage);
 
-    const link = document.createElement('a');
-    link.download = `screenshot-${state.selectedIndex + 1}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    const panels = renderScreenshotPanels(state.selectedIndex);
+    panels.forEach((url, k) => {
+        const link = document.createElement('a');
+        link.download = panels.length > 1
+            ? `screenshot-${state.selectedIndex + 1}-panel-${k + 1}.png`
+            : `screenshot-${state.selectedIndex + 1}.png`;
+        link.href = url;
+        link.click();
+    });
 }
 
 async function exportAll() {
@@ -8160,21 +11728,23 @@ async function exportAllForLanguage(lang) {
         s.text.currentSubheadlineLang = lang;
     });
 
-    for (let i = 0; i < state.screenshots.length; i++) {
-        state.selectedIndex = i;
-        updateCanvas();
+    // Decode this language's images before rendering (lazy loading).
+    await ensureLanguageImagesLoaded(lang);
 
+    let panelNum = 1; // running counter so panorama panels stay in order
+    const pad = (n) => String(n).padStart(2, '0');
+    for (let i = 0; i < state.screenshots.length; i++) {
         // Update progress
         const percent = Math.round(((i + 1) / total) * 90); // Reserve 10% for ZIP generation
         showExportProgress('Exporting...', `Screenshot ${i + 1} of ${total}`, percent);
+        await yieldToUI();
 
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Get canvas data as base64, strip the data URL prefix
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-
-        zip.file(`screenshot-${i + 1}.png`, base64Data, { base64: true });
+        // Rendered off-screen: the visible preview and its neighbours are left alone.
+        const panels = renderScreenshotPanels(i);
+        panels.forEach((dataUrl) => {
+            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+            zip.file(`screenshot-${pad(panelNum++)}.png`, base64Data, { base64: true });
+        });
     }
 
     // Restore original settings
@@ -8191,7 +11761,7 @@ async function exportAllForLanguage(lang) {
     const content = await zip.generateAsync({ type: 'blob' });
 
     showExportProgress('Complete!', '', 100);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 400));
     hideExportProgress();
 
     const link = document.createElement('a');
@@ -8232,22 +11802,23 @@ async function exportAllLanguages() {
             s.text.currentSubheadlineLang = lang;
         });
 
-        for (let i = 0; i < state.screenshots.length; i++) {
-            state.selectedIndex = i;
-            updateCanvas();
+        // Decode this language's images before rendering (lazy loading).
+        await ensureLanguageImagesLoaded(lang);
 
+        let panelNum = 1; // running counter so panorama panels stay in order
+        for (let i = 0; i < state.screenshots.length; i++) {
             completedItems++;
             const percent = Math.round((completedItems / totalItems) * 90); // Reserve 10% for ZIP
             showExportProgress('Exporting...', `${langName}: Screenshot ${i + 1} of ${totalScreenshots}`, percent);
+            await yieldToUI();
 
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Get canvas data as base64, strip the data URL prefix
-            const dataUrl = canvas.toDataURL('image/png');
-            const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
-
-            // Use language code as folder name
-            zip.file(`${lang}/screenshot-${i + 1}.png`, base64Data, { base64: true });
+            // Rendered off-screen: the visible preview and its neighbours are left alone.
+            const panels = renderScreenshotPanels(i);
+            panels.forEach((dataUrl) => {
+                const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+                // Use language code as folder name
+                zip.file(`${lang}/screenshot-${panelNum++}.png`, base64Data, { base64: true });
+            });
         }
     }
 
@@ -8265,7 +11836,7 @@ async function exportAllLanguages() {
     const content = await zip.generateAsync({ type: 'blob' });
 
     showExportProgress('Complete!', '', 100);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 400));
     hideExportProgress();
 
     const link = document.createElement('a');

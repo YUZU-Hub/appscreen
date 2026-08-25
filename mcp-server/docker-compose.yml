@@ -1,0 +1,62 @@
+# Run the appscreen MCP server over HTTP:
+#   docker compose up -d
+# Then connect Claude Code:
+#   claude mcp add --transport http appscreen http://localhost:3000/mcp
+#
+# Expose it publicly over HTTPS (for claude.ai / Claude Desktop custom connectors)
+# via a Cloudflare Tunnel — no open ports, automatic TLS on 443:
+#   TUNNEL_TOKEN=xxxxx docker compose --profile tunnel up -d
+# In the Cloudflare Zero Trust dashboard, point the tunnel's public hostname
+# (e.g. appscreen.agence-zen.com) at the service  http://appscreen-mcp:3000
+# Then the connector URL is  https://appscreen.agence-zen.com/mcp  (no :3000).
+#
+# Mount a host folder at /work to let `outputPath` / image inputs use host files,
+# e.g. "outputPath": "/work/shot.png".
+services:
+  appscreen-mcp:
+    build: .
+    image: appscreen-mcp:latest
+    container_name: appscreen-mcp
+    ports:
+      # Loopback-only: to expose on the LAN, remove the "127.0.0.1:" prefix AND set MCP_AUTH_TOKEN.
+      - "127.0.0.1:3000:3000"
+    environment:
+      MCP_TRANSPORT: http
+      PORT: "3000"
+      # Persisted project store (mounted below). WITHOUT this, projects live in
+      # the container's writable layer and are DESTROYED on every recreate
+      # (image update, compose up after an edit, watchtower redeploy…).
+      APPSCREEN_PROJECTS_DIR: /data/projects
+      # Optional shared auth token. When set, all REST + MCP endpoints require
+      # "Authorization: Bearer <token>" (or X-Auth-Token; SSE/file downloads accept ?token=).
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+      # Confine path-form image inputs and outputPath writes to the mounted /work.
+      MCP_IMAGE_DIR: /work
+      MCP_OUTPUT_DIR: /work
+      # Default text font when a spec doesn't set one (must be installed in the image).
+      APPSCREEN_FONT_FAMILY: "DejaVu Sans"
+      # Restrict browser CORS in production, e.g. https://claude.ai (default: *).
+      MCP_CORS_ORIGIN: ${MCP_CORS_ORIGIN:-*}
+      # Public base URL for temporary download links (deliver:'url'). Leave empty to
+      # derive it from the request (X-Forwarded-* / Host). Set it behind a tunnel,
+      # e.g. https://appscreen.example.com
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+    volumes:
+      - ./work:/work
+      - ./data/projects:/data/projects
+    restart: unless-stopped
+
+  # Optional: public HTTPS via Cloudflare Tunnel. Enable with `--profile tunnel`.
+  # Get TUNNEL_TOKEN from Cloudflare Zero Trust → Networks → Tunnels (create a
+  # tunnel, copy its token). Route the public hostname to http://appscreen-mcp:3000.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: appscreen-cloudflared
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      # Required when using --profile tunnel. Set it in your shell or a .env file.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - appscreen-mcp
+    restart: unless-stopped

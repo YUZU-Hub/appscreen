@@ -14,7 +14,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 ## Features
 
 ### Output & Export
-- **Multiple Output Sizes**: iPhone 6.9", 6.7", 6.5", 5.5" and iPad 12.9", 11" App Store requirements, plus custom sizes
+- **Multiple Output Sizes**: iPhone, iPad, Apple Watch, Mac, Android and web sizes matching the App Store / Play Store requirements, plus custom sizes
 - **Batch Export**: Export all screenshots at once as a ZIP file
 - **Per-Screenshot Settings**: Each screenshot can have its own background, device settings, and text
 
@@ -27,7 +27,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 
 ### Device Mockups
 - **2D Mode**: Position, scale, rotate, and adjust corner radius of screenshots
-- **3D Mode**: Interactive iPhone 15 Pro Max 3D mockup with drag-to-rotate
+- **3D Mode**: Interactive iPhone 15 Pro Max and Samsung Galaxy S25 Ultra 3D mockups with drag-to-rotate (iPad, Mac and Apple Watch are 2D-only)
 - **Position Presets**: Centered, bleed, tilt left/right, perspective, and more
 - **Shadow Effects**: Customizable drop shadows with color, blur, opacity, and offset
 - **Border Effects**: Add borders around screenshots with adjustable width and opacity
@@ -52,6 +52,8 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 - **Multiple Projects**: Create, rename, and delete projects
 - **Auto-Save**: All changes saved automatically to browser storage
 - **Screenshot Count**: See screenshot counts in project selector
+- **Bulk Import (MCP)**: `import_screenshots` imports a whole folder in one call — the language is read off each filename suffix (`home_de.png`, `home_pt-br.png`) and files sharing a base name become one screenshot with all its localized images
+- **Image Compression**: Imported screenshots are re-encoded to WebP and capped at a maximum size before they are stored — quality, size and format are configurable in Settings → Image compression, where a one-click pass also re-encodes the images an existing project already stores
 
 ### User Interface
 - **Dark Theme**: Easy on the eyes for extended editing sessions
@@ -59,6 +61,11 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 - **Drag & Drop**: Reorder screenshots by dragging
 - **Collapsible Sections**: Clean UI with expandable settings panels
 - **Tab Persistence**: Remembers your active tab between sessions
+
+### Automation (MCP)
+- **AI Agent Generation**: An [MCP server](#mcp-server-generate-screenshots-with-ai-agents) lets Claude render screenshots headlessly — single shots or batches
+- **In-App Connection**: Connect to an MCP server from Settings; the URL is auto-detected from the page
+- **Runs Anywhere**: stdio for local use, HTTP for networked/Docker deployments
 
 ## Getting Started
 
@@ -124,17 +131,28 @@ If you have the "Live Server" extension installed in VS Code, right-click `index
 
 #### Option 4: Docker
 
-Run the pre-built Docker image from GitHub Container Registry:
+Run the pre-built Docker image from GitHub Container Registry (published by CI on
+every push to `main`):
 
 ```bash
 # Using Docker directly
-docker run -d -p 8080:80 ghcr.io/yuzu-hub/appscreen:latest
+docker run -d -p 8080:80 ghcr.io/flocom/appscreen:latest
 
 # Using Docker Compose
 docker compose up -d
 ```
 
 Then open `http://localhost:8080` in your browser.
+
+**Updating to the latest version:**
+
+```bash
+# Pull the latest CI-built image and restart
+docker compose pull && docker compose up -d
+
+# …or rebuild from the current local source
+docker compose up -d --build
+```
 
 #### Building locally
 
@@ -150,7 +168,7 @@ docker compose -f docker-compose.build.yml up -d
 2. **Choose Output Size**: Select the target device size from the sidebar
 3. **Customize Background**: Choose gradient, solid color, or image background
 4. **Position Screenshot**: Use presets or manually adjust scale, position, and rotation
-5. **Switch to 3D** (optional): Enable 3D mode for interactive iPhone mockup
+5. **Switch to 3D** (optional): Enable 3D mode for an interactive iPhone or Samsung mockup (unavailable on Apple Watch output sizes, which have no 3D model)
 6. **Add Text**: Enter your headline and optional subheadline
 7. **Export**: Download the current screenshot or export all at once as ZIP
 
@@ -166,6 +184,64 @@ To use the AI-powered translation feature:
 
 Your API key is stored locally in your browser and only sent to the respective AI provider's API.
 
+## MCP Server (generate screenshots with AI agents)
+
+This repo ships an [**MCP**](https://modelcontextprotocol.io) server in [`mcp-server/`](mcp-server/)
+that renders App Store / Play Store / web screenshots **headlessly** (no browser) — a Node port of
+the same 2D pipeline (`app.js`) using [`@napi-rs/canvas`](https://github.com/Brooooooklyn/canvas).
+It lets an AI agent like **Claude** generate marketing screenshots for you, on demand or in batches.
+
+- **Tools:** `list_output_sizes`, `list_gradient_presets`, `generate_screenshot`, `generate_batch`
+- **Full parameter coverage:** gradient/solid/image backgrounds + noise, device placement
+  (scale/position/rotation/shadow/border), headline + subheadline, free-floating
+  elements (text/emoji/icon/graphic with laurel/badge/star frames), cropped "popout" callouts,
+  multi-language text, and an `avoidTextOverlap` layout safeguard.
+- **Returns the rendered PNG** in the tool result (and can write it to a path).
+- **Transports:** stdio (local) and Streamable HTTP (remote/networked).
+
+### Connect Claude in one command
+
+```bash
+cd mcp-server && ./setup.sh          # builds, then registers the server with Claude Code
+# or, over Docker / HTTP:
+cd mcp-server && ./setup.sh docker
+```
+
+The repo also ships a project-scoped [`.mcp.json`](.mcp.json), so opening it in Claude Code
+auto-discovers the **appscreen** server (after a one-time `cd mcp-server && npm install`).
+
+### Run it in Docker
+
+```bash
+cd mcp-server && docker compose up -d        # HTTP server on http://localhost:3000/mcp
+```
+
+### Connect from the web app (Settings → MCP Server)
+
+Open **Settings** in the app: the **MCP Server** URL is auto-detected from the page
+(`http://<host>:3000/mcp`). Add an optional access token and click **Connect** to run the
+handshake and list the available tools.
+
+### Use it from claude.ai / Claude Desktop (public connector)
+
+The "Add custom connector" flow needs a **publicly reachable HTTPS** endpoint on port **443** —
+`localhost` or a `:3000` URL behind Cloudflare won't work. If your domain is on Cloudflare, the
+included **Cloudflare Tunnel** exposes the server over HTTPS with no open ports:
+
+```bash
+cd mcp-server
+TUNNEL_TOKEN=<your-cloudflare-tunnel-token> docker compose --profile tunnel up -d
+```
+
+Route the tunnel's public hostname to `http://appscreen-mcp:3000`, then use
+`https://your-host/mcp` (no port) as the connector URL. Details in
+[`mcp-server/README.md`](mcp-server/README.md#expose-publicly-claudeai--claude-desktop-custom-connectors).
+
+> For local use (Claude Code / `.mcp.json` / `claude mcp add`) none of this is needed.
+
+See [`mcp-server/README.md`](mcp-server/README.md) for the full parameter reference and all
+connection options (Claude Desktop, HTTP, Docker stdio, fonts, CORS).
+
 ## Tech Stack
 
 - Vanilla JavaScript (no frameworks)
@@ -176,6 +252,7 @@ Your API key is stored locally in your browser and only sent to the respective A
 - Google Fonts API for font picker
 - Claude/OpenAI/Google APIs for translations
 - Docker + nginx for containerized deployment
+- MCP server (Node + @napi-rs/canvas) for headless, AI-agent screenshot generation
 
 ## Apps Using This Project
 

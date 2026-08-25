@@ -22,7 +22,7 @@ App Store Screenshot Generator - a browser-based tool for creating App Store mar
 
 ## Development
 
-To run locally, serve via a web server (required for IndexedDB persistence):
+To run locally, serve via a web server:
 
 ```bash
 python3 -m http.server 8000
@@ -30,7 +30,7 @@ python3 -m http.server 8000
 npx serve .
 ```
 
-Open `http://localhost:8000` in browser. Opening `index.html` directly from filesystem will break persistence.
+Open `http://localhost:8000` in browser. Persistence requires a running MCP server (the server's disk is the only project store — without it the editor works in-memory only and nothing survives a reload).
 
 ## Architecture
 
@@ -38,18 +38,29 @@ Open `http://localhost:8000` in browser. Opening `index.html` directly from file
 
 - `index.html` - UI structure with modals for settings, about, project management, translations, and language selection
 - `styles.css` - Dark theme styling, responsive layout with CSS Grid (3-column: left sidebar, canvas, right sidebar)
-- `app.js` - All application logic (~4400 lines)
-- `three-renderer.js` - Three.js 3D rendering for iPhone mockups (~1000 lines)
-- `language-utils.js` - Language detection, localized image management, and translation dialogs (~500 lines)
+- `app.js` - Core application logic (~10,000 lines): state, rendering, persistence, remote sync, undo/redo, exports
+- `three-renderer.js` - Three.js 3D rendering for iPhone mockups (~1,200 lines)
+- `language-utils.js` - Language detection, localized image management, and translation dialogs (~560 lines)
+- `appstore-features.js` - App Store-specific tooling: per-language overview matrix, overlap guard, CSV import/export (~1,100 lines)
+- `templates.js` - Layout templates: whole-project device + text positioning recipes and their modal (~450 lines)
+- `magical-titles.js` - AI-generated headline suggestions from screenshot images (~460 lines)
+- `llm.js` - Shared LLM provider config (Claude/OpenAI/Gemini endpoints, headers, key validation)
+- `lucide-icons.js`, `color-input.js`, `panel-resize.js`, `updater.js` - icon set, color input enhancement, resizable panels, Tauri auto-update
+- `mcp-server/` - optional Node/TypeScript MCP + REST server for shared project storage and server-side rendering
+- `src-tauri/` - Tauri desktop app wrapper
 
 **Key patterns in app.js:**
 
 - `state` object at top holds all application state (screenshots, settings, text, background config)
-- `updateCanvas()` is the main render function - call after any state change
-- `saveState()` persists to IndexedDB, called automatically in `updateCanvas()`
+- `updateCanvas()` is the main render function - call after any state change (renders are coalesced to one per animation frame)
+- `saveState()` pushes to the MCP server (debounced via `scheduleRemotePush()`), called automatically in `updateCanvas()`
 - `syncUIWithState()` updates all UI controls to reflect current state
-- Project management uses IndexedDB with two stores: `projects` (data) and `meta` (project list)
+- **STORAGE IS SERVER-ONLY**: the MCP server's disk (`mcp-server/src/projectstore.ts`, MCP tools + REST endpoints in `server.ts`) is the one and only project store — a project is on the server or it doesn't exist. The browser persists nothing but the current-project id (localStorage); the legacy IndexedDB mirror is deleted at startup. `syncWithRemote()` loads the project list, `loadState()` fetches the open project (`RemoteStore` is the REST client), and every change is pushed back with optimistic concurrency (`rev` + If-Match; 409 → the server copy is reloaded). Live updates arrive over SSE (`/events`). Uploads are guarded by a blocking overlay + an in-memory pending-upload ledger until the server confirms them; heavy raster images are compressed (see below) and uploaded as content-addressed binary blobs (`externalizeForUpload()`).
+- **Bulk import over MCP**: `import_screenshots` (server.ts) takes a list of images *or* a whole server directory (`MCP_IMAGE_DIR`) and slots them all in ONE `mutateProject` — one lock, one save, one rev bump, one SSE event, instead of N× `set_screenshot_image`. `match:'filename'` (default) reads the locale off the filename suffix and groups files by base name exactly like drag-and-drop (`src/filenames.ts` ports `stripLanguageSuffix()` from language-utils.js — keep the two in sync); `'order'` maps files onto existing screens by position per language; `'append'` adds one screen per file. Images are resolved and stored as blobs *outside* the lock, so peak memory is one image, not the whole batch.
+- **Image compression**: imported screenshots are re-encoded to WebP (JPEG fallback) and capped on their longest edge before they ever enter `state` (`optimizeImageDataUrl()` / `optimizeImportedImage()`, called from `processImageFile()`); `externalizeForUpload()` runs the same pass as a net for images arriving by other routes, and leaves anything already compressed and small enough alone (no stacked generation loss). Quality / max size / format live in localStorage (`imageQuality`, `imageMaxEdge`, `imageFormat`) and are edited in Settings → Image compression. Images arriving **through MCP** are compressed on the way in by `storeImageAsBlob()`/`externalizeRecord()` (`mcp-server/src/imagecodec.ts` holds the shared codec primitives; env: `APPSCREEN_IMAGE_QUALITY`, `APPSCREEN_IMAGE_FORMAT`, `APPSCREEN_IMAGE_MAX_EDGE`, `APPSCREEN_IMAGE_COMPRESS=0` to disable). Images **already stored** are re-encoded server-side by `POST /projects/:id/optimize` (`mcp-server/src/imageopt.ts`), driven from the same settings section — it downscales each blob to the largest size that screen can actually draw it at (panorama span and popout magnification included, never under 2880 px on the long edge), rewrites the record's refs, and lets the blob GC reclaim the old bytes. `GET /projects/:id/storage` reports what a project's images weigh.
 - Per-screenshot settings: each screenshot stores its own background, device, and text settings
+- **Devices**: `deviceDimensions` (app.js) is the one source of truth for output sizes and is mirrored byte-for-byte by `OUTPUT_SIZES` in `mcp-server/src/presets.ts` (which feeds `z.enum(OUTPUT_DEVICES)` and therefore gates every render tool) and by the `data-device` options in `index.html`. Every key is prefixed with its family (`iphone-`, `ipad-`, `watch-`, `mac-`, `android-`, `web-`) because the 2D Device Model buttons match the current output size by prefix (`appstore-features.js`, `initDeviceTextExtras`) — an unprefixed key silently resets the canvas to an iPhone. 2D bezels live in `drawDeviceBezel()` (`iphone`/`ipad`/`samsung`/`mac`/`watch`); the Apple Watch case (`drawWatchBezel()`) is drawn from ratios measured on Apple's official bezel artwork, and picks the Ultra shape for the `watch-ultra*` sizes. 3D is GLB-driven and only iPhone and Samsung have models, so `output3DSupported()` keeps watch output in 2D. Canvases under 700px wide (only the watch) scale the absolute-pixel shadow defaults and lower the text auto-fit floor.
+- Undo/redo: `captureHistoryState()`/`historyFingerprint()` snapshot serializable state (transient image fields excluded); `recordHistoryDebounced()` is driven by `saveState()`; `resetHistory()` re-baselines after a project finishes hydrating (`checkAllLoaded()`); Ctrl+Z / Ctrl+Shift+Z shortcuts skip text inputs and open modals
 
 **Canvas rendering pipeline (in updateCanvas):**
 1. `drawBackground()` - gradient/solid/image with optional blur and overlay
@@ -96,6 +107,13 @@ Open `http://localhost:8000` in browser. Opening `index.html` directly from file
 - `transferStyle()` - copies style settings from one screenshot to another
 - `slideToScreenshot()` - animates carousel transition between screenshots
 - `updateSidePreviews()` - renders adjacent screenshots in side preview canvases
+
+**Layout templates (templates.js):**
+- `LAYOUT_TEMPLATES` - the catalogue; each entry has `steps` (cycled over the screens, so a two-step template alternates) with a declarative `zone` (text rectangle, % of canvas) and `device` ({scale, x, top}, `top` = top edge as a fraction of the canvas height). `zone`/`device` are canvas-relative and port to any aspect; `headlineSize`/`subheadlineSize`/`subheadlineSpacing` are absolute canvas pixels calibrated for a ~1320px-wide phone canvas and get scaled by `min(1, baseWidth/1320)` at apply time (`templateTypeScale()`), so they shrink on an Apple Watch canvas instead of landing one word per line
+- `templateDeviceY()` - converts a wanted `top` into the renderer's `y` (mirrors `drawScreenshotToContext`)
+- `applyLayoutTemplate(id, {scope, skipFirst, keepBackground})` - applies to all screens or just the current one; `skipFirst` leaves screen 0 untouched (hero delivered ready-made), `keepBackground` leaves the existing background colours alone
+- `templatePreviewSVG()` - card thumbnails generated from the template's own geometry, so they can't drift from what applying it does; card width follows the live canvas aspect (`tplFrameW()`) so a near-square Apple Watch layout isn't previewed as a tall phone
+- Templates write the layout into BOTH `text.*` and every `text.languageSettings[lang]` entry, so they take effect whether or not per-language layout is on, and into `panelTexts` for panorama screens
 
 **Language Utils (language-utils.js):**
 - `detectLanguageFromFilename()` - extracts language code from filename suffixes

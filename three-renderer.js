@@ -11,6 +11,7 @@ let orbitControls = null;
 let isThreeJSInitialized = false;
 let phoneModelLoaded = false;
 let phoneModelLoading = false;
+let phoneModelLoadGeneration = 0;
 
 // Screen texture for the screenshot
 let screenTexture = null;
@@ -218,6 +219,7 @@ function initThreeJS() {
 function loadPhoneModel() {
     if (phoneModelLoading) return; // Prevent double loading
     phoneModelLoading = true;
+    const loadGeneration = ++phoneModelLoadGeneration;
 
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
     const loader = new THREE.GLTFLoader();
@@ -225,6 +227,7 @@ function loadPhoneModel() {
     loader.load(
         config.modelPath,
         (gltf) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
             phoneModelLoading = false;
             phoneModel = gltf.scene;
 
@@ -291,9 +294,11 @@ function loadPhoneModel() {
             }
 
             // Create a pivot group for rotation around screen center
-            const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
             const screenOffset = config.screenOffset;
 
+            if (phonePivot) {
+                threeScene.remove(phonePivot);
+            }
             phonePivot = new THREE.Group();
 
             // Offset the phone model so the screen center is at the pivot's origin
@@ -341,6 +346,8 @@ function loadPhoneModel() {
             console.log('Loading phone model... ' + percent + '%');
         },
         (error) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
+            phoneModelLoading = false;
             console.error('Error loading phone model:', error);
         }
     );
@@ -360,7 +367,8 @@ function switchPhoneModel(deviceType) {
 
     // Update current device type
     currentDeviceModel = deviceType;
-    phoneModelLoading = false; // Reset so we can load the new one
+    phoneModelLoading = true;
+    const loadGeneration = ++phoneModelLoadGeneration;
 
     // Remove current pivot (which contains the model) from scene
     if (phonePivot && threeScene) {
@@ -395,6 +403,8 @@ function switchPhoneModel(deviceType) {
     loader.load(
         config.modelPath,
         (gltf) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
+            phoneModelLoading = false;
             phoneModel = gltf.scene;
 
             // Center and scale the model
@@ -410,6 +420,9 @@ function switchPhoneModel(deviceType) {
 
             // Create a pivot group for rotation around screen center
             const screenOffset = config.screenOffset;
+            if (phonePivot) {
+                threeScene.remove(phonePivot);
+            }
             phonePivot = new THREE.Group();
 
             // Offset the phone model so the screen center is at the pivot's origin
@@ -456,6 +469,8 @@ function switchPhoneModel(deviceType) {
             console.log('Loading ' + deviceType + ' model... ' + percent + '%');
         },
         (error) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
+            phoneModelLoading = false;
             console.error('Error loading ' + deviceType + ' model:', error);
         }
     );
@@ -661,6 +676,16 @@ function updateScreenTexture() {
     const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
     const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
 
+    // Bake the notch / Dynamic Island onto the 3D screen texture so it follows
+    // the model (the 2D notch options also apply in 3D).
+    const notch = screenshot.screenshot && screenshot.screenshot.frame && screenshot.screenshot.frame.notch;
+    if (notch && notch !== 'none' && typeof drawNotchShape === 'function') {
+        try {
+            const nctx = roundedImage.getContext('2d');
+            drawNotchShape(nctx, 0, 0, roundedImage.width, roundedImage.height, cornerRadius, notch);
+        } catch (e) { /* ignore */ }
+    }
+
     screenTexture = new THREE.Texture(roundedImage);
     screenTexture.needsUpdate = true;
     screenTexture.encoding = THREE.sRGBEncoding;
@@ -783,9 +808,9 @@ function renderThreeJSToCanvas(targetCanvas, width, height) {
     threeScene.background = null;
     threeRenderer.setClearColor(0x000000, 0); // Fully transparent clear color
 
-    // Temporarily resize renderer
+    // Temporarily resize renderer - render at 2x for supersampled antialiasing
     const oldSize = { width: 400, height: 700 };
-    threeRenderer.setSize(dims.width, dims.height);
+    threeRenderer.setSize(dims.width * 2, dims.height * 2);
     threeCamera.aspect = dims.width / dims.height;
     threeCamera.updateProjectionMatrix();
 
@@ -795,9 +820,15 @@ function renderThreeJSToCanvas(targetCanvas, width, height) {
     // Render with transparency
     threeRenderer.render(threeScene, threeCamera);
 
-    // Draw to target canvas (compositing the 3D phone onto existing content)
+    // Downscale to target canvas (compositing the 3D phone onto existing content)
     const ctx = targetCanvas.getContext('2d');
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    const prevQuality = ctx.imageSmoothingQuality;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(threeRenderer.domElement, 0, 0, dims.width, dims.height);
+    ctx.imageSmoothingEnabled = prevSmoothing;
+    ctx.imageSmoothingQuality = prevQuality;
 
     // Restore size, background, and model transforms
     threeRenderer.setSize(oldSize.width, oldSize.height);
@@ -886,8 +917,16 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
     }
 
     // Apply frame color for this screenshot
+    const savedMaterialColors = [];
     if (ss.frameColor) {
         if (useCurrentModel) {
+            if (phoneModel) {
+                phoneModel.traverse((child) => {
+                    if (child.isMesh && child.material?.color) {
+                        savedMaterialColors.push({ material: child.material, color: child.material.color.clone() });
+                    }
+                });
+            }
             setPhoneFrameColor(ss.frameColor, screenshotDeviceType);
         } else {
             setCachedModelFrameColor(ss.frameColor, screenshotDeviceType);
@@ -955,13 +994,10 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         screenPlaneToUse.material = oldMaterial;
     }
 
-    // Restore frame color on current model if we changed it
-    if (useCurrentModel && ss.frameColor && typeof state !== 'undefined') {
-        const currentSS = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : null;
-        if (currentSS?.frameColor) {
-            setPhoneFrameColor(currentSS.frameColor, currentDeviceModel);
-        }
-    }
+    // Restore original frame colors on current model if we changed them
+    savedMaterialColors.forEach(({ material, color }) => {
+        material.color.copy(color);
+    });
 
     // Clean up: remove cached model from scene and restore current model visibility
     if (!useCurrentModel) {
@@ -1034,14 +1070,40 @@ function updateThreeJSBackground() {
 
 // Cleanup
 function disposeThreeJS() {
+    phoneModelLoadGeneration++;
     if (screenTexture) {
         screenTexture.dispose();
+        screenTexture = null;
+    }
+    if (threeScene) {
+        threeScene.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry?.dispose();
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((material) => {
+                    if (!material) return;
+                    material.map?.dispose();
+                    material.dispose();
+                });
+            }
+        });
     }
     if (threeRenderer) {
         threeRenderer.dispose();
+        if (threeRenderer.domElement?.parentNode) {
+            threeRenderer.domElement.parentNode.removeChild(threeRenderer.domElement);
+        }
     }
+    threeRenderer = null;
+    threeScene = null;
+    threeCamera = null;
+    phonePivot = null;
+    phoneModel = null;
+    customScreenPlane = null;
+    screenMesh = null;
     isThreeJSInitialized = false;
     phoneModelLoaded = false;
+    phoneModelLoading = false;
 }
 
 // Interactive rotation/movement for 2D canvas in 3D mode
@@ -1107,8 +1169,8 @@ function setup3DCanvasInteraction() {
             // Regular drag: rotate
             if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
 
-            ss.rotation3D.y = Math.max(-45, Math.min(45, ss.rotation3D.y + deltaX * 0.5));
-            ss.rotation3D.x = Math.max(-45, Math.min(45, ss.rotation3D.x + deltaY * 0.5));
+            ss.rotation3D.y = Math.max(-90, Math.min(90, ss.rotation3D.y + deltaX * 0.5));
+            ss.rotation3D.x = Math.max(-90, Math.min(90, ss.rotation3D.x + deltaY * 0.5));
 
             // Update sliders
             document.getElementById('rotation-3d-y').value = ss.rotation3D.y;

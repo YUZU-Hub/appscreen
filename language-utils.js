@@ -10,26 +10,31 @@ let currentTranslationsIndex = null;
  * @param {string} filename - The filename to parse
  * @returns {string} - Base filename without language suffix and extension
  */
-function getBaseFilename(filename) {
-    // Remove extension
+function stripLanguageSuffix(filename) {
+    // Remove the final extension once; both detection and grouping work on this
     const withoutExt = filename.replace(/\.[^.]+$/, '');
 
-    // All supported language codes from languageFlags
+    // All supported language codes from languageFlags (defined in app.js)
     const supportedLangs = Object.keys(languageFlags);
 
     // Sort by length (longest first) to match pt-br before pt
     const sortedLangs = [...supportedLangs].sort((a, b) => b.length - a.length);
 
     for (const lang of sortedLangs) {
-        // Match patterns like: _pt-br, -pt-br, _pt_br, -pt_br, _de, -de
-        const escapedLang = lang.replace('-', '[-_]?');
-        const pattern = new RegExp(`[_-]${escapedLang}(?:[_-][a-z]{2})?$`, 'i');
+        // Match suffixes anchored at the END of the basename, with a REQUIRED
+        // separator: _pt-br, -pt-br, _pt_br, -pt_br, _de, -de, _de-DE
+        const escapedLang = lang.replace(/-/g, '[-_]');
+        const pattern = new RegExp(`[_-]${escapedLang}(?:[-_][a-z]{2,4})?$`, 'i');
         if (pattern.test(withoutExt)) {
-            return withoutExt.replace(pattern, '');
+            return { base: withoutExt.replace(pattern, ''), lang };
         }
     }
 
-    return withoutExt;
+    return { base: withoutExt, lang: null };
+}
+
+function getBaseFilename(filename) {
+    return stripLanguageSuffix(filename).base;
 }
 
 /**
@@ -63,26 +68,9 @@ function findScreenshotByBaseFilename(filename) {
  * @returns {string} - Language code (e.g., 'de', 'fr', 'pt-br') or 'en' as fallback
  */
 function detectLanguageFromFilename(filename) {
-    // All supported language codes from languageFlags (defined in app.js)
-    const supportedLangs = Object.keys(languageFlags);
-
-    // Normalize filename for matching
-    const lower = filename.toLowerCase();
-
-    // Check for longer codes first (pt-br, zh-tw, en-gb) to avoid false matches
-    const sortedLangs = [...supportedLangs].sort((a, b) => b.length - a.length);
-
-    for (const lang of sortedLangs) {
-        // Match patterns like: _pt-br., -pt-br., _pt_br., -pt_br.
-        // Also: _de., -de., _DE., -DE., _de-DE., etc.
-        const escapedLang = lang.replace('-', '[-_]?');
-        const pattern = new RegExp(`[_-]${escapedLang}(?:[_-][a-z]{2})?\\.`, 'i');
-        if (pattern.test(lower)) {
-            return lang;
-        }
-    }
-
-    return 'en'; // fallback to English
+    // Same stripped basename + end-anchored suffix matching as getBaseFilename,
+    // so detection and grouping always agree
+    return stripLanguageSuffix(filename).lang || 'en'; // fallback to English
 }
 
 /**
@@ -94,31 +82,35 @@ function detectLanguageFromFilename(filename) {
 function getScreenshotImage(screenshot) {
     if (!screenshot) return null;
 
-    const lang = state.currentLanguage;
+    // Return a loaded bitmap, lazily decoding the entry from disk if needed
+    // (ensureEntryImage lives in app.js; returns null until loaded, then re-renders).
+    const pick = (entry) => {
+        if (!entry || !entry.src) return null;
+        if (entry.image) return entry.image;
+        return typeof ensureEntryImage === 'function' ? ensureEntryImage(entry) : null;
+    };
 
-    // Try current language first
-    if (screenshot.localizedImages?.[lang]?.image) {
-        return screenshot.localizedImages[lang].image;
-    }
-
-    // Fallback to first available language in project order
-    for (const l of state.projectLanguages) {
-        if (screenshot.localizedImages?.[l]?.image) {
-            return screenshot.localizedImages[l].image;
-        }
-    }
-
-    // Fallback to any available language
-    if (screenshot.localizedImages) {
-        for (const l of Object.keys(screenshot.localizedImages)) {
-            if (screenshot.localizedImages[l]?.image) {
-                return screenshot.localizedImages[l].image;
-            }
-        }
+    const li = screenshot.localizedImages;
+    if (li) {
+        const lang = state.currentLanguage;
+        if (li[lang]?.src) return pick(li[lang]);
+        for (const l of state.projectLanguages) if (li[l]?.src) return pick(li[l]);
+        for (const l of Object.keys(li)) if (li[l]?.src) return pick(li[l]);
     }
 
     // Legacy fallback for old screenshot format
     return screenshot.image || null;
+}
+
+/**
+ * Check if a localized image entry has a usable image source
+ * Based on having a SOURCE (ref or data URL), not a decoded bitmap —
+ * images load lazily, so .image may be absent until shown.
+ * @param {Object} entry - Localized image entry
+ * @returns {boolean} - True if the entry has an image source
+ */
+function entryHasImage(entry) {
+    return !!(entry && entry.src);
 }
 
 /**
@@ -129,8 +121,10 @@ function getScreenshotImage(screenshot) {
 function getAvailableLanguagesForScreenshot(screenshot) {
     if (!screenshot?.localizedImages) return [];
 
+    // Based on having an image SOURCE (ref or data URL), not a decoded bitmap —
+    // images load lazily now, so .image may be absent until shown.
     return Object.keys(screenshot.localizedImages).filter(
-        lang => screenshot.localizedImages[lang]?.image
+        lang => screenshot.localizedImages[lang]?.src
     );
 }
 
@@ -144,7 +138,7 @@ function isScreenshotComplete(screenshot) {
     if (state.projectLanguages.length === 0) return true;
 
     return state.projectLanguages.every(
-        lang => screenshot.localizedImages[lang]?.image
+        lang => screenshot.localizedImages[lang]?.src
     );
 }
 
@@ -199,6 +193,10 @@ function addLocalizedImage(screenshotIndex, lang, image, src, name) {
         name: name
     };
 
+    // Pending-upload ledger (app.js): the file is only "saved" once the server
+    // has confirmed both its bytes and the record referencing it.
+    if (typeof trackPendingUpload === 'function') trackPendingUpload(lang, name, src);
+
     // Auto-add language to project if not already present
     if (!state.projectLanguages.includes(lang)) {
         addProjectLanguage(lang);
@@ -207,7 +205,7 @@ function addLocalizedImage(screenshotIndex, lang, image, src, name) {
     // Update displays
     updateScreenshotList();
     updateCanvas();
-    saveState();
+    if (typeof scheduleSaveState === 'function') scheduleSaveState(); else saveState();
 }
 
 /**
@@ -273,7 +271,11 @@ function updateScreenshotTranslationsList() {
     container.innerHTML = '';
 
     state.projectLanguages.forEach(lang => {
-        const hasImage = screenshot.localizedImages?.[lang]?.image;
+        const entry = screenshot.localizedImages?.[lang];
+        const hasImage = !!(entry && entry.src);
+        // Load the thumbnail straight from the server blob URL (lazy, HTTP-cached)
+        // instead of requiring an already-decoded bitmap.
+        const thumbUrl = hasImage ? (typeof blobUrlForRef === 'function' ? blobUrlForRef(entry.src) : entry.src) : null;
         const flag = languageFlags[lang] || '🏳️';
         const name = languageNames[lang] || lang.toUpperCase();
 
@@ -281,20 +283,9 @@ function updateScreenshotTranslationsList() {
         item.className = 'translation-item' + (hasImage ? ' has-image' : '');
 
         if (hasImage) {
-            // Create thumbnail
-            const thumbCanvas = document.createElement('canvas');
-            thumbCanvas.width = 40;
-            thumbCanvas.height = 86;
-            const ctx = thumbCanvas.getContext('2d');
-            const img = screenshot.localizedImages[lang].image;
-            const scale = Math.min(40 / img.width, 86 / img.height);
-            const w = img.width * scale;
-            const h = img.height * scale;
-            ctx.drawImage(img, (40 - w) / 2, (86 - h) / 2, w, h);
-
             item.innerHTML = `
                 <div class="translation-thumb">
-                    <img src="${thumbCanvas.toDataURL()}" alt="${name}">
+                    <img src="${thumbUrl}" alt="${name}" loading="lazy">
                 </div>
                 <div class="translation-info">
                     <span class="flag">${flag}</span>
@@ -363,8 +354,9 @@ function handleTranslationFileSelect(event) {
     const input = event.target;
     const lang = input.dataset.targetLang;
     const file = input.files?.[0];
+    const idx = currentTranslationsIndex;
 
-    if (!file || !lang || currentTranslationsIndex === null) {
+    if (!file || !lang || idx === null) {
         input.value = '';
         return;
     }
@@ -378,8 +370,10 @@ function handleTranslationFileSelect(event) {
     reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-            addLocalizedImage(currentTranslationsIndex, lang, img, e.target.result, file.name);
-            updateScreenshotTranslationsList();
+            addLocalizedImage(idx, lang, img, e.target.result, file.name);
+            if (currentTranslationsIndex === idx) {
+                updateScreenshotTranslationsList();
+            }
         };
         img.src = e.target.result;
     };
@@ -428,9 +422,10 @@ function closeExportLanguageDialog(choice) {
         modal.classList.remove('visible');
     }
 
-    if (window._exportLanguageCallback && choice) {
-        window._exportLanguageCallback(choice);
-        window._exportLanguageCallback = null;
+    const callback = window._exportLanguageCallback;
+    window._exportLanguageCallback = null;
+    if (callback && choice) {
+        callback(choice);
     }
 }
 
@@ -438,8 +433,7 @@ function closeExportLanguageDialog(choice) {
 // Duplicate Screenshot Dialog Functions
 // ==========================================
 
-// Queue for pending duplicate resolution
-let duplicateQueue = [];
+// Pending duplicate resolution
 let currentDuplicateResolve = null;
 
 /**
@@ -469,11 +463,16 @@ function showDuplicateDialog(params) {
         const newName = document.getElementById('duplicate-new-name');
         const langNameEl = document.getElementById('duplicate-lang-name');
 
-        // Get existing thumbnail for the specific language being replaced
-        const existingLangImg = screenshot.localizedImages?.[params.detectedLang]?.image;
+        // Get existing thumbnail for the specific language being replaced. Use the
+        // entry's source (ref/data URL) via a loadable URL — the bitmap may not be
+        // decoded yet (lazy loading).
+        const existingEntry = screenshot.localizedImages?.[params.detectedLang];
+        const existingUrl = existingEntry && existingEntry.src
+            ? (typeof blobUrlForRef === 'function' ? blobUrlForRef(existingEntry.src) : existingEntry.src)
+            : null;
         if (existingThumb) {
-            if (existingLangImg) {
-                existingThumb.innerHTML = `<img src="${existingLangImg.src}" alt="Existing">`;
+            if (existingUrl) {
+                existingThumb.innerHTML = `<img src="${existingUrl}" alt="Existing">`;
             } else {
                 // No existing image for this language - show empty placeholder
                 existingThumb.innerHTML = `

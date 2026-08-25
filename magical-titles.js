@@ -38,9 +38,10 @@ function showMagicalTitlesTooltip() {
 
     btn.appendChild(tooltip);
 
-    // Auto-hide after 8 seconds
+    // Auto-hide after 8 seconds (without setting the permanent dismissed flag)
     setTimeout(() => {
-        dismissMagicalTitlesTooltip();
+        const t = document.getElementById('magical-titles-tooltip');
+        if (t) t.remove();
     }, 8000);
 }
 
@@ -88,6 +89,38 @@ function parseDataUrl(dataUrl) {
         mimeType: match[1],
         base64: match[2]
     };
+}
+
+/**
+ * Resolve an image source (data URL or ref:-scheme string) into { mimeType, base64 }
+ * @param {string} src - Data URL or ref: source
+ * @returns {Promise<Object|null>} - { mimeType, base64 } or null
+ */
+async function resolveImageData(src) {
+    if (!src) return null;
+
+    // Fast path: already a data URL
+    const parsed = parseDataUrl(src);
+    if (parsed) return parsed;
+
+    // ref:-scheme (MCP server) - resolve to a fetchable URL and convert
+    const url = typeof blobUrlForRef === 'function' ? blobUrlForRef(src) : null;
+    if (!url) return null;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+        });
+        return parseDataUrl(dataUrl);
+    } catch (e) {
+        return null;
+    }
 }
 
 /**
@@ -297,22 +330,31 @@ async function generateMagicalTitles() {
     const sourceLang = langSelect.value || state.projectLanguages[0] || 'en';
     const langName = languageNames[sourceLang] || 'English';
 
-    // Collect images from all screenshots
-    const images = [];
-    for (const screenshot of state.screenshots) {
-        const dataUrl = getScreenshotDataUrl(screenshot, sourceLang);
+    // Collect images from all screenshots, keeping the original index of each
+    // so response keys can be mapped back even when some screenshots are skipped
+    const imageEntries = [];
+    for (let i = 0; i < state.screenshots.length; i++) {
+        const dataUrl = getScreenshotDataUrl(state.screenshots[i], sourceLang);
         if (dataUrl) {
-            const parsed = parseDataUrl(dataUrl);
+            const parsed = await resolveImageData(dataUrl);
             if (parsed) {
-                images.push(parsed);
+                imageEntries.push({ originalIndex: i, image: parsed });
             }
         }
     }
+    const images = imageEntries.map(entry => entry.image);
 
     if (images.length === 0) {
         await showAppAlert('No screenshot images found. Please upload some screenshots first.', 'error');
         return;
     }
+
+    // An Apple Watch canvas is a third the width of a phone's, so the same
+    // headline that reads well on an iPhone runs to four lines on a watch.
+    const _dims = typeof getCanvasDimensions === 'function' ? getCanvasDimensions() : null;
+    const tinyCanvas = !!(_dims && _dims.width < 700);
+    const headlineWords = tinyCanvas ? '1-2' : '2-4';
+    const subheadlineWords = tinyCanvas ? '3-5' : '4-8';
 
     // Build prompt
     const prompt = `You are an expert App Store marketing copywriter. Analyze these ${images.length} app screenshots and create compelling marketing titles.
@@ -325,8 +367,8 @@ The screenshots are shown in order (1 through ${images.length}). Study what the 
 CRITICAL: Screenshot 1's headline MUST focus on the main value proposition - what problem does this app solve for users? This is the most important title.
 
 LENGTH REQUIREMENTS - THIS IS VERY IMPORTANT:
-- headline: VERY SHORT, maximum 2-4 words. Punchy, memorable, benefit-focused.
-- subheadline: SHORT, maximum 4-8 words. Expands on the headline.
+- headline: VERY SHORT, maximum ${headlineWords} words. Punchy, memorable, benefit-focused.
+- subheadline: SHORT, maximum ${subheadlineWords} words. Expands on the headline.
 
 UNIQUENESS - VERY IMPORTANT:
 - Each screenshot MUST have a UNIQUE headline and subheadline
@@ -405,11 +447,12 @@ Write all titles in ${langName}.`;
 
         updateStatus('Applying titles...', 'Updating screenshots');
 
-        // Apply titles to screenshots
-        for (let i = 0; i < state.screenshots.length; i++) {
-            const titleData = titles[String(i)];
+        // Apply titles to screenshots, translating response keys (positions of
+        // the images that were sent) back to original screenshot indices
+        for (let p = 0; p < imageEntries.length; p++) {
+            const titleData = titles[String(p)];
             if (titleData) {
-                const screenshot = state.screenshots[i];
+                const screenshot = state.screenshots[imageEntries[p].originalIndex];
 
                 // Ensure text object exists with proper structure
                 if (!screenshot.text) {

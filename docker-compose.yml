@@ -1,6 +1,12 @@
 services:
   appscreen:
-    image: ghcr.io/yuzu-hub/appscreen:latest
+    # This fork's image, published by .github/workflows/docker-publish.yml on
+    # every push to main. Update with:
+    #   docker compose pull && docker compose up -d        (use the latest CI build)
+    # Or build the latest local source directly:
+    #   docker compose up -d --build
+    image: ghcr.io/flocom/appscreen:latest
+    build: .
     container_name: appscreen
     ports:
       - "8080:80"

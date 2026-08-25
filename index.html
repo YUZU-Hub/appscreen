@@ -117,6 +117,13 @@
                                 <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
                             </svg>
                         </button>
+                        <button class="settings-btn update-btn" id="update-btn" title="Up to date">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                                <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                            </svg>
+                            <span class="update-dot"></span>
+                        </button>
                     </div>
                 </div>
                 <div class="project-controls">
@@ -145,6 +152,26 @@
                                 <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
                             </svg>
                         </button>
+                        <button class="project-btn" id="duplicate-project-btn" title="Duplicate Project (with all screenshots, images & settings)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                            </svg>
+                        </button>
+                        <button class="project-btn" id="templates-btn" title="Templates de mise en page : positionner l'appareil et le texte sur tous les écrans d'un coup">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="7" rx="1"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                            </svg>
+                        </button>
+                        <button class="project-btn" id="copy-layout-project-btn" title="Copier la mise en page (disposition du texte + emplacement de l'appareil) depuis un autre projet">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="8" height="8" rx="1"/>
+                                <rect x="13" y="13" width="8" height="8" rx="1"/>
+                                <path d="M11 7h4a2 2 0 0 1 2 2v4"/>
+                            </svg>
+                        </button>
                         <button class="project-btn danger" id="delete-project-btn" title="Delete Project">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="3,6 5,6 21,6"/>
@@ -165,7 +192,7 @@
                                 <line x1="12" y1="3" x2="12" y2="15"/>
                             </svg>
                         </button>
-                        <input type="file" id="import-project-input" accept=".json" hidden>
+                        <input type="file" id="import-project-input" accept=".zip,.json" hidden>
                     </div>
                 </div>
 
@@ -225,6 +252,10 @@
                                     <span class="device-option-size">1242 × 2208</span>
                                 </div>
                                 <div class="output-size-divider"></div>
+                                <div class="device-option" data-device="ipad-13">
+                                    <span class="device-option-name">iPad 13"</span>
+                                    <span class="device-option-size">2064 × 2752</span>
+                                </div>
                                 <div class="device-option" data-device="ipad-12.9">
                                     <span class="device-option-name">iPad 12.9"</span>
                                     <span class="device-option-size">2048 × 2732</span>
@@ -232,6 +263,48 @@
                                 <div class="device-option" data-device="ipad-11">
                                     <span class="device-option-name">iPad 11"</span>
                                     <span class="device-option-size">1668 × 2388</span>
+                                </div>
+                                <div class="output-size-divider"></div>
+                                <div class="device-option" data-device="watch-ultra3">
+                                    <span class="device-option-name">Watch Ultra 3</span>
+                                    <span class="device-option-size">422 × 514</span>
+                                </div>
+                                <div class="device-option" data-device="watch-ultra">
+                                    <span class="device-option-name">Watch Ultra 1–2</span>
+                                    <span class="device-option-size">410 × 502</span>
+                                </div>
+                                <div class="device-option" data-device="watch-46">
+                                    <span class="device-option-name">Watch Series 11–10</span>
+                                    <span class="device-option-size">416 × 496</span>
+                                </div>
+                                <div class="device-option" data-device="watch-45">
+                                    <span class="device-option-name">Watch Series 9–7</span>
+                                    <span class="device-option-size">396 × 484</span>
+                                </div>
+                                <div class="device-option" data-device="watch-44">
+                                    <span class="device-option-name">Watch Series 6–4, SE</span>
+                                    <span class="device-option-size">368 × 448</span>
+                                </div>
+                                <div class="device-option" data-device="watch-42">
+                                    <span class="device-option-name">Watch Series 3–1</span>
+                                    <span class="device-option-size">312 × 390</span>
+                                </div>
+                                <div class="output-size-divider"></div>
+                                <div class="device-option" data-device="mac-2880">
+                                    <span class="device-option-name">Mac 16:10</span>
+                                    <span class="device-option-size">2880 × 1800</span>
+                                </div>
+                                <div class="device-option" data-device="mac-2560">
+                                    <span class="device-option-name">Mac 16:10 (2K)</span>
+                                    <span class="device-option-size">2560 × 1600</span>
+                                </div>
+                                <div class="device-option" data-device="mac-1440">
+                                    <span class="device-option-name">Mac 16:10 (HD)</span>
+                                    <span class="device-option-size">1440 × 900</span>
+                                </div>
+                                <div class="device-option" data-device="mac-1280">
+                                    <span class="device-option-name">Mac 16:10 (Small)</span>
+                                    <span class="device-option-size">1280 × 800</span>
                                 </div>
                                 <div class="output-size-divider"></div>
                                 <div class="device-option" data-device="android-phone">
@@ -297,6 +370,22 @@
 
         <!-- Main Canvas Area -->
         <div class="canvas-area">
+            <div class="history-controls">
+                <button id="undo-btn" class="history-btn" title="Annuler (Ctrl/Cmd+Z)" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H9"/>
+                    </svg>
+                </button>
+                <button id="redo-btn" class="history-btn" title="Rétablir (Ctrl/Cmd+Shift+Z)" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h6"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="canvas-view-toggle" id="canvas-view-toggle">
+                <button data-view="single" class="active">Single</button>
+                <button data-view="all-languages">All languages</button>
+            </div>
             <div class="preview-strip">
                 <div class="side-preview side-preview-far-left" id="side-preview-far-left">
                     <canvas id="preview-canvas-far-left"></canvas>
@@ -306,6 +395,12 @@
                 </div>
                 <div class="canvas-wrapper" id="canvas-wrapper">
                     <canvas id="preview-canvas"></canvas>
+                    <div id="text-zone-overlay" class="text-zone-overlay" style="display:none;">
+                        <div class="tz-handle tz-nw" data-handle="nw"></div>
+                        <div class="tz-handle tz-ne" data-handle="ne"></div>
+                        <div class="tz-handle tz-sw" data-handle="sw"></div>
+                        <div class="tz-handle tz-se" data-handle="se"></div>
+                    </div>
                     <div id="threejs-container" style="display: none;"></div>
                     <div class="no-screenshot" id="no-screenshot">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
@@ -323,6 +418,7 @@
                     <canvas id="preview-canvas-far-right"></canvas>
                 </div>
             </div>
+            <div id="all-languages-view" class="all-languages-view" style="display:none;"></div>
         </div>
 
         <!-- Right Sidebar - Settings -->
@@ -545,6 +641,54 @@
                     </div>
                 </div>
 
+                <div class="control-group" id="device-model-2d-group">
+                    <label class="control-label">Device Model</label>
+                    <div class="btn-group" id="device-model-2d-selector">
+                        <button class="active" data-model2d="iphone">iPhone</button>
+                        <button data-model2d="ipad">iPad</button>
+                        <button data-model2d="samsung">Samsung</button>
+                        <button data-model2d="mac">Mac</button>
+                        <button data-model2d="watch">Watch</button>
+                    </div>
+                    <div id="mac-finish-row" style="display: none; margin-top: 10px;">
+                        <label class="control-label">Mac Finish</label>
+                        <div class="btn-group" id="mac-finish-selector">
+                            <button class="active" data-macfinish="silver">Silver</button>
+                            <button data-macfinish="space-black">Space Black</button>
+                        </div>
+                    </div>
+                    <div id="watch-finish-row" style="display: none; margin-top: 10px;">
+                        <label class="control-label">Watch Finish</label>
+                        <div class="btn-group" id="watch-finish-selector">
+                            <button class="active" data-watchfinish="midnight">Midnight</button>
+                            <button data-watchfinish="starlight">Starlight</button>
+                            <button data-watchfinish="silver">Silver</button>
+                            <button data-watchfinish="gold">Gold</button>
+                        </div>
+                    </div>
+                    <div class="toggle-row" style="margin-top: 10px;">
+                        <span class="toggle-label">Device bezel</span>
+                        <div class="toggle" id="bezel-toggle"></div>
+                    </div>
+                    <label class="control-label" style="margin-top: 10px;">Notch / Camera</label>
+                    <div class="btn-group" id="notch-selector">
+                        <button class="active" data-notch="none">None</button>
+                        <button data-notch="island">Island</button>
+                        <button data-notch="notch">Notch</button>
+                        <button data-notch="punch">Punch</button>
+                    </div>
+                </div>
+
+                <div class="control-group" id="span-screens-group">
+                    <label class="control-label">Span Screens (panorama)</label>
+                    <div class="btn-group" id="span-screens-selector">
+                        <button class="active" data-span="1">1</button>
+                        <button data-span="2">2</button>
+                        <button data-span="3">3</button>
+                    </div>
+                    <p class="control-hint" id="span-hint" style="display:none; font-size:11px; color:var(--text-secondary); margin-top:6px;">Spans multiple App Store slots — sliced into separate panels on export.</p>
+                </div>
+
                 <div id="rotation-3d-options" style="display: none;">
                     <div class="control-group">
                         <label class="control-label">Device Model</label>
@@ -556,21 +700,21 @@
                     <div class="control-group">
                         <label class="control-label">Rotation X (Tilt)</label>
                         <div class="control-row">
-                            <input type="range" id="rotation-3d-x" min="-45" max="45" value="0">
+                            <input type="range" id="rotation-3d-x" min="-90" max="90" value="0">
                             <span class="range-value" id="rotation-3d-x-value">0°</span>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation Y (Turn)</label>
                         <div class="control-row">
-                            <input type="range" id="rotation-3d-y" min="-45" max="45" value="0">
+                            <input type="range" id="rotation-3d-y" min="-90" max="90" value="0">
                             <span class="range-value" id="rotation-3d-y-value">0°</span>
                         </div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Rotation Z (Roll)</label>
                         <div class="control-row">
-                            <input type="range" id="rotation-3d-z" min="-45" max="45" value="0">
+                            <input type="range" id="rotation-3d-z" min="-90" max="90" value="0">
                             <span class="range-value" id="rotation-3d-z-value">0°</span>
                         </div>
                     </div>
@@ -635,6 +779,54 @@
                                     </svg>
                                     <span>Float Bottom</span>
                                 </button>
+                                <button class="position-preset" data-preset="hero" title="Hero">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="5" y="16" width="30" height="44" rx="2"/>
+                                    </svg>
+                                    <span>Hero</span>
+                                </button>
+                                <button class="position-preset" data-preset="showcase-bottom" title="Showcase Bottom">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="6" y="26" width="28" height="50" rx="2"/>
+                                    </svg>
+                                    <span>Showcase ↓</span>
+                                </button>
+                                <button class="position-preset" data-preset="showcase-top" title="Showcase Top">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="6" y="-16" width="28" height="50" rx="2"/>
+                                    </svg>
+                                    <span>Showcase ↑</span>
+                                </button>
+                                <button class="position-preset" data-preset="tilt-left-strong" title="Tilt Left Strong">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="13" width="22" height="34" rx="2" transform="rotate(-14 20 30)"/>
+                                    </svg>
+                                    <span>Tilt L+</span>
+                                </button>
+                                <button class="position-preset" data-preset="tilt-right-strong" title="Tilt Right Strong">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="13" width="22" height="34" rx="2" transform="rotate(14 20 30)"/>
+                                    </svg>
+                                    <span>Tilt R+</span>
+                                </button>
+                                <button class="position-preset" data-preset="perspective-left" title="Perspective Left">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 12 L28 15 L30 45 L10 48 Z"/>
+                                    </svg>
+                                    <span>Perspective ←</span>
+                                </button>
+                                <button class="position-preset" data-preset="minimal" title="Minimal">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="13" y="20" width="14" height="21" rx="2"/>
+                                    </svg>
+                                    <span>Minimal</span>
+                                </button>
+                                <button class="position-preset" data-preset="full-bleed" title="Full Bleed">
+                                    <svg viewBox="0 0 40 60" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="2" width="36" height="56" rx="2"/>
+                                    </svg>
+                                    <span>Full Bleed</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -654,7 +846,7 @@
                 <div class="control-group">
                     <label class="control-label">Vertical Position</label>
                     <div class="control-row">
-                        <input type="range" id="screenshot-y" min="-80" max="180" value="55">
+                        <input type="range" id="screenshot-y" min="-200" max="300" value="55">
                         <span class="range-value" id="screenshot-y-value">55%</span>
                     </div>
                 </div>
@@ -662,7 +854,7 @@
                 <div class="control-group">
                     <label class="control-label">Horizontal Position</label>
                     <div class="control-row">
-                        <input type="range" id="screenshot-x" min="-80" max="180" value="50">
+                        <input type="range" id="screenshot-x" min="-200" max="300" value="50">
                         <span class="range-value" id="screenshot-x-value">50%</span>
                     </div>
                 </div>
@@ -678,7 +870,7 @@
                     <div class="control-group">
                         <label class="control-label">Corner Radius</label>
                         <div class="control-row">
-                            <input type="range" id="corner-radius" min="0" max="100" value="24">
+                            <input type="range" id="corner-radius" min="0" max="120" value="24">
                             <span class="range-value" id="corner-radius-value">24px</span>
                         </div>
                     </div>
@@ -686,7 +878,7 @@
                     <div class="control-group">
                         <label class="control-label">Tilt / Rotation</label>
                         <div class="control-row">
-                            <input type="range" id="screenshot-rotation" min="-45" max="45" value="0">
+                            <input type="range" id="screenshot-rotation" min="-90" max="90" value="0">
                             <span class="range-value" id="screenshot-rotation-value">0°</span>
                         </div>
                     </div>
@@ -793,6 +985,44 @@
 
             <!-- Text Tab -->
             <div class="tab-content" id="tab-text">
+                <div class="control-group" id="text-zone-group">
+                    <div class="control-label-row">
+                        <label class="control-label">Text zone (auto-fit)</label>
+                        <div class="toggle" id="text-zone-toggle" title="Confine the text to a zone and shrink it to fit entirely"></div>
+                    </div>
+                    <div class="text-zone-controls" id="text-zone-controls" style="display:none;">
+                        <p class="text-zone-hint">Drag or resize the dashed box on the preview. The headline &amp; subheadline auto-size and wrap to fill the box — entirely and without breaking any word.</p>
+                        <div class="control-label-row text-zone-uniform-row">
+                            <label class="control-label">Same size for all languages</label>
+                            <div class="toggle active" id="text-zone-uniform-toggle" title="Shrink to the size that fits every language so all languages stay inside the zone and match"></div>
+                        </div>
+                        <div class="control-label-row text-zone-uniform-row">
+                            <label class="control-label">Grow to fill the zone</label>
+                            <div class="toggle" id="text-zone-fill-toggle" title="Also enlarge short text until the longest language reaches the edge of the box (instead of capping at the designed size)"></div>
+                        </div>
+                        <div class="control-row opacity-row">
+                            <span class="mini-label">X</span>
+                            <input type="range" id="text-zone-x" min="0" max="100" value="8">
+                            <span class="range-value" id="text-zone-x-value">8%</span>
+                        </div>
+                        <div class="control-row opacity-row">
+                            <span class="mini-label">Y</span>
+                            <input type="range" id="text-zone-y" min="0" max="100" value="6">
+                            <span class="range-value" id="text-zone-y-value">6%</span>
+                        </div>
+                        <div class="control-row opacity-row">
+                            <span class="mini-label">W</span>
+                            <input type="range" id="text-zone-w" min="5" max="100" value="84">
+                            <span class="range-value" id="text-zone-w-value">84%</span>
+                        </div>
+                        <div class="control-row opacity-row">
+                            <span class="mini-label">H</span>
+                            <input type="range" id="text-zone-h" min="5" max="100" value="26">
+                            <span class="range-value" id="text-zone-h-value">26%</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="control-group">
                     <div class="toggle-row collapsible" data-target="headline-options">
                         <span class="toggle-label">
@@ -877,6 +1107,23 @@
                                 <path d="M10 16.5c.5.5 1.5 1 3 1 4 0 5.5-2 5.5-4"/>
                             </svg>
                         </button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <label class="control-label">Text Background</label>
+                        <div class="toggle" id="headline-bg-toggle" title="Enable text background"></div>
+                    </div>
+                    <div class="text-bg-controls" id="headline-bg-controls" style="display:none;">
+                        <div class="control-row">
+                            <input type="color" id="headline-bg-color" value="#000000" title="Background color">
+                        </div>
+                        <div class="control-row opacity-row">
+                            <span class="mini-label">Opacity</span>
+                            <input type="range" id="headline-bg-opacity" min="0" max="100" value="100" title="Background opacity">
+                            <span class="range-value" id="headline-bg-opacity-value">100%</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1006,6 +1253,31 @@
                     <div class="control-row">
                         <input type="range" id="subheadline-opacity" min="0" max="100" value="70">
                         <span class="range-value" id="subheadline-opacity-value">70%</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <label class="control-label">Text Background</label>
+                        <div class="toggle" id="subheadline-bg-toggle" title="Enable text background"></div>
+                    </div>
+                    <div class="text-bg-controls" id="subheadline-bg-controls" style="display:none;">
+                        <div class="control-row">
+                            <input type="color" id="subheadline-bg-color" value="#000000" title="Background color">
+                        </div>
+                        <div class="control-row opacity-row">
+                            <span class="mini-label">Opacity</span>
+                            <input type="range" id="subheadline-bg-opacity" min="0" max="100" value="100" title="Background opacity">
+                            <span class="range-value" id="subheadline-bg-opacity-value">100%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">Title–Subtitle Spacing</label>
+                    <div class="control-row">
+                        <input type="range" id="subheadline-spacing" min="0" max="400" value="0">
+                        <span class="range-value" id="subheadline-spacing-value">0px</span>
                     </div>
                 </div>
                 </div><!-- end subheadline-options -->
@@ -1486,6 +1758,23 @@
             </div>
 
             </div><!-- end sidebar-content -->
+            <div class="sidebar-right-footer">
+                <div class="copy-design-controls">
+                    <label class="copy-design-label" for="copy-design-source">Dupliquer le design depuis</label>
+                    <select id="copy-design-source" class="copy-design-select" title="Choisir la vue source"></select>
+                    <label class="copy-design-checkbox">
+                        <input type="checkbox" id="copy-design-include-image">
+                        <span>Dupliquer aussi le screenshot</span>
+                    </label>
+                    <button id="copy-design-btn" class="sync-design-btn" title="Copier le design de la vue sélectionnée vers la vue affichée">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="11" height="11" rx="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        Dupliquer le design
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1528,6 +1817,74 @@
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="delete-project-cancel">Cancel</button>
                 <button class="modal-btn modal-btn-confirm" id="delete-project-confirm">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Copy Layout From Another Project Modal -->
+    <div class="modal-overlay" id="copy-layout-modal">
+        <div class="modal">
+            <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="8" height="8" rx="1"/>
+                    <rect x="13" y="13" width="8" height="8" rx="1"/>
+                    <path d="M11 7h4a2 2 0 0 1 2 2v4"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Copier la mise en page d'un projet</h3>
+            <p class="modal-message">Copie la disposition/les options du texte et l'emplacement/la taille de l'appareil depuis un autre projet vers le projet actuel, écran par écran (par position). Idéal pour reprendre une présentation iPhone vers iPad. Vos textes et vos images ne sont pas modifiés.</p>
+            <div class="control-group" style="margin: 16px 0; text-align: left;">
+                <label class="control-label">Copier depuis le projet</label>
+                <select id="copy-layout-source" class="control-select"></select>
+            </div>
+            <div class="control-group" style="margin: 16px 0; text-align: left;">
+                <label class="copy-design-checkbox"><input type="checkbox" id="copy-layout-text" checked><span>Disposition &amp; options du texte</span></label>
+                <label class="copy-design-checkbox" style="margin-top: 8px;"><input type="checkbox" id="copy-layout-device" checked><span>Emplacement &amp; taille de l'appareil</span></label>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="copy-layout-cancel">Annuler</button>
+                <button class="modal-btn modal-btn-confirm" id="copy-layout-confirm" style="background: var(--accent);">Copier</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout Templates Modal -->
+    <div class="modal-overlay" id="templates-modal">
+        <div class="modal templates-modal">
+            <button class="modal-close" id="templates-close" title="Fermer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            </button>
+            <h3 class="modal-title">Templates de mise en page</h3>
+            <p class="modal-message">
+                Chaque template positionne l'appareil et le texte de la même façon sur tous les écrans.
+                Le texte est placé dans une zone qui s'ajuste toute seule : il grandit ou rétrécit selon sa longueur,
+                garde la même taille dans toutes les langues et ne coupe jamais un mot — même quand la traduction est
+                beaucoup plus longue que l'original.
+            </p>
+            <div class="template-gallery" id="template-gallery"></div>
+            <div class="template-options">
+                <div class="control-group">
+                    <label class="control-label" for="template-scope">Appliquer à</label>
+                    <select id="template-scope" class="control-select">
+                        <option value="all">Tous les écrans</option>
+                        <option value="current">L'écran affiché uniquement</option>
+                    </select>
+                </div>
+                <label class="copy-design-checkbox">
+                    <input type="checkbox" id="template-skip-first" checked>
+                    <span>Le 1<sup>er</sup> écran est différent (hero fourni tel quel) — ne pas y toucher</span>
+                </label>
+                <label class="copy-design-checkbox">
+                    <input type="checkbox" id="template-keep-background" checked>
+                    <span>Ne pas modifier les couleurs de fond déjà en place</span>
+                </label>
+                <p class="template-scope-hint" id="template-scope-hint"></p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="templates-cancel">Annuler</button>
+                <button class="modal-btn modal-btn-confirm" id="templates-confirm" style="background: var(--accent);">Appliquer</button>
             </div>
         </div>
     </div>
@@ -1758,6 +2115,81 @@
                 </a>
             </div>
 
+            <div class="settings-section" id="settings-mcp">
+                <h4 class="settings-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                    MCP Server
+                    <span class="mcp-status-dot" id="mcp-status-dot" title="Not connected"></span>
+                </h4>
+                <p class="settings-description">Connect to an appscreen MCP server to render screenshots server-side. Enter the server URL and, if it requires one, an access token. Settings are stored locally in your browser.</p>
+
+                <label class="settings-model-label" for="settings-mcp-url">Server URL</label>
+                <div class="settings-input-group">
+                    <input type="text" id="settings-mcp-url" placeholder="http://localhost:3000/mcp" />
+                </div>
+
+                <label class="settings-model-label" for="settings-mcp-token" style="margin-top: 10px;">Access token <span style="opacity:.6">(optional — sent as Bearer)</span></label>
+                <div class="settings-input-group">
+                    <input type="password" id="settings-mcp-token" placeholder="Leave empty if not required" />
+                    <button class="settings-show-key" data-target="settings-mcp-token" title="Show/hide token">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+                    <button class="modal-btn modal-btn-confirm" id="mcp-connect-btn" style="background: var(--accent); flex: 0 0 auto;">Connect</button>
+                    <div class="settings-key-status" id="mcp-connection-status" style="margin:0;"></div>
+                </div>
+
+                <div class="mcp-tools-list" id="mcp-tools-list"></div>
+            </div>
+
+            <div class="settings-section" id="settings-images">
+                <h4 class="settings-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                    </svg>
+                    Image compression
+                </h4>
+                <p class="settings-description">Screenshots are re-encoded before they are stored, which is what decides how much disk a project takes. Applies to every image imported from now on.</p>
+
+                <label class="settings-model-label" for="settings-image-quality">Quality</label>
+                <select id="settings-image-quality" class="settings-model-select">
+                    <option value="0.92">Maximum — largest files</option>
+                    <option value="0.82">Balanced — recommended</option>
+                    <option value="0.7">Compact — smallest files</option>
+                </select>
+
+                <label class="settings-model-label" for="settings-image-maxedge" style="margin-top: 10px;">Maximum size <span style="opacity:.6">(longest edge — never below what this project renders)</span></label>
+                <select id="settings-image-maxedge" class="settings-model-select">
+                    <option value="0">Keep original size</option>
+                    <option value="4096">4096 px</option>
+                    <option value="2880">2880 px — fits every App Store size</option>
+                    <option value="2048">2048 px</option>
+                </select>
+
+                <label class="settings-model-label" for="settings-image-format" style="margin-top: 10px;">Format</label>
+                <select id="settings-image-format" class="settings-model-select">
+                    <option value="auto">WebP when supported — recommended</option>
+                    <option value="jpeg">JPEG — maximum compatibility</option>
+                </select>
+
+                <p class="settings-description" style="margin-top: 16px;">Images already stored can be re-encoded with these settings. It runs on the server, replaces each image with its smaller version, and cannot be undone.</p>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
+                    <button class="modal-btn modal-btn-confirm" id="optimize-images-btn" style="background: var(--accent); flex: 0 0 auto;">Optimize this project</button>
+                    <button class="modal-btn modal-btn-cancel" id="optimize-images-all-btn" style="flex: 0 0 auto;">Optimize all projects</button>
+                    <span class="settings-description" style="margin:0;">This project: <span id="settings-storage-readout">—</span></span>
+                </div>
+                <div class="settings-key-status" id="optimize-images-status"></div>
+            </div>
+
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px;">
                 <span style="font-size: 13px; color: var(--text-secondary); flex-shrink: 0;">Appearance</span>
                 <div class="btn-group" id="theme-selector" style="flex: 0 0 200px;">
@@ -1797,28 +2229,70 @@
     <!-- Languages Modal -->
     <div class="modal-overlay" id="languages-modal">
         <div class="modal languages-modal">
-            <div class="modal-header">
-                <h3 class="modal-title">Project Languages</h3>
-                <button class="modal-close" id="languages-modal-close">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
-                    </svg>
+            <div class="modal-header lang-header">
+                <div class="lang-header-text">
+                    <h3 class="modal-title">Project Languages</h3>
+                    <p class="lang-subtitle">Manage locales, upload localized screenshots, and import text.</p>
+                </div>
+                <span class="lang-count-chip" id="lang-count-chip">0</span>
+                <button class="modal-close" id="languages-modal-close" aria-label="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
 
-            <p class="modal-message">Manage the languages available for text in this project.</p>
+            <div class="lang-body">
+                <div class="lang-addbar">
+                    <div class="lang-select-wrap">
+                        <svg class="lang-select-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20"/></svg>
+                        <select id="add-language-select" class="lang-select">
+                            <option value="">Add a language…</option>
+                        </select>
+                    </div>
+                    <button class="lang-btn lang-btn-accent" id="add-all-languages-btn" title="Add every App Store language">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                        All App Store
+                    </button>
+                </div>
 
-            <div class="languages-list" id="languages-list">
-                <!-- Languages will be populated by JS -->
+                <div class="lang-section-label">Languages</div>
+                <div class="languages-list" id="languages-list"></div>
+
+                <div class="lang-divider"></div>
+
+                <div class="lang-section-label">Bulk import &amp; text</div>
+                <div class="lang-actions-grid">
+                    <button class="lang-action" id="folder-import-btn" title="Sub-folders named by language (ms/, de-DE/…) are classified automatically">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                        <span><b>Import folder</b><small>fastlane sub-folders by language</small></span>
+                    </button>
+                    <button class="lang-action" id="csv-template-btn" title="Download a CSV of all text to edit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                        <span><b>Text CSV template</b><small>download all text</small></span>
+                    </button>
+                    <button class="lang-action" id="csv-import-btn" title="Import a filled-in CSV to apply text">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                        <span><b>Import text CSV</b><small>apply filled-in text</small></span>
+                    </button>
+                </div>
+                <input type="file" id="folder-import-input" webkitdirectory directory multiple hidden>
+                <input type="file" id="csv-import-input" accept=".csv,text/csv" hidden>
+
+                <div class="lang-divider"></div>
+
+                <div class="lang-sync-card">
+                    <div class="lang-sync-info">
+                        <b>Sync main language</b>
+                        <small>Apply edits made in the main language to every other language automatically.</small>
+                    </div>
+                    <label class="lang-switch" title="Toggle main-language sync">
+                        <input type="checkbox" id="sync-main-language">
+                        <span class="lang-switch-track"><span class="lang-switch-thumb"></span></span>
+                    </label>
+                </div>
+                <button class="lang-btn lang-btn-ghost lang-btn-full" id="propagate-main-btn" title="Copy the main language's text & layout to every language now">Copy main language to all now</button>
             </div>
 
-            <div class="add-language-section">
-                <select id="add-language-select" class="control-select">
-                    <option value="">Add a language...</option>
-                </select>
-            </div>
-
-            <div class="modal-buttons">
+            <div class="modal-buttons lang-footer">
                 <button class="modal-btn modal-btn-confirm" id="languages-modal-done" style="background: var(--accent);">Done</button>
             </div>
         </div>
@@ -1942,6 +2416,18 @@
     </div>
 
     <!-- Export Progress Modal -->
+    <!-- Blocking upload overlay: shown while images are imported and held until
+         the SERVER confirms the save (an upload isn't done before that). Sits
+         below the duplicate-image dialog so that choice stays clickable. -->
+    <div class="modal-overlay" id="upload-progress-modal">
+        <div class="modal upload-progress-modal">
+            <div class="upload-spinner"></div>
+            <h2>Envoi en cours…</h2>
+            <p id="upload-progress-status">Import des images…</p>
+            <p id="upload-progress-detail" class="upload-progress-detail"></p>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="export-progress-modal">
         <div class="modal export-progress-modal">
             <div class="modal-icon" style="background: rgba(10, 132, 255, 0.2);">
@@ -1966,5 +2452,10 @@
     <script src="lucide-icons.js"></script>
     <script src="three-renderer.js"></script>
     <script src="app.js"></script>
+    <script src="appstore-features.js"></script>
+    <script src="templates.js"></script>
+    <script src="panel-resize.js"></script>
+    <script src="updater.js"></script>
+    <script src="color-input.js"></script>
 </body>
 </html>
