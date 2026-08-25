@@ -271,16 +271,28 @@ function getLayoutTemplate(id) {
 
 // Layout keys a template owns. Everything else about the text (fonts, colours,
 // weights, the content itself) is the user's and is left untouched.
+// `zone` and `device` are canvas-relative and port to any aspect, but the type
+// sizes are absolute canvas pixels calibrated against a ~1320px-wide phone
+// canvas. On a narrower canvas — an Apple Watch is 416px — a 130px headline is
+// a third of the width and every template would land one word per line, so
+// scale the type down to match. Never scales up: wider canvases keep the sizes
+// the templates were designed with.
+function templateTypeScale() {
+    const d = typeof getCanvasDimensions === 'function' ? getCanvasDimensions() : null;
+    return d && d.baseWidth ? Math.min(1, d.baseWidth / 1320) : 1;
+}
+
 function applyTemplateTextLayout(text, step) {
     const L = step.text || {};
     const position = templateTextPosition(step);
     const offsetY = templateOffsetY(step);
+    const f = templateTypeScale();
     const layout = {
         position: position,
         offsetY: offsetY,
         lineHeight: L.lineHeight || 112,
-        headlineSize: L.headlineSize || 110,
-        subheadlineSize: L.subheadlineSize || 52
+        headlineSize: Math.round((L.headlineSize || 110) * f),
+        subheadlineSize: Math.round((L.subheadlineSize || 52) * f)
     };
 
     Object.assign(text, layout);
@@ -303,7 +315,7 @@ function applyTemplateTextLayout(text, step) {
     text.headlineBgOpacity = L.headlineBgOpacity || 0;
     text.subheadlineBgColor = L.subheadlineBgColor || text.subheadlineBgColor || '#000000';
     text.subheadlineBgOpacity = L.subheadlineBgOpacity || 0;
-    text.subheadlineSpacing = L.subheadlineSpacing || 0;
+    text.subheadlineSpacing = Math.round((L.subheadlineSpacing || 0) * f);
 
     return text;
 }
@@ -409,12 +421,21 @@ function applyLayoutTemplate(templateId, opts) {
 // Drawn from the template's own geometry, so a card can never drift from what
 // applying it actually does.
 
-const TPL_FRAME_W = 40;
 const TPL_FRAME_H = 60;
 const TPL_FRAME_GAP = 7;
 
+// Card width follows the project's real canvas aspect (baseWidth, so a
+// panorama span doesn't stretch the card). A fixed 2:3 card would show a
+// near-square Apple Watch layout as a tall phone, which is exactly the drift
+// these previews exist to avoid.
+function tplFrameW() {
+    const d = typeof getCanvasDimensions === 'function' ? getCanvasDimensions() : null;
+    if (!d || !d.baseWidth || !d.height) return 40;
+    return Math.round(TPL_FRAME_H * d.baseWidth / d.height);
+}
+
 function templateFrameSVG(step, clipId) {
-    const W = TPL_FRAME_W, H = TPL_FRAME_H;
+    const W = tplFrameW(), H = TPL_FRAME_H;
     const d = step.device;
     const s = d.scale / 100;
     const dw = W * s;
@@ -463,9 +484,10 @@ function templateFrameSVG(step, clipId) {
 
 function templatePreviewSVG(tpl) {
     const n = tpl.steps.length;
-    const totalW = n * TPL_FRAME_W + (n - 1) * TPL_FRAME_GAP;
+    const frameW = tplFrameW();
+    const totalW = n * frameW + (n - 1) * TPL_FRAME_GAP;
     const frames = tpl.steps.map((step, i) =>
-        `<g transform="translate(${i * (TPL_FRAME_W + TPL_FRAME_GAP)} 0)">` +
+        `<g transform="translate(${i * (frameW + TPL_FRAME_GAP)} 0)">` +
         templateFrameSVG(step, `tplclip-${tpl.id}-${i}`) +
         `</g>`
     ).join('');

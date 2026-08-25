@@ -265,6 +265,31 @@
                                     <span class="device-option-size">1668 × 2388</span>
                                 </div>
                                 <div class="output-size-divider"></div>
+                                <div class="device-option" data-device="watch-ultra3">
+                                    <span class="device-option-name">Watch Ultra 3</span>
+                                    <span class="device-option-size">422 × 514</span>
+                                </div>
+                                <div class="device-option" data-device="watch-ultra">
+                                    <span class="device-option-name">Watch Ultra 1–2</span>
+                                    <span class="device-option-size">410 × 502</span>
+                                </div>
+                                <div class="device-option" data-device="watch-46">
+                                    <span class="device-option-name">Watch Series 11–10</span>
+                                    <span class="device-option-size">416 × 496</span>
+                                </div>
+                                <div class="device-option" data-device="watch-45">
+                                    <span class="device-option-name">Watch Series 9–7</span>
+                                    <span class="device-option-size">396 × 484</span>
+                                </div>
+                                <div class="device-option" data-device="watch-44">
+                                    <span class="device-option-name">Watch Series 6–4, SE</span>
+                                    <span class="device-option-size">368 × 448</span>
+                                </div>
+                                <div class="device-option" data-device="watch-42">
+                                    <span class="device-option-name">Watch Series 3–1</span>
+                                    <span class="device-option-size">312 × 390</span>
+                                </div>
+                                <div class="output-size-divider"></div>
                                 <div class="device-option" data-device="mac-2880">
                                     <span class="device-option-name">Mac 16:10</span>
                                     <span class="device-option-size">2880 × 1800</span>
@@ -623,12 +648,22 @@
                         <button data-model2d="ipad">iPad</button>
                         <button data-model2d="samsung">Samsung</button>
                         <button data-model2d="mac">Mac</button>
+                        <button data-model2d="watch">Watch</button>
                     </div>
                     <div id="mac-finish-row" style="display: none; margin-top: 10px;">
                         <label class="control-label">Mac Finish</label>
                         <div class="btn-group" id="mac-finish-selector">
                             <button class="active" data-macfinish="silver">Silver</button>
                             <button data-macfinish="space-black">Space Black</button>
+                        </div>
+                    </div>
+                    <div id="watch-finish-row" style="display: none; margin-top: 10px;">
+                        <label class="control-label">Watch Finish</label>
+                        <div class="btn-group" id="watch-finish-selector">
+                            <button class="active" data-watchfinish="midnight">Midnight</button>
+                            <button data-watchfinish="starlight">Starlight</button>
+                            <button data-watchfinish="silver">Silver</button>
+                            <button data-watchfinish="gold">Gold</button>
                         </div>
                     </div>
                     <div class="toggle-row" style="margin-top: 10px;">
@@ -835,7 +870,7 @@
                     <div class="control-group">
                         <label class="control-label">Corner Radius</label>
                         <div class="control-row">
-                            <input type="range" id="corner-radius" min="0" max="100" value="24">
+                            <input type="range" id="corner-radius" min="0" max="120" value="24">
                             <span class="range-value" id="corner-radius-value">24px</span>
                         </div>
                     </div>

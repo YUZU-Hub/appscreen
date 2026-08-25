@@ -5,7 +5,7 @@ export interface Size {
   height: number;
 }
 
-// app.js:1239-1252 — outputSizes map
+// app.js — deviceDimensions map (keep byte-identical to the browser copy)
 export const OUTPUT_SIZES: Record<string, Size> = {
   "iphone-6.9": { width: 1320, height: 2868 },
   "iphone-6.7": { width: 1290, height: 2796 },
@@ -14,6 +14,14 @@ export const OUTPUT_SIZES: Record<string, Size> = {
   "ipad-13": { width: 2064, height: 2752 },
   "ipad-12.9": { width: 2048, height: 2732 },
   "ipad-11": { width: 1668, height: 2388 },
+  // Apple Watch — App Store Connect accepts exactly these six sizes, one per
+  // model family (a Series 11 42mm still uploads at the 46mm size).
+  "watch-ultra3": { width: 422, height: 514 },
+  "watch-ultra": { width: 410, height: 502 },
+  "watch-46": { width: 416, height: 496 },
+  "watch-45": { width: 396, height: 484 },
+  "watch-44": { width: 368, height: 448 },
+  "watch-42": { width: 312, height: 390 },
   "mac-2880": { width: 2880, height: 1800 },
   "mac-2560": { width: 2560, height: 1600 },
   "mac-1440": { width: 1440, height: 900 },

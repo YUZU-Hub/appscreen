@@ -757,6 +757,18 @@ input[type="range"]::-webkit-slider-thumb {
     transition: all 0.2s;
 }
 
+/* Five device models share one row (iPhone / iPad / Samsung / Mac / Watch), and
+   the sidebar is user-resizable down to 220px — tighten the padding so the
+   labels stay on one line instead of wrapping. */
+#device-model-2d-selector button,
+#watch-finish-selector button {
+    padding: 8px 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .btn-group button.active {
     background: var(--bg-primary);
     color: var(--text-primary);
@@ -1192,6 +1204,12 @@ input[type="range"]::-webkit-slider-thumb {
     transform: translateY(10px);
     transition: all 0.2s;
     z-index: 100;
+    /* The list opens upward from the sidebar footer and is now ~26 rows deep
+       (iPhone, iPad, Apple Watch, Mac, Android, Web, Custom) — without a cap it
+       runs off the top of the viewport on a laptop with no way to reach it. */
+    max-height: min(70vh, 620px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .output-size-dropdown.open .output-size-menu {

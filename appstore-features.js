@@ -45,7 +45,10 @@ function assignImageFileToLanguage(file, lang) {
             const img = new Image();
             img.onload = () => {
                 const ratio = Math.min(img.width, img.height) / Math.max(img.width, img.height);
-                const deviceType = ratio > 0.6 ? 'iPad' : 'iPhone';
+                // Watch panels are tiny (largest 422x514) and their ratio
+                // overlaps the iPad's — check size before ratio.
+                const deviceType = Math.max(img.width, img.height) <= 560 ? 'Apple Watch'
+                    : ratio > 0.6 ? 'iPad' : 'iPhone';
                 const idx = findScreenshotByBaseFilename(file.name);
                 if (idx !== -1) {
                     addLocalizedImage(idx, lang, img, e.target.result, file.name);
@@ -603,10 +606,14 @@ function initCanvasViewToggle() {
 // ============================================================================
 // Device notch (2D "Device Model") + text background controls
 // ============================================================================
-// Per-model corner-radius defaults (slider value; render scales it).
+// Per-model corner-radius defaults (slider value; render scales it as
+// cornerRadius * imgWidth / 400, so the value is the radius as a fraction of
+// 400px of screen width).
 // iPad corners are far subtler than a phone's (~2-3% of width), so a low value
 // here is what makes the mockup actually read as an iPad rather than a big phone.
-const DEVICE_2D_RADIUS = { iphone: 52, samsung: 34, ipad: 12, mac: 16 };
+// The Apple Watch is the opposite extreme: its display corners measure 0.26 of
+// the screen width on Apple's own bezel artwork, hence 104.
+const DEVICE_2D_RADIUS = { iphone: 52, samsung: 34, ipad: 12, mac: 16, watch: 104 };
 
 function initDeviceTextExtras() {
     // 2D Device Model (iPhone / Samsung) — auto-adapts corner radius + notch.
@@ -622,21 +629,36 @@ function initDeviceTextExtras() {
             const val = document.getElementById('corner-radius-value');
             if (slider) slider.value = r;
             if (val) val.textContent = r + 'px';
-            // Sensible default notch for the model (iPads and Macs have none).
-            const defNotch = model === 'ipad' || model === 'mac' ? 'none' : model === 'samsung' ? 'punch' : 'island';
+            // Sensible default notch for the model (iPads, Macs and Watches have none).
+            const defNotch = model === 'ipad' || model === 'mac' || model === 'watch' ? 'none' : model === 'samsung' ? 'punch' : 'island';
             setScreenshotSetting('frame.notch', defNotch);
             document.querySelectorAll('#notch-selector button').forEach(b => b.classList.toggle('active', b.dataset.notch === defNotch));
             // Switch the output canvas to this device class's dimensions, unless the
             // current size already matches (don't clobber a deliberate sub-size).
-            const classPrefix = model === 'ipad' ? 'ipad' : model === 'samsung' ? 'android' : model === 'mac' ? 'mac' : 'iphone';
-            const defaultSize = model === 'ipad' ? 'ipad-13' : model === 'samsung' ? 'android-phone-hd' : model === 'mac' ? 'mac-2880' : 'iphone-6.9';
+            // Every size key is prefixed with its class for exactly this test —
+            // an unprefixed watch key would fall through and reset the canvas
+            // back to an iPhone the moment any model button is clicked.
+            const classPrefix = model === 'ipad' ? 'ipad' : model === 'samsung' ? 'android' : model === 'mac' ? 'mac' : model === 'watch' ? 'watch' : 'iphone';
+            const defaultSize = model === 'ipad' ? 'ipad-13' : model === 'samsung' ? 'android-phone-hd' : model === 'mac' ? 'mac-2880' : model === 'watch' ? (typeof DEFAULT_WATCH_DEVICE !== 'undefined' ? DEFAULT_WATCH_DEVICE : 'watch-46') : 'iphone-6.9';
             if (typeof state !== 'undefined' && !(state.outputDevice || '').startsWith(classPrefix)) {
+                const prevDevice = state.outputDevice;
                 state.outputDevice = defaultSize;
+                // Crossing the watch boundary changes the canvas for the WHOLE
+                // project, so the absolute text sizes and every other screen's
+                // device model have to come with it — not just this screen's,
+                // which setScreenshotSetting above has already handled.
+                if (typeof rescaleTextForOutput === 'function') rescaleTextForOutput(prevDevice, defaultSize);
+                if (typeof isWatchOutput === 'function' && isWatchOutput(defaultSize) !== isWatchOutput(prevDevice)) {
+                    if (isWatchOutput(defaultSize)) adoptWatchDeviceModel();
+                    else dropWatchDeviceModel(defaultSize);
+                }
                 if (typeof syncUIWithState === 'function') syncUIWithState();
             }
-            // The Mac finish selector is only relevant for the Mac model.
+            // The finish selectors are each only relevant for their own model.
             const finishRow = document.getElementById('mac-finish-row');
             if (finishRow) finishRow.style.display = model === 'mac' ? 'block' : 'none';
+            const watchFinishRow = document.getElementById('watch-finish-row');
+            if (watchFinishRow) watchFinishRow.style.display = model === 'watch' ? 'block' : 'none';
             updateCanvas();
         });
     });
@@ -646,6 +668,15 @@ function initDeviceTextExtras() {
         btn.addEventListener('click', () => {
             document.querySelectorAll('#mac-finish-selector button').forEach(b => b.classList.toggle('active', b === btn));
             setScreenshotSetting('deviceMacFinish', btn.dataset.macfinish);
+            updateCanvas();
+        });
+    });
+
+    // Apple Watch case finish — only shown for the Watch device model.
+    document.querySelectorAll('#watch-finish-selector button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#watch-finish-selector button').forEach(b => b.classList.toggle('active', b === btn));
+            setScreenshotSetting('deviceWatchFinish', btn.dataset.watchfinish);
             updateCanvas();
         });
     });
@@ -736,12 +767,21 @@ function syncDeviceTextExtras() {
         document.querySelectorAll('#mac-finish-selector button').forEach(b => b.classList.toggle('active', b.dataset.macfinish === macFinish));
         const finishRow = document.getElementById('mac-finish-row');
         if (finishRow) finishRow.style.display = (model2d === 'mac' && !ss.use3D) ? 'block' : 'none';
+        const watchFinish = ss.deviceWatchFinish || 'midnight';
+        document.querySelectorAll('#watch-finish-selector button').forEach(b => b.classList.toggle('active', b.dataset.watchfinish === watchFinish));
+        const watchFinishRow = document.getElementById('watch-finish-row');
+        if (watchFinishRow) watchFinishRow.style.display = (model2d === 'watch' && !ss.use3D) ? 'block' : 'none';
         const bezelToggle = document.getElementById('bezel-toggle');
         if (bezelToggle) bezelToggle.classList.toggle('active', !!ss.bezelEnabled);
         const span = ss.spanScreens || 1;
         document.querySelectorAll('#span-screens-selector button').forEach(b => b.classList.toggle('active', parseInt(b.dataset.span, 10) === span));
         const spanHint = document.getElementById('span-hint');
         if (spanHint) spanHint.style.display = span > 1 ? 'block' : 'none';
+        // The App Store takes no panoramic Apple Watch screenshots, and a
+        // 3-slot watch panorama is only 1248px wide in total — hide the control
+        // rather than offer something that can't be shipped.
+        const spanGroup = document.getElementById('span-screens-group');
+        if (spanGroup) spanGroup.style.display = (typeof isWatchOutput === 'function' && isWatchOutput()) ? 'none' : 'block';
         // In 3D, the notch still applies (baked into the texture) but the bezel/model
         // selectors are 2D-only; keep the Notch sub-control visible, hide the rest.
         const group = document.getElementById('device-model-2d-group');

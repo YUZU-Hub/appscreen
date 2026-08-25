@@ -349,6 +349,13 @@ async function generateMagicalTitles() {
         return;
     }
 
+    // An Apple Watch canvas is a third the width of a phone's, so the same
+    // headline that reads well on an iPhone runs to four lines on a watch.
+    const _dims = typeof getCanvasDimensions === 'function' ? getCanvasDimensions() : null;
+    const tinyCanvas = !!(_dims && _dims.width < 700);
+    const headlineWords = tinyCanvas ? '1-2' : '2-4';
+    const subheadlineWords = tinyCanvas ? '3-5' : '4-8';
+
     // Build prompt
     const prompt = `You are an expert App Store marketing copywriter. Analyze these ${images.length} app screenshots and create compelling marketing titles.
 
@@ -360,8 +367,8 @@ The screenshots are shown in order (1 through ${images.length}). Study what the 
 CRITICAL: Screenshot 1's headline MUST focus on the main value proposition - what problem does this app solve for users? This is the most important title.
 
 LENGTH REQUIREMENTS - THIS IS VERY IMPORTANT:
-- headline: VERY SHORT, maximum 2-4 words. Punchy, memorable, benefit-focused.
-- subheadline: SHORT, maximum 4-8 words. Expands on the headline.
+- headline: VERY SHORT, maximum ${headlineWords} words. Punchy, memorable, benefit-focused.
+- subheadline: SHORT, maximum ${subheadlineWords} words. Expands on the headline.
 
 UNIQUENESS - VERY IMPORTANT:
 - Each screenshot MUST have a UNIQUE headline and subheadline
