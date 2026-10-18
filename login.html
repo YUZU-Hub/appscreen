@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Connexion — App Store Screenshot Generator</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+        --bg-primary: #0a0a0b; --bg-secondary: #141416; --bg-tertiary: #1c1c1f;
+        --border-color: #2a2a2e; --text-primary: #ffffff; --text-secondary: #a1a1a6;
+        --accent: #0a84ff; --accent-hover: #409cff; --danger: #ff453a;
+    }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg-primary); color: var(--text-primary);
+        min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .login-card {
+        width: 100%; max-width: 380px; margin: 20px;
+        background: var(--bg-secondary); border: 1px solid var(--border-color);
+        border-radius: 16px; padding: 40px 32px; text-align: center;
+    }
+    .login-icon {
+        width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 14px;
+        background: rgba(10, 132, 255, 0.15); display: flex; align-items: center; justify-content: center;
+    }
+    .login-icon svg { color: var(--accent); }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .login-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 28px; }
+    .field { position: relative; margin-bottom: 14px; }
+    input[type="password"] {
+        width: 100%; padding: 12px 14px; font-size: 15px;
+        background: var(--bg-tertiary); border: 1px solid var(--border-color);
+        border-radius: 10px; color: var(--text-primary); outline: none;
+        transition: border-color 0.15s;
+    }
+    input[type="password"]:focus { border-color: var(--accent); }
+    button {
+        width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+        background: var(--accent); color: #fff; border: none; border-radius: 10px;
+        cursor: pointer; transition: background 0.15s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .error {
+        display: none; margin-top: 14px; font-size: 13px; color: var(--danger);
+    }
+    .error.visible { display: block; }
+</style>
+</head>
+<body>
+    <form class="login-card" id="login-form">
+        <div class="login-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+        </div>
+        <h1>App Store Screenshot Generator</h1>
+        <p class="login-sub">Entrez le mot de passe pour accéder au site</p>
+        <div class="field">
+            <input type="password" id="password" placeholder="Mot de passe" autocomplete="current-password" autofocus required>
+        </div>
+        <button type="submit" id="submit-btn">Se connecter</button>
+        <p class="error" id="error-msg">Mot de passe incorrect</p>
+    </form>
+
+<script>
+// The password never travels anywhere in clear: it's hashed here (salted SHA-256)
+// and only the hash is stored in the auth cookie, which nginx compares against
+// the hash it derived from SITE_PASSWORD at startup.
+const SALT = 'appscreen-v1:';
+
+// Pure-JS SHA-256 fallback for non-secure contexts (plain http over LAN), where
+// crypto.subtle is unavailable. Standard FIPS 180-4 implementation.
+function sha256HexSync(str) {
+    const bytes = new TextEncoder().encode(str);
+    const K = [
+        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+    let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    const l = bytes.length;
+    const bitLen = l * 8;
+    const padded = new Uint8Array((((l + 8) >> 6) + 1) << 6);
+    padded.set(bytes);
+    padded[l] = 0x80;
+    const dv = new DataView(padded.buffer);
+    dv.setUint32(padded.length - 8, Math.floor(bitLen / 0x100000000));
+    dv.setUint32(padded.length - 4, bitLen >>> 0);
+    const w = new Uint32Array(64);
+    const rr = (x, n) => (x >>> n) | (x << (32 - n));
+    for (let off = 0; off < padded.length; off += 64) {
+        for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+        for (let i = 16; i < 64; i++) {
+            const s0 = rr(w[i-15],7) ^ rr(w[i-15],18) ^ (w[i-15] >>> 3);
+            const s1 = rr(w[i-2],17) ^ rr(w[i-2],19) ^ (w[i-2] >>> 10);
+            w[i] = (w[i-16] + s0 + w[i-7] + s1) >>> 0;
+        }
+        let [a,b,c,d,e,f,g,h] = H;
+        for (let i = 0; i < 64; i++) {
+            const S1 = rr(e,6) ^ rr(e,11) ^ rr(e,25);
+            const ch = (e & f) ^ (~e & g);
+            const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+            const S0 = rr(a,2) ^ rr(a,13) ^ rr(a,22);
+            const maj = (a & b) ^ (a & c) ^ (b & c);
+            const t2 = (S0 + maj) >>> 0;
+            h = g; g = f; f = e; e = (d + t1) >>> 0;
+            d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+        }
+        H = H.map((x, i) => (x + [a,b,c,d,e,f,g,h][i]) >>> 0);
+    }
+    return H.map(x => x.toString(16).padStart(8, '0')).join('');
+}
+
+async function sha256Hex(str) {
+    if (window.crypto && crypto.subtle) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return sha256HexSync(str);
+}
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    const err = document.getElementById('error-msg');
+    const pw = document.getElementById('password').value;
+    if (!pw) return;
+    btn.disabled = true;
+    err.classList.remove('visible');
+    try {
+        const hash = await sha256Hex(SALT + pw);
+        // 30 days. SameSite=Lax; Secure is implied by the HTTPS origin in prod.
+        document.cookie = 'appscreen_auth=' + hash + '; Path=/; Max-Age=2592000; SameSite=Lax';
+        const r = await fetch('/auth-check', { cache: 'no-store' });
+        if (r.ok) {
+            location.replace('/');
+        } else {
+            document.cookie = 'appscreen_auth=; Path=/; Max-Age=0; SameSite=Lax';
+            err.classList.add('visible');
+            document.getElementById('password').select();
+        }
+    } catch (ex) {
+        err.textContent = 'Erreur de connexion — réessayez';
+        err.classList.add('visible');
+    } finally {
+        btn.disabled = false;
+    }
+});
+</script>
+</body>
+</html>

@@ -10,6 +10,14 @@
 # Node
 node_modules/
 
+# MCP server on-disk projects (user data)
+projects/
+mcp-server/projects/
+
+# Production deployment data volumes
+data/
+work/
+
 # Build output
 dist/
 out/

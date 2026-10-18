@@ -1,14 +1,31 @@
 name: Build and Publish Docker Image
 
+# PATH-FILTERED: only runs when the web app actually changed, so the web
+# container isn't restarted by MCP-only merges (and vice versa).
 on:
   push:
     branches:
       - main
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
+    paths:
+      - "*.html"
+      - "*.css"
+      - "*.js"
+      - "models/**"
+      - "img/**"
+      - "nginx.conf"
+      - "Dockerfile"
+      - "docker/**"
+      - ".github/workflows/docker-publish.yml"
+  workflow_dispatch: {}
+
+# Only the build on main (and tags) is kept: a PR build published nothing and
+# was rebuilt from scratch on merge anyway. Two merges in quick succession
+# don't need two full builds either — the newer one supersedes the older.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -16,7 +33,9 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # The deployment server is ARM: build arm64 only, natively on an ARM
+    # runner (free on public repos) instead of emulating it on x86 with QEMU.
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -59,4 +78,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64

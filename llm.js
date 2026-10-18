@@ -80,7 +80,8 @@ function getApiKey(provider) {
  */
 function validateApiKeyFormat(provider, key) {
     const config = llmProviders[provider];
-    if (!config) return false;
+    if (!config || typeof key !== 'string') return false;
+    if (provider === 'openai' && key.startsWith('sk-ant-')) return false;
     return key.startsWith(config.keyPrefix);
 }
 

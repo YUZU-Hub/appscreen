@@ -11,6 +11,7 @@ let orbitControls = null;
 let isThreeJSInitialized = false;
 let phoneModelLoaded = false;
 let phoneModelLoading = false;
+let phoneModelLoadGeneration = 0;
 
 // Screen texture for the screenshot
 let screenTexture = null;
@@ -21,15 +22,44 @@ let baseModelScale = 1;
 // Store base position offset to keep model centered after screen alignment
 let basePositionOffset = { x: 0, y: 0, z: 0 };
 
-// Current device model type
+// Current device model: the resolved deviceConfigs key ('iphone',
+// 'iphone-duo-inner', ...) and the UI device type it came from ('iphone',
+// 'iphone-duo'). They differ for devices with several 3D variants.
 let currentDeviceModel = 'iphone';
+let currentDeviceUiType = 'iphone';
 
 // Cache for loaded phone models (for rendering different devices in side previews)
-let phoneModelCache = {};  // { deviceType: { model, pivot, screenPlane, baseScale, loaded } }
+let phoneModelCache = {};  // { configKey: { model, pivot, screenPlane, baseScale, loaded } }
 
-// Device-specific configurations
+// iPhone Duo real-world dimensions (Apple tech specs), in millimetres — the
+// procedural model is built in these units. "Portrait" is how the app presents
+// each display: the outer cover display is natively portrait, the inner one is
+// natively landscape and gets turned 90° (hinge/crease runs horizontally).
+const DUO_SPEC = {
+    closed: { w: 84.1, h: 117.8, d: 11.3 },
+    open: { w: 164.6, h: 117.8, d: 5.2 },
+    outerScreen: { w: 1398 / 460 * 25.4, h: 2034 / 460 * 25.4 },  // 77.19 x 112.31
+    innerScreen: { w: 1878 / 430 * 25.4, h: 2670 / 430 * 25.4 },  // 110.93 x 157.72 (portrait)
+    halfT: 5.2,         // each half is as thick as the open device
+    hingeGap: 0.3,      // seam between the halves when open
+    cornerR: 11,        // device corner radius on the free edges
+    hingeCornerR: 1.2,  // corner radius on the hinge side of each half
+    frameBevel: 1.0,    // rounded titanium edge
+    spineRx: 2.0        // how far the closed hinge spine reaches in from the edge
+};
+DUO_SPEC.halfW = (DUO_SPEC.open.w - DUO_SPEC.hingeGap) / 2;
+DUO_SPEC.closedGap = DUO_SPEC.closed.d - 2 * DUO_SPEC.halfT;
+// Screen corner radius = device corner radius minus the (uniform) display border
+DUO_SPEC.outerScreenR = DUO_SPEC.cornerR - (DUO_SPEC.closed.h - DUO_SPEC.outerScreen.h) / 2;
+DUO_SPEC.innerScreenR = DUO_SPEC.cornerR - (DUO_SPEC.open.w - DUO_SPEC.innerScreen.h) / 2;
+DUO_SPEC.screenLift = 0.05;  // screen overlay sits this far in front of the glass
+
+// Device-specific configurations, keyed by config key. `uiType` is the device
+// type the UI stores in screenshot.device3D. A config has either `modelPath`
+// (GLB) or `build()` (procedural, returns a THREE.Object3D).
 const deviceConfigs = {
     iphone: {
+        uiType: 'iphone',
         modelPath: 'models/iphone-15-pro-max.glb',
         aspectRatio: 1290 / 2796,
         screenHeightFactor: 0.826,
@@ -38,16 +68,52 @@ const deviceConfigs = {
         cornerRadiusFactor: 0.16,
         modelRotation: { x: 0, y: 0, z: 0 }  // No correction needed
     },
-    samsung: {
-        modelPath: 'models/samsung-galaxy-s25-ultra.glb',
-        aspectRatio: 1440 / 3120,
-        screenHeightFactor: 0.66,
-        screenOffset: { x: 0, y: 0.0, z: 0.08},  // Will need adjustment
-        positionOffsetFactor: 0.5,
-        cornerRadiusFactor: 0.04,
-        modelRotation: { x: 0, y: 0, z: 0 }  // Adjust to correct model tilt (in degrees)
+    // iPhone Duo, open: the 7.6" inner display, shown in portrait.
+    // Built in mm with the screen centre at (0, 0, screenOffset.z).
+    'iphone-duo-inner': {
+        uiType: 'iphone-duo',
+        build: () => buildIPhoneDuoModel('inner'),
+        aspectRatio: 2007 / 2853,
+        screenHeightFactor: DUO_SPEC.innerScreen.h / 4.3,
+        screenOffset: { x: 0, y: 0, z: DUO_SPEC.halfT / 2 + DUO_SPEC.screenLift },
+        cornerRadiusFactor: DUO_SPEC.innerScreenR / DUO_SPEC.innerScreen.w,
+        modelRotation: { x: 0, y: 0, z: 0 }
+    },
+    // iPhone Duo, closed: the 5.4" outer cover display.
+    'iphone-duo-outer': {
+        uiType: 'iphone-duo',
+        build: () => buildIPhoneDuoModel('outer'),
+        aspectRatio: 1398 / 2034,
+        screenHeightFactor: DUO_SPEC.outerScreen.h / 4.3,
+        screenOffset: { x: 0, y: 0, z: DUO_SPEC.closed.d / 2 + DUO_SPEC.screenLift },
+        cornerRadiusFactor: DUO_SPEC.outerScreenR / DUO_SPEC.outerScreen.w,
+        modelRotation: { x: 0, y: 0, z: 0 }
     }
 };
+
+// Map a UI device type (screenshot.device3D) to a deviceConfigs key.
+// 'iphone-duo' picks the inner/outer display from duoDisplayVariant(ss)
+// (app.js); the removed 'samsung' and anything unknown fall back to the iPhone.
+function resolve3DConfigKey(deviceType, ss) {
+    if (deviceType === 'iphone-duo') {
+        let variant = 'inner';
+        if (typeof duoDisplayVariant === 'function') {
+            try {
+                if (duoDisplayVariant(ss) === 'outer') variant = 'outer';
+            } catch (e) { /* keep the default */ }
+        }
+        return 'iphone-duo-' + variant;
+    }
+    if (deviceType && deviceConfigs[deviceType]) return deviceType;  // already a config key
+    return 'iphone';
+}
+
+// Map a UI device type or config key to the UI device type (the key of
+// frameColorPresets). Legacy/unknown types become 'iphone'.
+function normalize3DDeviceType(deviceType) {
+    if (deviceType === 'iphone-duo') return deviceType;
+    return deviceConfigs[deviceType]?.uiType || 'iphone';
+}
 
 // Frame color presets per device (real device colors)
 // Using var so it's accessible from app.js
@@ -70,69 +136,606 @@ var frameColorPresets = {
         { id: 'red', label: 'Product Red', swatch: '#c1272d',
           materials: { backpanel: '#c1272d', metalframe: '#8a1c20', gray: '#1a0a0a' } },
     ],
-    samsung: [
-        { id: 'gray', label: 'Titanium Gray', swatch: '#8a8a8a',
-          materials: { back_glass: '#4c4c4c', frame: '#cdcdcd', antenna: '#707070' } },
-        { id: 'black', label: 'Titanium Black', swatch: '#2a2a2a',
-          materials: { back_glass: '#1a1a1a', frame: '#3a3a3a', antenna: '#2a2a2a' } },
-        { id: 'silverblue', label: 'Titanium Silverblue', swatch: '#a8b8c8',
-          materials: { back_glass: '#8a9eb0', frame: '#b8c8d4', antenna: '#7a8ea0' } },
-        { id: 'whitesilver', label: 'Titanium Whitesilver', swatch: '#e8e4df',
-          materials: { back_glass: '#d8d4cf', frame: '#e8e4df', antenna: '#c0bcb7' } },
-        { id: 'pinkgold', label: 'Titanium Pinkgold', swatch: '#d4a89a',
-          materials: { back_glass: '#c89888', frame: '#d4b0a0', antenna: '#b08878' } },
-        { id: 'jadegreen', label: 'Titanium Jadegreen', swatch: '#9aaa9c',
-          materials: { back_glass: '#7a9a7c', frame: '#a8b8aa', antenna: '#6a8a6c' } },
-        { id: 'jetblack', label: 'Titanium Jetblack', swatch: '#404040',
-          materials: { back_glass: '#2a2a2a', frame: '#484848', antenna: '#353535' } },
+    // Keys are the material names of the procedural model (buildIPhoneDuoModel)
+    'iphone-duo': [
+        { id: 'night-sky', label: 'Night Sky', swatch: '#23272f',
+          materials: { frame: '#1b1f27', spine: '#1b1f27', buttons: '#1b1f27', lensring: '#14171d',
+                       backpanel: '#04060a', plateau: '#06080d' } },
+        { id: 'star-white', label: 'Star White', swatch: '#e6e1d8',
+          materials: { frame: '#8e887d', spine: '#8e887d', buttons: '#8e887d', lensring: '#7d776c',
+                       backpanel: '#8f8a80', plateau: '#958f85' } },
     ]
 };
 
 // Store original material colors for the current model
 let originalMaterialColors = {};
 
+// Find a preset by id for a device, falling back to the device's first preset
+// (a screenshot may carry another device's color id, e.g. after a device switch)
+function findFrameColorPreset(presetId, deviceType) {
+    const presets = frameColorPresets[normalize3DDeviceType(deviceType)];
+    if (!presets || !presets.length) return null;
+    return presets.find(p => p.id === presetId) || presets[0];
+}
+
+// Recolor the meshes of a model whose material names appear in the preset
+function applyFrameColorPreset(model, preset) {
+    model.traverse((child) => {
+        if (child.isMesh && child.material) {
+            const matName = (child.material.name || '').toLowerCase();
+            if (preset.materials[matName]) {
+                child.material.color.set(preset.materials[matName]);
+            }
+        }
+    });
+}
+
 // Apply a frame color preset to the phone model
 function setPhoneFrameColor(presetId, deviceType) {
     if (!phoneModel) return;
 
-    deviceType = deviceType || currentDeviceModel;
-    const presets = frameColorPresets[deviceType];
-    if (!presets) return;
-
-    const preset = presets.find(p => p.id === presetId);
+    const preset = findFrameColorPreset(presetId, deviceType || currentDeviceUiType);
     if (!preset) return;
 
-    phoneModel.traverse((child) => {
-        if (child.isMesh && child.material) {
-            const matName = (child.material.name || '').toLowerCase();
-            if (preset.materials[matName]) {
-                child.material.color.set(preset.materials[matName]);
-            }
-        }
-    });
-
+    applyFrameColorPreset(phoneModel, preset);
     requestThreeJSRender();
 }
 
-// Apply frame color to a cached model (for side previews)
-function setCachedModelFrameColor(presetId, deviceType) {
-    const cached = phoneModelCache[deviceType];
+// Apply frame color to a cached model (for side previews). deviceType is a
+// config key or a UI type (resolved against ss).
+function setCachedModelFrameColor(presetId, deviceType, ss) {
+    const cached = phoneModelCache[resolve3DConfigKey(deviceType, ss)];
     if (!cached?.loaded) return;
 
-    const presets = frameColorPresets[deviceType];
-    if (!presets) return;
-
-    const preset = presets.find(p => p.id === presetId);
+    const preset = findFrameColorPreset(presetId, deviceType);
     if (!preset) return;
 
-    cached.model.traverse((child) => {
-        if (child.isMesh && child.material) {
-            const matName = (child.material.name || '').toLowerCase();
-            if (preset.materials[matName]) {
-                child.material.color.set(preset.materials[matName]);
-            }
+    applyFrameColorPreset(cached.model, preset);
+}
+
+// ===== Procedural iPhone Duo model =====
+
+// Shared studio environment map so the procedural titanium and glass get
+// reflections (metals render near-black under direct lights alone). Built once
+// per renderer with PMREM from a painted equirectangular "photo studio".
+let duoEnvMap = null;
+let duoEnvMapRenderer = null;
+
+function getDuoEnvMap() {
+    if (!threeRenderer || typeof THREE.PMREMGenerator !== 'function') return null;
+    if (duoEnvMap && duoEnvMapRenderer === threeRenderer) return duoEnvMap;
+
+    const w = 512, h = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    // Dim studio: lighter ceiling, dark floor
+    const base = ctx.createLinearGradient(0, 0, 0, h);
+    base.addColorStop(0, '#6a6a6e');
+    base.addColorStop(0.45, '#232326');
+    base.addColorStop(0.55, '#141416');
+    base.addColorStop(1, '#060607');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, w, h);
+
+    // Soft boxes. Equirect u: 0.25 = -Z (behind the device), 0.5 = +X,
+    // 0.75 = +Z (camera side), 0/1 = -X. Kept off the +Z horizon so the black
+    // front glass stays black when viewed head-on.
+    const softbox = (u, v, bw, bh, alpha) => {
+        const x = u * w, y = v * h;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, Math.max(bw, bh) / 2);
+        g.addColorStop(0, `rgba(255,255,255,${alpha})`);
+        g.addColorStop(0.6, `rgba(255,255,255,${alpha * 0.55})`);
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(bw / Math.max(bw, bh), bh / Math.max(bw, bh));
+        ctx.translate(-x, -y);
+        ctx.fillStyle = g;
+        ctx.fillRect(x - Math.max(bw, bh) / 2, y - Math.max(bw, bh) / 2, Math.max(bw, bh), Math.max(bw, bh));
+        ctx.restore();
+    };
+    softbox(0.62, 0.18, 170, 60, 1.0);   // key: upper front-right
+    softbox(0.90, 0.30, 110, 70, 0.7);   // fill: upper front-left
+    softbox(0.50, 0.45, 40, 150, 0.9);   // strip right (+X)
+    softbox(0.00, 0.45, 40, 150, 0.6);   // strip left (-X), wraps
+    softbox(1.00, 0.45, 40, 150, 0.6);
+    softbox(0.25, 0.25, 160, 70, 0.6);   // behind, for the back of the device
+    softbox(0.50, 0.03, 512, 30, 0.8);   // ceiling
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.encoding = THREE.sRGBEncoding;
+
+    const pmrem = new THREE.PMREMGenerator(threeRenderer);
+    duoEnvMap = pmrem.fromEquirectangular(tex).texture;
+    pmrem.dispose();
+    tex.dispose();
+    duoEnvMapRenderer = threeRenderer;
+    return duoEnvMap;
+}
+
+// Shared texture for the inner display's crease: a faint light/dark/light band
+let duoCreaseTexture = null;
+
+function getDuoCreaseTexture() {
+    if (duoCreaseTexture) return duoCreaseTexture;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 4;
+    const ctx = canvas.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 64, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.3, 'rgba(255,255,255,0.07)');
+    g.addColorStop(0.5, 'rgba(0,0,0,0.10)');
+    g.addColorStop(0.7, 'rgba(255,255,255,0.07)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 4);
+    duoCreaseTexture = new THREE.CanvasTexture(canvas);
+    return duoCreaseTexture;
+}
+
+// Rounded rectangle shape centred on the origin. r is a radius or per-corner
+// radii { tl, tr, br, bl }.
+function duoRoundedRectShape(w, h, r) {
+    const R = typeof r === 'number' ? { tl: r, tr: r, br: r, bl: r } : r;
+    const x0 = -w / 2, x1 = w / 2, y0 = -h / 2, y1 = h / 2;
+    const s = new THREE.Shape();
+    s.moveTo(x0 + R.bl, y0);
+    s.lineTo(x1 - R.br, y0);
+    if (R.br > 0) s.absarc(x1 - R.br, y0 + R.br, R.br, -Math.PI / 2, 0, false);
+    s.lineTo(x1, y1 - R.tr);
+    if (R.tr > 0) s.absarc(x1 - R.tr, y1 - R.tr, R.tr, 0, Math.PI / 2, false);
+    s.lineTo(x0 + R.tl, y1);
+    if (R.tl > 0) s.absarc(x0 + R.tl, y1 - R.tl, R.tl, Math.PI / 2, Math.PI, false);
+    s.lineTo(x0, y0 + R.bl);
+    if (R.bl > 0) s.absarc(x0 + R.bl, y0 + R.bl, R.bl, Math.PI, Math.PI * 1.5, false);
+    return s;
+}
+
+// Smooth the normals of a (non-indexed) geometry across edges sharper than
+// creaseDeg degrees, so bevels and rounded corners shade smoothly while flat
+// faces keep crisp edges. ExtrudeGeometry otherwise comes out faceted.
+function duoSmoothNormals(geometry, creaseDeg) {
+    const geo = geometry.index ? geometry.toNonIndexed() : geometry;
+    const pos = geo.attributes.position;
+    const n = pos.count;
+    const faceN = new Float32Array(n * 3);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    for (let i = 0; i < n; i += 3) {
+        a.fromBufferAttribute(pos, i);
+        b.fromBufferAttribute(pos, i + 1);
+        c.fromBufferAttribute(pos, i + 2);
+        c.sub(b);
+        a.sub(b);
+        c.cross(a).normalize();
+        for (let k = 0; k < 3; k++) {
+            faceN[(i + k) * 3] = c.x;
+            faceN[(i + k) * 3 + 1] = c.y;
+            faceN[(i + k) * 3 + 2] = c.z;
+        }
+    }
+    const buckets = new Map();
+    for (let i = 0; i < n; i++) {
+        const key = Math.round(pos.getX(i) * 1000) + ',' + Math.round(pos.getY(i) * 1000) + ',' + Math.round(pos.getZ(i) * 1000);
+        let list = buckets.get(key);
+        if (!list) buckets.set(key, list = []);
+        list.push(i);
+    }
+    const cosT = Math.cos((creaseDeg || 40) * Math.PI / 180);
+    const normals = new Float32Array(n * 3);
+    buckets.forEach((list) => {
+        list.forEach((i) => {
+            let x = 0, y = 0, z = 0;
+            const ix = faceN[i * 3], iy = faceN[i * 3 + 1], iz = faceN[i * 3 + 2];
+            list.forEach((j) => {
+                const jx = faceN[j * 3], jy = faceN[j * 3 + 1], jz = faceN[j * 3 + 2];
+                if (ix * jx + iy * jy + iz * jz >= cosT) { x += jx; y += jy; z += jz; }
+            });
+            const len = Math.hypot(x, y, z) || 1;
+            normals[i * 3] = x / len;
+            normals[i * 3 + 1] = y / len;
+            normals[i * 3 + 2] = z / len;
+        });
+    });
+    geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    return geo;
+}
+
+// Rounded slab: a w x h rounded rectangle (outer size incl. bevel) extruded to
+// `depth` along Z, centred on the origin, with a rounded edge of size `bevel`.
+function duoSlab(w, h, depth, r, bevel, material, curveSegments) {
+    const R = typeof r === 'number' ? { tl: r, tr: r, br: r, bl: r } : r;
+    const b = Math.max(0, Math.min(bevel, depth / 2 - 0.01, w / 2 - 0.01, h / 2 - 0.01));
+    const inset = (v) => Math.max(0, v - b);
+    const shape = duoRoundedRectShape(w - 2 * b, h - 2 * b,
+        { tl: inset(R.tl), tr: inset(R.tr), br: inset(R.br), bl: inset(R.bl) });
+    const core = depth - 2 * b;
+    let geo = new THREE.ExtrudeGeometry(shape, {
+        depth: core,
+        bevelEnabled: b > 0,
+        bevelThickness: b,
+        bevelSize: b,
+        bevelSegments: 3,
+        curveSegments: curveSegments || 8
+    });
+    geo.translate(0, 0, -core / 2);
+    geo = duoSmoothNormals(geo, 35);
+    return new THREE.Mesh(geo, material);
+}
+
+// Flat rounded-rect panel (zero thickness) facing +Z
+function duoPanel(w, h, r, material) {
+    const geo = new THREE.ShapeGeometry(duoRoundedRectShape(w, h, r), 10);
+    return new THREE.Mesh(geo, material);
+}
+
+// Cylinder whose axis runs along Z (lenses, flash, rings)
+function duoDisc(radius, height, material, segments) {
+    const geo = new THREE.CylinderGeometry(radius, radius, height, segments || 40);
+    geo.rotateX(Math.PI / 2);
+    return new THREE.Mesh(geo, material);
+}
+
+// Fresh material set for one model instance (instances never share materials,
+// so recoloring a cached side-preview model can't bleed into the main one).
+// Names are what frameColorPresets['iphone-duo'] keys on.
+function duoMaterials() {
+    const env = getDuoEnvMap();
+    const finish = frameColorPresets['iphone-duo'][0].materials;
+    const make = (name, color, metalness, roughness, envMapIntensity) => {
+        const m = new THREE.MeshStandardMaterial({
+            color, metalness, roughness, envMap: env, envMapIntensity: envMapIntensity ?? 1
+        });
+        m.name = name;
+        return m;
+    };
+    return {
+        frame: make('frame', finish.frame, 0.85, 0.3, 1.2),
+        spine: make('spine', finish.spine, 0.85, 0.38, 1.1),
+        buttons: make('buttons', finish.buttons, 0.85, 0.28, 1.2),
+        lensring: make('lensring', finish.lensring, 0.85, 0.25, 1.2),
+        backpanel: make('backpanel', finish.backpanel, 0.0, 0.6, 0.3),    // frosted glass
+        plateau: make('plateau', finish.plateau, 0.0, 0.12, 1.0),         // polished glass
+        glass: make('glass', '#020203', 0.0, 0.06, 0.9),
+        display: make('display', '#000000', 0.0, 0.04, 0.7),
+        seam: make('seam', '#050506', 0.3, 0.6, 0.3),
+        lens: make('lens', '#030405', 0.3, 0.05, 1.0),
+        lensinner: make('lensinner', '#141a2c', 0.6, 0.2, 1.0),
+        flash: make('flash', '#6f6a5c', 0.0, 0.35, 0.4),
+        mic: make('mic', '#000000', 0.0, 0.8, 0.2)
+    };
+}
+
+// One half of the book: titanium frame with glass on both faces, in a local
+// frame where the hinge edge is at x = -halfW/2, the free edge at +halfW/2,
+// the outer face at -Z and the inner (folding-display) face at +Z.
+//   kind 'camera': frosted back glass, camera plateau, side/volume buttons
+//   kind 'cover':  black glass carrying the outer cover display
+//   opts.innerPanel: black glass on the inner face (closed model only; the open
+//                    model puts one glass across both halves instead)
+//   opts.coverShiftX: offset of the cover display toward the hinge, so it is
+//                     centred on the whole closed device (spine included)
+function duoBuildHalf(kind, mats, opts) {
+    const S = DUO_SPEC;
+    const w = S.halfW, h = S.open.h, t = S.halfT, b = S.frameBevel;
+    const group = new THREE.Group();
+    const radii = { tl: S.hingeCornerR, bl: S.hingeCornerR, tr: S.cornerR, br: S.cornerR };
+    const insetRadii = (d) => ({ tl: Math.max(0.2, radii.tl - d), bl: Math.max(0.2, radii.bl - d),
+                                 tr: radii.tr - d, br: radii.br - d });
+
+    // Titanium frame body (the glass panels make up the remaining thickness)
+    const glassT = 0.3, embed = 0.05;
+    const bodyT = t - 2 * (glassT - embed);
+    group.add(duoSlab(w, h, bodyT, radii, b, mats.frame, 10));
+
+    // Glass panels sit on the flat part of the faces, just inside the bevel
+    const gi = b + 0.1;
+    const panelZ = bodyT / 2 + glassT / 2 - embed;
+    const outerMat = kind === 'camera' ? mats.backpanel : mats.glass;
+    const outer = duoSlab(w - 2 * gi, h - 2 * gi, glassT, insetRadii(gi), 0.12, outerMat, 10);
+    outer.position.z = -panelZ;
+    group.add(outer);
+    if (opts.innerPanel) {
+        const inner = duoSlab(w - 2 * gi, h - 2 * gi, glassT, insetRadii(gi), 0.12, mats.glass, 10);
+        inner.position.z = panelZ;
+        group.add(inner);
+    }
+
+    if (kind === 'cover') {
+        // Cover display (switched off): a deeper black under the glass,
+        // portrait like the closed device
+        const disp = duoPanel(S.outerScreen.w, S.outerScreen.h, S.outerScreenR, mats.display);
+        disp.rotation.y = Math.PI;  // face -Z
+        disp.position.set(opts.coverShiftX || 0, 0, -(t / 2 + 0.01));
+        group.add(disp);
+        return group;
+    }
+
+    // Camera plateau: polished glass pill near the free edge, top, with the
+    // 48MP Fusion + 48MP Ultra Wide lenses stacked vertically, flash and mic.
+    const pW = 16, pH = 32, pT = 1.1, pR = 8;
+    const px = w / 2 - b - 3.2 - pW / 2;
+    const py = h / 2 - b - 3.2 - pH / 2;
+    const backZ = -t / 2;
+    const plateau = duoSlab(pW, pH, pT, pR, 0.45, mats.plateau, 14);
+    plateau.position.set(px, py, backZ - pT / 2 + 0.05);
+    group.add(plateau);
+    const plateauZ = backZ - pT + 0.05;
+    [pH / 4, -pH / 4].forEach((ly) => {
+        const ring = duoDisc(6.0, 1.3, mats.lensring, 40);
+        ring.position.set(px, py + ly, plateauZ - 0.65);
+        group.add(ring);
+        const glass = duoDisc(5.1, 0.2, mats.lens, 40);
+        glass.position.set(px, py + ly, plateauZ - 1.35);
+        group.add(glass);
+        const elem = duoDisc(2.4, 0.1, mats.lensinner, 28);
+        elem.position.set(px, py + ly, plateauZ - 1.42);
+        group.add(elem);
+    });
+    // Flash beside the pill, mic below it
+    const flash = duoDisc(2.2, 0.25, mats.flash, 28);
+    flash.position.set(px - pW / 2 - 4.2, py + pH / 4, backZ - 0.1);
+    group.add(flash);
+    const mic = duoDisc(0.55, 0.1, mats.mic, 12);
+    mic.position.set(px - pW / 2 - 4.2, py - pH / 4, backZ - 0.03);
+    group.add(mic);
+
+    // Buttons on the titanium frame: side button (Touch ID) and Camera
+    // Control on the free edge, volume up/down on the top edge.
+    const btnT = 2.2, btnP = 0.55;
+    const side = duoSlab(btnP * 2, 19, btnT, 0.5, 0.45, mats.buttons, 6);
+    side.position.set(w / 2, h / 2 - 32, 0);
+    group.add(side);
+    const camCtl = duoSlab(btnP * 2, 12, btnT, 0.5, 0.45, mats.buttons, 6);
+    camCtl.position.set(w / 2, -h / 2 + 34, 0);
+    group.add(camCtl);
+    [-w / 2 + 18, -w / 2 + 31].forEach((vx) => {
+        const vol = duoSlab(10, btnP * 2, btnT, 0.5, 0.45, mats.buttons, 6);
+        vol.position.set(vx, h / 2, 0);
+        group.add(vol);
+    });
+    return group;
+}
+
+// Build the iPhone Duo in millimetres. variant 'outer' = closed device seen on
+// its cover display (hinge spine on the left edge); 'inner' = open device in
+// portrait (hinge horizontal across the middle, camera half on top). The model
+// origin is the centre of the respective display; its front faces +Z.
+function buildIPhoneDuoModel(variant) {
+    const S = DUO_SPEC;
+    const mats = duoMaterials();
+    const root = new THREE.Group();
+    root.name = 'iphone-duo-' + variant;
+
+    if (variant === 'outer') {
+        const W = S.closed.w, H = S.closed.h, D = S.closed.d;
+        const halfX = W / 2 - S.halfW / 2;       // halves sit against the free edge
+        const halfZ = S.closedGap / 2 + S.halfT / 2;
+
+        const back = duoBuildHalf('camera', mats, { innerPanel: true });
+        back.position.set(halfX, 0, -halfZ);
+        root.add(back);
+
+        // Cover half flipped about X: its outer face (cover display) now faces
+        // +Z, its hinge edge stays on the left
+        const front = duoBuildHalf('cover', mats, { innerPanel: true, coverShiftX: -halfX });
+        front.rotation.x = Math.PI;
+        front.position.set(halfX, 0, halfZ);
+        root.add(front);
+
+        // Dark seam between the closed halves
+        const seam = duoSlab(S.halfW - 2.5, H - 2.5, S.closedGap + 0.6, 6, 0, mats.seam, 6);
+        seam.position.set(halfX, 0, 0);
+        root.add(seam);
+
+        // Hinge spine: rounded titanium cover along the full left edge, with
+        // domed ends so the hinge-side corners read rounded
+        const capH = 2.0;
+        const spine = new THREE.Group();
+        const spineGeo = new THREE.CylinderGeometry(1, 1, H - 2 * capH, 40, 1, true);
+        spineGeo.scale(S.spineRx, 1, D / 2);
+        spine.add(new THREE.Mesh(spineGeo, mats.spine));
+        [1, -1].forEach((dir) => {
+            const capGeo = new THREE.SphereGeometry(1, 40, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+            capGeo.scale(S.spineRx, capH, D / 2);
+            const cap = new THREE.Mesh(capGeo, mats.spine);
+            cap.position.y = dir * (H / 2 - capH);
+            if (dir < 0) cap.rotation.x = Math.PI;
+            spine.add(cap);
+        });
+        spine.position.set(-W / 2 + S.spineRx, 0, 0);
+        root.add(spine);
+        return root;
+    }
+
+    // Open: lay the book out in its native landscape first (cover half left,
+    // camera half right, inner display facing +Z), then turn it to portrait.
+    const book = new THREE.Group();
+    const halfX = S.halfW / 2 + S.hingeGap / 2;
+
+    const camHalf = duoBuildHalf('camera', mats, { innerPanel: false });
+    camHalf.position.set(halfX, 0, 0);
+    book.add(camHalf);
+
+    // Cover half turned 180° about Z: hinge edge on the right, cover display
+    // still on the back
+    const coverHalf = duoBuildHalf('cover', mats, { innerPanel: false });
+    coverHalf.rotation.z = Math.PI;
+    coverHalf.position.set(-halfX, 0, 0);
+    book.add(coverHalf);
+
+    // Hinge mechanism visible in the seam from the back
+    const hingeGeo = new THREE.CylinderGeometry(1, 1, S.open.h - 6, 24, 1);
+    hingeGeo.scale(0.9, 1, 1.9);
+    const hinge = new THREE.Mesh(hingeGeo, mats.spine);
+    hinge.position.set(0, 0, -S.halfT / 2 + 2.0);
+    book.add(hinge);
+
+    // One sheet of black glass across both halves carries the inner display
+    const gi = S.frameBevel + 0.1, glassT = 0.3;
+    const front = duoSlab(S.open.w - 2 * gi, S.open.h - 2 * gi, glassT, S.cornerR - gi, 0.12, mats.glass, 12);
+    front.position.z = S.halfT / 2 - glassT / 2;
+    book.add(front);
+
+    // Crease along the hinge, just in front of the screen overlay
+    const creaseMat = new THREE.MeshBasicMaterial({
+        map: getDuoCreaseTexture(), transparent: true, depthWrite: false
+    });
+    creaseMat.name = 'crease';
+    const crease = new THREE.Mesh(new THREE.PlaneGeometry(3.0, S.innerScreen.w - 1), creaseMat);
+    crease.position.z = S.halfT / 2 + S.screenLift + 0.05;
+    crease.renderOrder = 2;
+    book.add(crease);
+
+    book.rotation.z = Math.PI / 2;  // landscape -> portrait, camera half on top
+    root.add(book);
+    return root;
+}
+
+// ===== Model loading =====
+
+// Get the scene object for a deviceConfigs key. Procedural models are built
+// synchronously — onLoad runs before this returns, which lets callers swap a
+// variant mid-render — GLBs load asynchronously through GLTFLoader.
+function loadDeviceSceneInto(configKey, onLoad, onError, onProgress) {
+    const config = deviceConfigs[configKey] || deviceConfigs.iphone;
+    if (config.build) {
+        let scene;
+        try {
+            scene = config.build();
+        } catch (error) {
+            if (onError) onError(error);
+            return;
+        }
+        onLoad(scene);
+        return;
+    }
+    const loader = new THREE.GLTFLoader();
+    loader.load(config.modelPath, (gltf) => onLoad(gltf.scene), onProgress, onError);
+}
+
+// Promise flavour of loadDeviceSceneInto → Promise<THREE.Object3D>
+function loadDeviceScene(configKey) {
+    return new Promise((resolve, reject) => loadDeviceSceneInto(configKey, resolve, reject));
+}
+
+// Centre and scale a freshly loaded model and hang it in a pivot group so it
+// rotates around its screen centre. Note: the centering is overwritten by the
+// screen offset, so screenOffset is in the model's own units from its origin.
+function prepareDeviceModel(model, config) {
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Center the model
+    model.position.sub(center);
+
+    // Scale to fit view (3.75 = 2.5 * 1.5 to match 2D scale at 100%)
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale = 3.75 / maxDim;
+    model.scale.setScalar(scale);
+
+    // Offset the model so the screen center is at the pivot's origin
+    const screenOffset = config.screenOffset;
+    const pivot = new THREE.Group();
+    model.position.set(
+        -screenOffset.x * scale,
+        -screenOffset.y * scale,
+        -screenOffset.z * scale
+    );
+    pivot.add(model);
+    return { model, pivot, baseScale: scale };
+}
+
+// Screen overlay plane for a device (the model's own UV mapping may be wrong,
+// so the screenshot is always shown on this plane). Added to the model.
+function createScreenPlaneFor(config) {
+    const planeHeight = 4.3 * config.screenHeightFactor;
+    const planeWidth = planeHeight * config.aspectRatio;
+
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    const material = new THREE.MeshBasicMaterial({
+        color: 0x111111,
+        side: THREE.DoubleSide
+    });
+    const plane = new THREE.Mesh(geometry, material);
+
+    // Position at the screen center, slightly in front of the glass
+    const screenOffset = config.screenOffset;
+    plane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
+
+    // Counter-rotate the screen to cancel out the model's base rotation
+    // This keeps the screen facing forward when the pivot applies the base rotation
+    const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
+    plane.rotation.set(
+        -modelRot.x * Math.PI / 180,
+        -modelRot.y * Math.PI / 180,
+        -modelRot.z * Math.PI / 180
+    );
+    return plane;
+}
+
+// Find the front glass of a GLB model (the largest 'glass' mesh)
+function findScreenMesh(model) {
+    let best = null, bestArea = 0;
+    model.traverse((child) => {
+        if (!child.isMesh || (child.material?.name || '').toLowerCase() !== 'glass') return;
+        child.geometry.computeBoundingBox();
+        const size = new THREE.Vector3();
+        child.geometry.boundingBox.getSize(size);
+        if (size.x * size.y > bestArea) {
+            bestArea = size.x * size.y;
+            best = child;
         }
     });
+    return best;
+}
+
+// Install a loaded model as the main (interactive/export) model
+function installMainModel(model, config) {
+    const prepared = prepareDeviceModel(model, config);
+    phoneModel = prepared.model;
+    baseModelScale = prepared.baseScale;
+    screenMesh = findScreenMesh(phoneModel);
+
+    if (phonePivot) {
+        threeScene.remove(phonePivot);
+    }
+    phonePivot = prepared.pivot;
+    threeScene.add(phonePivot);
+
+    // Create a custom screen plane overlay since the model's UV mapping may be incorrect
+    createScreenOverlay();
+
+    phoneModelLoaded = true;
+
+    // Apply settings from state
+    if (typeof state !== 'undefined') {
+        updateThreeJSBackground();
+        const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
+        const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
+        setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
+
+        // Apply frame color
+        if (ss?.frameColor) {
+            setPhoneFrameColor(ss.frameColor, currentDeviceUiType);
+        }
+
+        // Apply screenshot texture
+        if (state.screenshots.length > 0) {
+            updateScreenTexture();
+        }
+
+        // Refresh canvas now that model is loaded (needed for side previews too).
+        // Not during slide transitions, which suppress it.
+        if (typeof updateCanvas === 'function' && !window.suppressSwitchModelUpdate) {
+            updateCanvas();
+        }
+    }
 }
 
 // Initialize Three.js scene
@@ -200,14 +803,16 @@ function initThreeJS() {
     isThreeJSInitialized = true;
 
     // Load the phone model - check state for which device to use
-    let deviceToLoad = 'iphone';
+    let uiType = 'iphone';
+    let ss = null;
     if (typeof state !== 'undefined' && typeof getScreenshotSettings === 'function') {
-        const ss = getScreenshotSettings();
+        ss = getScreenshotSettings();
         if (ss?.device3D) {
-            deviceToLoad = ss.device3D;
+            uiType = ss.device3D;
         }
     }
-    currentDeviceModel = deviceToLoad;
+    currentDeviceUiType = normalize3DDeviceType(uiType);
+    currentDeviceModel = resolve3DConfigKey(uiType, ss);
     loadPhoneModel();
 
     // Start animation loop
@@ -218,149 +823,60 @@ function initThreeJS() {
 function loadPhoneModel() {
     if (phoneModelLoading) return; // Prevent double loading
     phoneModelLoading = true;
+    const loadGeneration = ++phoneModelLoadGeneration;
 
-    const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-    const loader = new THREE.GLTFLoader();
+    const configKey = deviceConfigs[currentDeviceModel] ? currentDeviceModel : 'iphone';
+    const config = deviceConfigs[configKey];
 
-    loader.load(
-        config.modelPath,
-        (gltf) => {
+    loadDeviceSceneInto(
+        configKey,
+        (scene) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
             phoneModelLoading = false;
-            phoneModel = gltf.scene;
-
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(phoneModel);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-
-            // Center the model
-            phoneModel.position.sub(center);
-
-            // Scale to fit view (3.75 = 2.5 * 1.5 to match 2D scale at 100%)
-            const maxDim = Math.max(size.x, size.y, size.z);
-            baseModelScale = 3.75 / maxDim;
-            phoneModel.scale.setScalar(baseModelScale);
-
-            // Log all meshes to help identify the screen
-            console.log('Phone model meshes:');
-            let blackMeshes = [];
-            phoneModel.traverse((child) => {
-                if (child.isMesh) {
-                    console.log('  Mesh:', child.name, '| Material:', child.material?.name);
-
-                    // Look for screen mesh - in this model it's likely "black" material
-                    const name = (child.name || '').toLowerCase();
-                    const matName = (child.material?.name || '').toLowerCase();
-
-                    if (matName === 'black') {
-                        blackMeshes.push(child);
-                    }
-
-                    if (name.includes('screen') || name.includes('display') ||
-                        matName.includes('screen') || matName.includes('display') ||
-                        matName.includes('emission') || matName.includes('emissive')) {
-                        screenMesh = child;
-                        console.log('  -> Identified as screen mesh');
-                    }
-                }
-            });
-
-            // Find the front glass - that's where the screen actually is
-            // Don't use black meshes, those are small elements like notch/dynamic island
-            let glassMeshes = [];
-            phoneModel.traverse((child) => {
-                if (child.isMesh) {
-                    const matName = (child.material?.name || '').toLowerCase();
-                    if (matName === 'glass') {
-                        child.geometry.computeBoundingBox();
-                        const box = child.geometry.boundingBox;
-                        const size = new THREE.Vector3();
-                        box.getSize(size);
-                        const area = size.x * size.y;
-                        glassMeshes.push({ mesh: child, area, size });
-                        console.log('  Glass mesh:', child.name, 'size:', size.x.toFixed(3), 'x', size.y.toFixed(3), 'area:', area.toFixed(3));
-                    }
-                }
-            });
-
-            // Use the largest glass mesh (front screen glass)
-            if (glassMeshes.length > 0) {
-                glassMeshes.sort((a, b) => b.area - a.area);
-                screenMesh = glassMeshes[0].mesh;
-                console.log('  -> Using largest glass mesh as screen:', screenMesh.name);
-            }
-
-            // Create a pivot group for rotation around screen center
-            const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-            const screenOffset = config.screenOffset;
-
-            phonePivot = new THREE.Group();
-
-            // Offset the phone model so the screen center is at the pivot's origin
-            phoneModel.position.set(
-                -screenOffset.x * baseModelScale,
-                -screenOffset.y * baseModelScale,
-                -screenOffset.z * baseModelScale
-            );
-
-            phonePivot.add(phoneModel);
-            threeScene.add(phonePivot);
-
-            // Create a custom screen plane overlay since the model's UV mapping may be incorrect
-            createScreenOverlay();
-
-            phoneModelLoaded = true;
-
-            // Apply initial settings from state
-            if (typeof state !== 'undefined') {
-                updateThreeJSBackground();
-                const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
-                const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
-                setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
-
-                // Apply frame color
-                if (ss?.frameColor) {
-                    setPhoneFrameColor(ss.frameColor, currentDeviceModel);
-                }
-
-                // Apply screenshot texture
-                if (state.screenshots.length > 0) {
-                    updateScreenTexture();
-                }
-
-                // Refresh canvas now that model is loaded (needed for side previews too)
-                if (typeof updateCanvas === 'function') {
-                    updateCanvas();
-                }
-            }
-
-            console.log('Phone model loaded successfully');
+            installMainModel(scene, config);
+            console.log('Phone model loaded successfully (' + configKey + ')');
+        },
+        (error) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
+            phoneModelLoading = false;
+            console.error('Error loading phone model:', error);
         },
         (progress) => {
             const percent = Math.round(progress.loaded / progress.total * 100);
             console.log('Loading phone model... ' + percent + '%');
-        },
-        (error) => {
-            console.error('Error loading phone model:', error);
         }
     );
 }
 
-// Switch to a different phone model
-function switchPhoneModel(deviceType) {
-    if (!deviceConfigs[deviceType]) {
-        console.error('Unknown device type:', deviceType);
+// Switch to a different phone model. deviceType is the UI device type
+// (screenshot.device3D); devices with several variants (iPhone Duo inner/outer)
+// are resolved against ss (default: the selected screenshot's settings), and
+// the model reloads whenever the resolved variant differs from the loaded one.
+function switchPhoneModel(deviceType, ss) {
+    if (ss === undefined && typeof getScreenshotSettings === 'function' && typeof state !== 'undefined') {
+        ss = getScreenshotSettings();
+    }
+    const uiType = normalize3DDeviceType(deviceType);
+    const configKey = resolve3DConfigKey(deviceType, ss);
+
+    // Not initialized yet: initThreeJS resolves the device from state itself
+    if (!isThreeJSInitialized || !threeScene) {
+        currentDeviceUiType = uiType;
+        currentDeviceModel = configKey;
         return;
     }
 
     // Skip if same device and already loaded or loading
-    if (currentDeviceModel === deviceType && (phoneModelLoaded || phoneModelLoading)) {
+    if (currentDeviceModel === configKey && (phoneModelLoaded || phoneModelLoading)) {
+        currentDeviceUiType = uiType;
         return;
     }
 
     // Update current device type
-    currentDeviceModel = deviceType;
-    phoneModelLoading = false; // Reset so we can load the new one
+    currentDeviceModel = configKey;
+    currentDeviceUiType = uiType;
+    phoneModelLoading = true;
+    const loadGeneration = ++phoneModelLoadGeneration;
 
     // Remove current pivot (which contains the model) from scene
     if (phonePivot && threeScene) {
@@ -389,175 +905,92 @@ function switchPhoneModel(deviceType) {
     phoneModelLoaded = false;
 
     // Load new model using the config
-    const config = deviceConfigs[currentDeviceModel];
-    const loader = new THREE.GLTFLoader();
+    const config = deviceConfigs[configKey];
 
-    loader.load(
-        config.modelPath,
-        (gltf) => {
-            phoneModel = gltf.scene;
-
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(phoneModel);
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-
-            phoneModel.position.sub(center);
-
-            const maxDim = Math.max(size.x, size.y, size.z);
-            baseModelScale = 3.75 / maxDim;
-            phoneModel.scale.setScalar(baseModelScale);
-
-            // Create a pivot group for rotation around screen center
-            const screenOffset = config.screenOffset;
-            phonePivot = new THREE.Group();
-
-            // Offset the phone model so the screen center is at the pivot's origin
-            phoneModel.position.set(
-                -screenOffset.x * baseModelScale,
-                -screenOffset.y * baseModelScale,
-                -screenOffset.z * baseModelScale
-            );
-
-            phonePivot.add(phoneModel);
-            threeScene.add(phonePivot);
-
-            // Create screen overlay for this device
-            createScreenOverlay();
-
-            phoneModelLoaded = true;
-
-            // Apply settings
-            if (typeof state !== 'undefined') {
-                updateThreeJSBackground();
-                const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
-                const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
-                setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
-
-                // Apply frame color
-                if (ss?.frameColor) {
-                    setPhoneFrameColor(ss.frameColor, currentDeviceModel);
-                }
-
-                if (state.screenshots.length > 0) {
-                    updateScreenTexture();
-                }
-
-                // Only call updateCanvas if not suppressed (e.g., during slide transitions)
-                if (typeof updateCanvas === 'function' && !window.suppressSwitchModelUpdate) {
-                    updateCanvas();
-                }
-            }
-
-            console.log(deviceType + ' model loaded successfully');
+    loadDeviceSceneInto(
+        configKey,
+        (scene) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
+            phoneModelLoading = false;
+            installMainModel(scene, config);
+            console.log(configKey + ' model loaded successfully');
+        },
+        (error) => {
+            if (loadGeneration !== phoneModelLoadGeneration) return;
+            phoneModelLoading = false;
+            console.error('Error loading ' + configKey + ' model:', error);
         },
         (progress) => {
             const percent = Math.round(progress.loaded / progress.total * 100);
-            console.log('Loading ' + deviceType + ' model... ' + percent + '%');
-        },
-        (error) => {
-            console.error('Error loading ' + deviceType + ' model:', error);
+            console.log('Loading ' + configKey + ' model... ' + percent + '%');
         }
     );
 }
 
-// Load a phone model into the cache (for side preview rendering with different devices)
-function loadCachedPhoneModel(deviceType) {
-    if (!deviceConfigs[deviceType]) return Promise.reject('Unknown device type');
+// Re-resolve the current device's variant (e.g. after the output size changed
+// from the iPhone Duo outer display to the inner one) and reload if needed
+function refresh3DDeviceVariant() {
+    if (!isThreeJSInitialized) return;
+    switchPhoneModel(currentDeviceUiType);
+}
+
+// Load a phone model into the cache (for side preview rendering with different
+// devices). deviceType is a config key or a UI type (resolved against ss).
+// Procedural models are cached synchronously.
+function loadCachedPhoneModel(deviceType, ss) {
+    const configKey = resolve3DConfigKey(deviceType, ss);
+    const config = deviceConfigs[configKey];
 
     // Already loaded or loading
-    if (phoneModelCache[deviceType]?.loaded) {
-        return Promise.resolve(phoneModelCache[deviceType]);
+    if (phoneModelCache[configKey]?.loaded) {
+        return Promise.resolve(phoneModelCache[configKey]);
     }
-    if (phoneModelCache[deviceType]?.loading) {
-        return phoneModelCache[deviceType].loadingPromise;
+    if (phoneModelCache[configKey]?.loading) {
+        return phoneModelCache[configKey].loadingPromise;
     }
 
-    const config = deviceConfigs[deviceType];
-    const loader = new THREE.GLTFLoader();
+    phoneModelCache[configKey] = { loading: true, loaded: false };
 
-    phoneModelCache[deviceType] = { loading: true, loaded: false };
-
-    phoneModelCache[deviceType].loadingPromise = new Promise((resolve, reject) => {
-        loader.load(
-            config.modelPath,
-            (gltf) => {
-                const model = gltf.scene;
-
-                // Center and scale the model
-                const box = new THREE.Box3().setFromObject(model);
-                const center = box.getCenter(new THREE.Vector3());
-                const size = box.getSize(new THREE.Vector3());
-
-                model.position.sub(center);
-
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const modelBaseScale = 3.75 / maxDim;
-                model.scale.setScalar(modelBaseScale);
-
-                // Create pivot for this model
-                const screenOffset = config.screenOffset;
-                const pivot = new THREE.Group();
-
-                model.position.set(
-                    -screenOffset.x * modelBaseScale,
-                    -screenOffset.y * modelBaseScale,
-                    -screenOffset.z * modelBaseScale
-                );
-
-                pivot.add(model);
+    const loadingPromise = new Promise((resolve, reject) => {
+        loadDeviceSceneInto(
+            configKey,
+            (scene) => {
+                const prepared = prepareDeviceModel(scene, config);
 
                 // Create screen plane for this model
-                const aspectRatio = config.aspectRatio;
-                const planeHeight = 4.3 * config.screenHeightFactor;
-                const planeWidth = planeHeight * aspectRatio;
+                const screenPlane = createScreenPlaneFor(config);
+                prepared.model.add(screenPlane);
 
-                const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
-                const material = new THREE.MeshBasicMaterial({
-                    color: 0x111111,
-                    side: THREE.DoubleSide
-                });
-
-                const screenPlane = new THREE.Mesh(geometry, material);
-                screenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
-
-                const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
-                screenPlane.rotation.set(
-                    -modelRot.x * Math.PI / 180,
-                    -modelRot.y * Math.PI / 180,
-                    -modelRot.z * Math.PI / 180
-                );
-
-                model.add(screenPlane);
-
-                phoneModelCache[deviceType] = {
-                    model: model,
-                    pivot: pivot,
+                phoneModelCache[configKey] = {
+                    model: prepared.model,
+                    pivot: prepared.pivot,
                     screenPlane: screenPlane,
-                    baseScale: modelBaseScale,
+                    baseScale: prepared.baseScale,
                     loaded: true,
                     loading: false
                 };
 
-                console.log('Cached ' + deviceType + ' model for side previews');
-                resolve(phoneModelCache[deviceType]);
+                console.log('Cached ' + configKey + ' model for side previews');
+                resolve(phoneModelCache[configKey]);
             },
-            undefined,
             (error) => {
-                console.error('Error loading cached ' + deviceType + ' model:', error);
-                phoneModelCache[deviceType] = { loading: false, loaded: false };
+                console.error('Error loading cached ' + configKey + ' model:', error);
+                phoneModelCache[configKey] = { loading: false, loaded: false };
                 reject(error);
             }
         );
     });
-
-    return phoneModelCache[deviceType].loadingPromise;
+    // A procedural build has already replaced the entry with the loaded one
+    if (phoneModelCache[configKey].loading) {
+        phoneModelCache[configKey].loadingPromise = loadingPromise;
+    }
+    return loadingPromise;
 }
 
 // Preload all device models for side previews
 function preloadAllPhoneModels() {
-    const deviceTypes = Object.keys(deviceConfigs);
-    return Promise.all(deviceTypes.map(type => loadCachedPhoneModel(type).catch(() => null)));
+    const configKeys = Object.keys(deviceConfigs);
+    return Promise.all(configKeys.map(key => loadCachedPhoneModel(key).catch(() => null)));
 }
 
 // Create a custom screen plane overlay with correct UV mapping
@@ -571,41 +1004,13 @@ function createScreenOverlay() {
     }
 
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-
-    // Use device-specific aspect ratio and screen size
-    const aspectRatio = config.aspectRatio;
-    const planeHeight = 4.3 * config.screenHeightFactor;
-    const planeWidth = planeHeight * aspectRatio;
-
-    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
-    const material = new THREE.MeshBasicMaterial({
-        color: 0x111111,
-        side: THREE.DoubleSide
-    });
-
-    customScreenPlane = new THREE.Mesh(geometry, material);
-
-    // Position at center of phone, slightly in front of glass
-    const screenOffset = config.screenOffset;
-    customScreenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
-
-    // Counter-rotate the screen to cancel out the model's base rotation
-    // This keeps the screen facing forward when the pivot applies the base rotation
-    const modelRot = config.modelRotation || { x: 0, y: 0, z: 0 };
-    customScreenPlane.rotation.set(
-        -modelRot.x * Math.PI / 180,
-        -modelRot.y * Math.PI / 180,
-        -modelRot.z * Math.PI / 180
-    );
+    customScreenPlane = createScreenPlaneFor(config);
 
     // Add directly to phoneModel so it moves with it
     phoneModel.add(customScreenPlane);
 
     // basePositionOffset is no longer needed since we use pivot-based rotation
     basePositionOffset.y = 0;
-
-    console.log('Created screen overlay for ' + currentDeviceModel + ' at:', customScreenPlane.position);
-    console.log('Plane size:', planeWidth.toFixed(4), 'x', planeHeight.toFixed(4));
 }
 
 // Create a rounded corner version of the screenshot
@@ -660,6 +1065,16 @@ function updateScreenTexture() {
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
     const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
     const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
+
+    // Bake the notch / Dynamic Island onto the 3D screen texture so it follows
+    // the model (the 2D notch options also apply in 3D).
+    const notch = screenshot.screenshot && screenshot.screenshot.frame && screenshot.screenshot.frame.notch;
+    if (notch && notch !== 'none' && typeof drawNotchShape === 'function') {
+        try {
+            const nctx = roundedImage.getContext('2d');
+            drawNotchShape(nctx, 0, 0, roundedImage.width, roundedImage.height, cornerRadius, notch);
+        } catch (e) { /* ignore */ }
+    }
 
     screenTexture = new THREE.Texture(roundedImage);
     screenTexture.needsUpdate = true;
@@ -735,7 +1150,19 @@ function animateThreeJS() {
 
 // Render 3D phone only (with transparent background) to be composited
 function renderThreeJSToCanvas(targetCanvas, width, height) {
-    if (!threeRenderer || !threeScene || !threeCamera || !phonePivot) return;
+    if (!threeRenderer || !threeScene || !threeCamera) return;
+
+    // The selected screenshot may now need another variant of a procedural
+    // device (e.g. the output size moved from the iPhone Duo outer display to
+    // the inner one). Those build synchronously, so swap before rendering.
+    if (typeof state !== 'undefined' && typeof getScreenshotSettings === 'function') {
+        const cur = getScreenshotSettings();
+        const wantKey = resolve3DConfigKey(cur?.device3D || 'iphone', cur);
+        if (wantKey !== currentDeviceModel && deviceConfigs[wantKey].build) {
+            switchPhoneModel(cur.device3D, cur);
+        }
+    }
+    if (!phonePivot) return;
 
     const dims = { width: width || 1290, height: height || 2796 };
 
@@ -783,9 +1210,9 @@ function renderThreeJSToCanvas(targetCanvas, width, height) {
     threeScene.background = null;
     threeRenderer.setClearColor(0x000000, 0); // Fully transparent clear color
 
-    // Temporarily resize renderer
+    // Temporarily resize renderer - render at 2x for supersampled antialiasing
     const oldSize = { width: 400, height: 700 };
-    threeRenderer.setSize(dims.width, dims.height);
+    threeRenderer.setSize(dims.width * 2, dims.height * 2);
     threeCamera.aspect = dims.width / dims.height;
     threeCamera.updateProjectionMatrix();
 
@@ -795,9 +1222,15 @@ function renderThreeJSToCanvas(targetCanvas, width, height) {
     // Render with transparency
     threeRenderer.render(threeScene, threeCamera);
 
-    // Draw to target canvas (compositing the 3D phone onto existing content)
+    // Downscale to target canvas (compositing the 3D phone onto existing content)
     const ctx = targetCanvas.getContext('2d');
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    const prevQuality = ctx.imageSmoothingQuality;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(threeRenderer.domElement, 0, 0, dims.width, dims.height);
+    ctx.imageSmoothingEnabled = prevSmoothing;
+    ctx.imageSmoothingQuality = prevQuality;
 
     // Restore size, background, and model transforms
     threeRenderer.setSize(oldSize.width, oldSize.height);
@@ -818,12 +1251,13 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
     const ss = screenshot.screenshot;
     const dims = { width: width || 1290, height: height || 2796 };
 
-    // Determine which device model this screenshot uses
-    const screenshotDeviceType = ss.device3D || 'iphone';
-    const config = deviceConfigs[screenshotDeviceType] || deviceConfigs.iphone;
+    // Determine which device model (config key) this screenshot uses
+    const screenshotDeviceType = normalize3DDeviceType(ss.device3D || 'iphone');
+    const configKey = resolve3DConfigKey(ss.device3D || 'iphone', ss);
+    const config = deviceConfigs[configKey];
 
     // Check if this screenshot uses the same device as currently active
-    const useCurrentModel = screenshotDeviceType === currentDeviceModel && phonePivot;
+    const useCurrentModel = configKey === currentDeviceModel && phonePivot;
 
     // Get the model to use (either current or from cache)
     let pivotToUse, screenPlaneToUse;
@@ -834,15 +1268,20 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         screenPlaneToUse = customScreenPlane;
     } else {
         // Use cached model for different device
-        const cached = phoneModelCache[screenshotDeviceType];
+        let cached = phoneModelCache[configKey];
+        if (!cached?.loaded && config.build) {
+            // Procedural models cache synchronously - no need to skip a frame
+            loadCachedPhoneModel(configKey).catch(() => null);
+            cached = phoneModelCache[configKey];
+        }
         if (!cached?.loaded) {
             // Model not cached yet - trigger loading and skip this render
-            loadCachedPhoneModel(screenshotDeviceType).then(() => {
+            loadCachedPhoneModel(configKey).then(() => {
                 // Trigger a re-render once model is loaded
                 if (typeof updateCanvas === 'function') {
                     updateCanvas();
                 }
-            });
+            }).catch(() => null);
             return;
         }
         pivotToUse = cached.pivot;
@@ -886,12 +1325,23 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
     }
 
     // Apply frame color for this screenshot
+    const savedMaterialColors = [];
     if (ss.frameColor) {
         if (useCurrentModel) {
+            if (phoneModel) {
+                phoneModel.traverse((child) => {
+                    if (child.isMesh && child.material?.color) {
+                        savedMaterialColors.push({ material: child.material, color: child.material.color.clone() });
+                    }
+                });
+            }
             setPhoneFrameColor(ss.frameColor, screenshotDeviceType);
         } else {
-            setCachedModelFrameColor(ss.frameColor, screenshotDeviceType);
+            setCachedModelFrameColor(ss.frameColor, configKey);
         }
+    } else if (!useCurrentModel && config.build) {
+        // Cached procedural models keep the last colors applied to them; reset to the default finish
+        setCachedModelFrameColor(null, configKey);
     }
 
     // Apply rotation for this screenshot + model base rotation
@@ -955,13 +1405,10 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         screenPlaneToUse.material = oldMaterial;
     }
 
-    // Restore frame color on current model if we changed it
-    if (useCurrentModel && ss.frameColor && typeof state !== 'undefined') {
-        const currentSS = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : null;
-        if (currentSS?.frameColor) {
-            setPhoneFrameColor(currentSS.frameColor, currentDeviceModel);
-        }
-    }
+    // Restore original frame colors on current model if we changed them
+    savedMaterialColors.forEach(({ material, color }) => {
+        material.color.copy(color);
+    });
 
     // Clean up: remove cached model from scene and restore current model visibility
     if (!useCurrentModel) {
@@ -1034,14 +1481,44 @@ function updateThreeJSBackground() {
 
 // Cleanup
 function disposeThreeJS() {
+    phoneModelLoadGeneration++;
     if (screenTexture) {
         screenTexture.dispose();
+        screenTexture = null;
+    }
+    if (threeScene) {
+        threeScene.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry?.dispose();
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((material) => {
+                    if (!material) return;
+                    material.map?.dispose();
+                    material.dispose();
+                });
+            }
+        });
     }
     if (threeRenderer) {
         threeRenderer.dispose();
+        if (threeRenderer.domElement?.parentNode) {
+            threeRenderer.domElement.parentNode.removeChild(threeRenderer.domElement);
+        }
     }
+    threeRenderer = null;
+    threeScene = null;
+    threeCamera = null;
+    phonePivot = null;
+    phoneModel = null;
+    customScreenPlane = null;
+    screenMesh = null;
+    // Cached models and the Duo environment map belong to the old renderer
+    phoneModelCache = {};
+    duoEnvMap = null;
+    duoEnvMapRenderer = null;
     isThreeJSInitialized = false;
     phoneModelLoaded = false;
+    phoneModelLoading = false;
 }
 
 // Interactive rotation/movement for 2D canvas in 3D mode
@@ -1107,8 +1584,8 @@ function setup3DCanvasInteraction() {
             // Regular drag: rotate
             if (!ss.rotation3D) ss.rotation3D = { x: 0, y: 0, z: 0 };
 
-            ss.rotation3D.y = Math.max(-45, Math.min(45, ss.rotation3D.y + deltaX * 0.5));
-            ss.rotation3D.x = Math.max(-45, Math.min(45, ss.rotation3D.x + deltaY * 0.5));
+            ss.rotation3D.y = Math.max(-90, Math.min(90, ss.rotation3D.y + deltaX * 0.5));
+            ss.rotation3D.x = Math.max(-90, Math.min(90, ss.rotation3D.x + deltaY * 0.5));
 
             // Update sliders
             document.getElementById('rotation-3d-y').value = ss.rotation3D.y;

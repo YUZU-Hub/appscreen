@@ -1,0 +1,103 @@
+# Production deployment — fully automatic updates.
+#
+# Runs the published images (built by CI on every merge to main) and a Watchtower
+# container that auto-pulls the new images and restarts the services within a
+# couple of minutes. After deploying this once, merging to main is all it takes:
+#
+#   merge to main  ->  CI builds & pushes :latest  ->  Watchtower redeploys
+#
+# First-time setup on the server:
+#   1) Authenticate to GHCR so images can be pulled (only needed if the packages
+#      are private):  docker login ghcr.io -u <github-user> -p <PAT-with-read:packages>
+#   2) (public exposure) put your Cloudflare tunnel token in a .env file:
+#        TUNNEL_TOKEN=xxxxx
+#      and route the public hostname's paths in the Cloudflare dashboard:
+#        appscreen.agence-zen.com/mcp*  ->  http://appscreen-mcp:3000
+#        appscreen.agence-zen.com/*     ->  http://appscreen:80
+#   3) (optional) protect the site with a password (login page): add to the same
+#      .env file
+#        SITE_PASSWORD=your-password
+#      Leaving it unset keeps the site open.
+#   4) docker compose -f docker-compose.prod.yml --profile tunnel up -d
+#
+# Projects are persisted on a host volume (./data/projects) so they survive
+# every redeploy.
+
+services:
+  # Web app (static, nginx).
+  appscreen:
+    image: ghcr.io/flocom/appscreen:latest
+    container_name: appscreen
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      # Site password (login page). Leave SITE_PASSWORD empty/unset to keep the
+      # site open. To protect it, put SITE_PASSWORD=yourpassword in a .env file
+      # next to this compose, then redeploy: visitors get a login page.
+      SITE_PASSWORD: ${SITE_PASSWORD:-}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # MCP server (renders screenshots + stores projects on disk).
+  appscreen-mcp:
+    image: ghcr.io/flocom/appscreen-mcp:latest
+    container_name: appscreen-mcp
+    restart: unless-stopped
+    ports:
+      # Loopback-only: cloudflared reaches this service over the compose network
+      # (http://appscreen-mcp:3000), not the host port. For LAN exposure, remove
+      # the "127.0.0.1:" prefix AND set MCP_AUTH_TOKEN.
+      - "127.0.0.1:3000:3000"
+    environment:
+      MCP_TRANSPORT: http
+      PORT: "3000"
+      # Optional shared auth token. When set, all REST + MCP endpoints require
+      # "Authorization: Bearer <token>" (or X-Auth-Token; SSE/file downloads accept ?token=).
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+      # Confine path-form image inputs and outputPath writes to the mounted /work.
+      MCP_IMAGE_DIR: /work
+      MCP_OUTPUT_DIR: /work
+      # Persisted project store (mounted below) — survives redeploys.
+      APPSCREEN_PROJECTS_DIR: /data/projects
+      APPSCREEN_FONT_FAMILY: "DejaVu Sans"
+      # Lock down to your web app's origin in production, e.g. https://appscreen.agence-zen.com
+      MCP_CORS_ORIGIN: ${MCP_CORS_ORIGIN:-*}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+    volumes:
+      - ./data/projects:/data/projects
+      - ./work:/work
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Auto-deploy: watches the two labeled services and redeploys new images.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # If GHCR packages are private, mount host docker auth so Watchtower can pull:
+      # - ~/.docker/config.json:/config.json:ro
+    command: --cleanup --label-enable --interval 120
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+
+  # Optional public HTTPS via Cloudflare Tunnel. Enable with `--profile tunnel`.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: appscreen-cloudflared
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - appscreen
+      - appscreen-mcp
+    restart: unless-stopped
