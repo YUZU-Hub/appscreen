@@ -191,6 +191,7 @@ Built something with this tool? Add your app to the list by submitting a pull re
 | Navegatime | time tracking for workers and business functions | [play.google.com](https://play.google.com/store/apps/details?id=com.companyname.NavegaTime) |
 | Sommo | Your personal wine journey — scan labels, learn wine, and build your tasting journal | [sommo.app](https://sommo.app) |
 | Dandelion: Write and Let Go | An ephemeral journal for writing to let go, not save. | [apple.com](https://apps.apple.com/us/app/dandelion-write-and-let-go/id6757363901) |
+| LearnMe PRO | Learn English with AI | [learnme.pro|(https://learnme.pro) |
 | *Your app here* | *Submit a PR to add your app* | *Your app link* |
 
 ## License
