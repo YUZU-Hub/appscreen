@@ -53,7 +53,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 - **Auto-Save**: All changes saved automatically to browser storage
 - **Screenshot Count**: See screenshot counts in project selector
 - **Backup & Restore**: Export/import all projects (including images) as one JSON file
-- **Settings Export / Folder Import**: Save a project's settings as a small, versionable `*.appscreen.json` (no image data) that links screenshots by path, and re-import the whole folder as a new project:
+- **Settings Export / Folder Import**: Build a project straight from a screenshot folder, and save its settings as a small, versionable `*.appscreen.json` (no image data) that links screenshots by path:
 
   ```
   MyApp/
@@ -65,7 +65,11 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
       └── en/01_home.png
   ```
 
-  Paths in the JSON are relative to the JSON file (`<Device>/<language>/<file>`). On import, screenshots are matched by exact path first, then by base filename inside `<Device>/<language>/`, so files may be named `01_home.png` or `01_home_de.png`. Language folders that exist on disk but are not in the JSON yet (e.g. a new `fr/`) are picked up automatically. Missing files are reported and left blank.
+  **Import Folder** always creates a new project:
+  - *Without* a settings file, every `<Device>/<language>/<file>` becomes a screenshot with default styling. Files with the same base name across language folders (`en/01_home.png`, `de/01_home_de.png`) are combined into one screenshot with all its languages. Language folders may use app codes (`de`, `pt-br`) or store locales (`de-DE`, `en-US`, `zh-Hans`).
+  - *With* a settings file, its settings are applied. Screenshots are matched by exact path first, then by base filename inside `<Device>/<language>/`. New language folders (e.g. `fr/`) and new files not yet in the JSON are added automatically. Missing files are reported and left blank.
+
+  Paths in the JSON are relative to the JSON file.
 
 ### User Interface
 - **Dark Theme**: Easy on the eyes for extended editing sessions

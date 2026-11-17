@@ -1880,7 +1880,12 @@ function resetStateToDefaults() {
     state.customHeight = 2868;
     state.currentLanguage = 'en';
     state.projectLanguages = ['en'];
-    state.defaults = {
+    state.defaults = createDefaultSettings();
+}
+
+// Fresh default settings for a new project (also used by folder import)
+function createDefaultSettings() {
+    return {
         background: {
             type: 'gradient',
             gradient: {
@@ -2035,7 +2040,7 @@ function buildSettingsExport() {
             projectLanguages: state.projectLanguages,
             selectedIndex: state.selectedIndex
         },
-        defaults: { ...state.defaults, background: serializeBackground(state.defaults.background) },
+        defaults: serializeDefaults(state.defaults),
         screenshots: state.screenshots.map(s => {
             const images = {};
             Object.keys(s.localizedImages || {}).forEach(lang => {
@@ -2089,13 +2094,54 @@ async function readImageFile(file) {
     return src;
 }
 
-// Import a project folder chosen via <input webkitdirectory>.
-// Creates a new project; never overwrites existing ones.
+// Map a language folder name to a project language code.
+// Accepts app codes (de, pt-br) and store/fastlane style locales (de-DE, en-US, zh-Hans).
+function normalizeLanguageFolder(folder) {
+    const lower = String(folder || '').toLowerCase().replace('_', '-');
+    if (languageFlags[lower]) return lower;
+    const aliases = { 'zh-hans': 'zh', 'zh-cn': 'zh', 'zh-hant': 'zh-tw', 'zh-hk': 'zh-tw', 'nb': 'no', 'nn': 'no' };
+    if (aliases[lower]) return aliases[lower];
+    const primary = lower.split('-')[0];
+    if (aliases[primary]) return aliases[primary];
+    return languageFlags[primary] ? primary : null;
+}
+
+// Canonical device label from a folder name (iphone -> iPhone)
+function normalizeDeviceFolder(folder) {
+    const lower = String(folder || '').toLowerCase();
+    if (lower === 'iphone') return 'iPhone';
+    if (lower === 'ipad') return 'iPad';
+    return /^[\w .-]{1,40}$/.test(folder || '') ? folder : null;
+}
+
+// Make sure a text settings object has (empty) entries for every language
+function ensureTextLanguages(text, langs) {
+    if (!text) return text;
+    for (const kind of ['headline', 'subheadline']) {
+        const listKey = kind + 'Languages';
+        const textsKey = kind + 's';
+        if (!Array.isArray(text[listKey])) text[listKey] = ['en'];
+        if (!text[textsKey]) text[textsKey] = {};
+        langs.forEach(lang => {
+            if (!text[listKey].includes(lang)) text[listKey].push(lang);
+            if (text[textsKey][lang] === undefined) text[textsKey][lang] = '';
+        });
+    }
+    return text;
+}
+
+// Import a project folder chosen via <input webkitdirectory>:
+//   <Project>/[<Project>.appscreen.json]
+//   <Project>/<Device>/<language>/<file>
+// The settings file is optional. Without it, screenshots are built from the
+// folder structure with default styling; with it, its settings are applied
+// and screenshots on disk that it doesn't mention are added with its defaults.
+// Always creates a new project; never overwrites existing ones.
 async function importSettingsFolder(fileList) {
     const files = Array.from(fileList);
     const relPath = f => f.webkitRelativePath || f.name;
 
-    // Pick the shallowest *.json that is an appscreen settings file
+    // Optional settings file: the shallowest *.json that is ours
     const jsonFiles = files
         .filter(f => f.name.toLowerCase().endsWith('.json'))
         .sort((a, b) => relPath(a).split('/').length - relPath(b).split('/').length);
@@ -2111,43 +2157,59 @@ async function importSettingsFolder(fileList) {
             }
         } catch (e) { /* not ours, keep looking */ }
     }
-    if (!settings) {
-        throw new Error('No appscreen settings file (*.appscreen.json) found in this folder.');
-    }
-    if (settings.version > SETTINGS_VERSION) {
-        throw new Error('This settings file was made by a newer version of the app.');
-    }
-    if (!Array.isArray(settings.screenshots)) {
-        throw new Error('Settings file has no screenshots list.');
+    if (settings) {
+        if (settings.version > SETTINGS_VERSION) {
+            throw new Error('This settings file was made by a newer version of the app.');
+        }
+        if (!Array.isArray(settings.screenshots)) {
+            throw new Error('Settings file has no screenshots list.');
+        }
     }
 
-    // Index image files by their path relative to the settings file
-    const baseParts = relPath(settingsFile).split('/').slice(0, -1);
-    const images = []; // { rel, relLower, device, lang, base, file }
+    // Project root: folder of the settings file, else the chosen folder itself
+    const firstPath = relPath(settingsFile || files[0] || { name: '' });
+    const baseParts = settingsFile ? firstPath.split('/').slice(0, -1) : firstPath.split('/').slice(0, 1);
+
+    // Index image files by their path relative to the project root
+    const images = []; // { rel, relLower, device, deviceType, lang, base, file, claimed }
     for (const f of files) {
         if (!IMAGE_FILE_PATTERN.test(f.name)) continue;
         const parts = relPath(f).split('/');
         if (!baseParts.every((p, i) => parts[i] === p)) continue;
         const relParts = parts.slice(baseParts.length);
+        const isLayout = relParts.length === 3;
         images.push({
             rel: relParts.join('/'),
             relLower: relParts.join('/').toLowerCase(),
-            device: relParts.length === 3 ? relParts[0].toLowerCase() : null,
-            lang: relParts.length === 3 ? relParts[1].toLowerCase() : null,
+            device: isLayout ? relParts[0].toLowerCase() : null,
+            deviceType: isLayout ? normalizeDeviceFolder(relParts[0]) : null,
+            lang: isLayout ? normalizeLanguageFolder(relParts[1]) : null,
             base: getBaseFilename(f.name).toLowerCase(),
-            file: f
+            file: f,
+            claimed: false
         });
     }
 
-    const knownLangs = new Set(Object.keys(languageFlags));
     const projectLanguages = new Set(
-        Array.isArray(settings.project?.projectLanguages) ? settings.project.projectLanguages : ['en']
+        Array.isArray(settings?.project?.projectLanguages) ? settings.project.projectLanguages : []
     );
     const missing = [];
     let loadedImages = 0;
 
+    const loadInto = async (localizedImages, lang, match) => {
+        match.claimed = true;
+        try {
+            localizedImages[lang] = { src: await readImageFile(match.file), name: match.file.name };
+            projectLanguages.add(lang);
+            loadedImages++;
+        } catch (e) {
+            missing.push(match.rel);
+        }
+    };
+
+    // 1) Screenshots described by the settings file
     const screenshots = [];
-    for (const s of settings.screenshots) {
+    for (const s of (settings?.screenshots || [])) {
         if (!s || typeof s !== 'object') continue;
         const deviceType = /^[\w .-]{1,40}$/.test(s.deviceType || '') ? s.deviceType : 'iPhone';
         const deviceLower = sanitizePathSegment(deviceType).toLowerCase();
@@ -2159,7 +2221,7 @@ async function importSettingsFolder(fileList) {
         // that holds a file with the same base name (lets you drop in new languages)
         const langs = new Set(Object.keys(refs));
         images.forEach(img => {
-            if (img.device === deviceLower && knownLangs.has(img.lang) && bases.has(img.base)) langs.add(img.lang);
+            if (img.device === deviceLower && img.lang && bases.has(img.base)) langs.add(img.lang);
         });
 
         const localizedImages = {};
@@ -2171,13 +2233,7 @@ async function importSettingsFolder(fileList) {
                 missing.push(refs[lang] || `${deviceType}/${lang}/${refNames[0] || '?'}`);
                 continue;
             }
-            try {
-                localizedImages[lang] = { src: await readImageFile(match.file), name: match.file.name };
-                projectLanguages.add(lang);
-                loadedImages++;
-            } catch (e) {
-                missing.push(match.rel);
-            }
+            await loadInto(localizedImages, lang, match);
         }
 
         screenshots.push({
@@ -2194,28 +2250,88 @@ async function importSettingsFolder(fileList) {
         });
     }
 
-    // Unique project name
-    let name = sanitizeDisplayName(settings.project?.name, 'Imported Project');
+    // 2) Remaining files in <Device>/<lang>/ become new screenshots with default
+    //    styling, one per device + base filename, sorted naturally (01, 02, … 10)
+    const defaults = (settings?.defaults && typeof settings.defaults === 'object')
+        ? settings.defaults
+        : serializeDefaults(createDefaultSettings());
+    const groups = new Map();
+    images.forEach(img => {
+        if (img.claimed || !img.deviceType || !img.lang) return;
+        const key = img.device + '/' + img.base;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(img);
+    });
+    const deviceRank = d => (d === 'iphone' ? 0 : d === 'ipad' ? 1 : 2);
+    const sortedGroups = [...groups.values()].sort((a, b) =>
+        deviceRank(a[0].device) - deviceRank(b[0].device) ||
+        a[0].device.localeCompare(b[0].device) ||
+        a[0].base.localeCompare(b[0].base, undefined, { numeric: true }));
+
+    let addedFromFolder = 0;
+    for (const group of sortedGroups) {
+        const localizedImages = {};
+        for (const img of group) {
+            if (localizedImages[img.lang]) continue; // e.g. home.png and home_de.png in de/
+            await loadInto(localizedImages, img.lang, img);
+        }
+        if (!Object.keys(localizedImages).length) continue;
+        const nameSource = group.find(img => img.lang === 'en') || group[0];
+        screenshots.push({
+            src: '',
+            name: sanitizeDisplayName(nameSource.file.name, 'Screenshot'),
+            deviceType: group[0].deviceType,
+            localizedImages,
+            background: JSON.parse(JSON.stringify(defaults.background)),
+            screenshot: JSON.parse(JSON.stringify(defaults.screenshot)),
+            text: JSON.parse(JSON.stringify(defaults.text)),
+            elements: JSON.parse(JSON.stringify(defaults.elements || [])),
+            popouts: [],
+            overrides: {}
+        });
+        addedFromFolder++;
+    }
+
+    // Images we couldn't place (wrong depth, unknown language folder)
+    const skipped = images.filter(img => !img.claimed).map(img => img.rel);
+
+    if (!screenshots.length) {
+        throw new Error('No screenshots found. Expected <Device>/<language>/<file>, e.g. iPhone/en/01_home.png');
+    }
+
+    // Every screenshot gets text slots for every project language
+    if (!projectLanguages.size) projectLanguages.add('en');
+    const langList = [...projectLanguages];
+    screenshots.forEach(s => ensureTextLanguages(s.text, langList));
+    ensureTextLanguages(defaults.text, langList);
+
+    // Unique project name (settings file name, else the chosen folder's name)
+    let name = sanitizeDisplayName(settings?.project?.name || baseParts[baseParts.length - 1], 'Imported Project');
     if (projects.some(p => p.name === name)) {
         let n = 2;
         while (projects.some(p => p.name === `${name} (${n})`)) n++;
         name = `${name} (${n})`;
     }
 
+    // Without settings, pick an iPad output size if the folder only has iPad shots
+    const p = settings?.project || {};
+    let outputDevice = (p.outputDevice === 'custom' || deviceDimensions[p.outputDevice]) ? p.outputDevice : undefined;
+    if (!settings && screenshots.every(s => s.deviceType === 'iPad')) outputDevice = 'ipad-12.9';
+    const currentLanguage = langList.includes(p.currentLanguage) ? p.currentLanguage
+        : (langList.includes('en') ? 'en' : langList[0]);
+
     const id = 'project_' + Date.now();
-    const p = settings.project || {};
     const record = {
         id,
         formatVersion: 2,
         screenshots,
-        selectedIndex: Math.min(Math.max(0, p.selectedIndex | 0), Math.max(0, screenshots.length - 1)),
-        // Unknown device ids would break getCanvasDimensions(); fall back to default
-        outputDevice: (p.outputDevice === 'custom' || deviceDimensions[p.outputDevice]) ? p.outputDevice : undefined,
+        selectedIndex: Math.min(Math.max(0, p.selectedIndex | 0), screenshots.length - 1),
+        outputDevice,
         customWidth: p.customWidth > 0 ? p.customWidth : undefined,
         customHeight: p.customHeight > 0 ? p.customHeight : undefined,
-        currentLanguage: p.currentLanguage,
-        projectLanguages: [...projectLanguages],
-        defaults: settings.defaults
+        currentLanguage,
+        projectLanguages: langList,
+        defaults
     };
 
     await new Promise((resolve, reject) => {
@@ -2228,7 +2344,21 @@ async function importSettingsFolder(fileList) {
     saveProjectsMeta();
     await switchProject(id);
 
-    return { name, screenshots: screenshots.length, images: loadedImages, missing };
+    return {
+        name,
+        fromSettings: !!settings,
+        screenshots: screenshots.length,
+        addedFromFolder,
+        languages: langList,
+        images: loadedImages,
+        missing,
+        skipped
+    };
+}
+
+// Defaults in their persisted form (background image as data URL)
+function serializeDefaults(defaults) {
+    return { ...defaults, background: serializeBackground(defaults.background) };
 }
 
 // Rename current project
@@ -4142,11 +4272,22 @@ function setupEventListeners() {
         if (!fileList?.length || !db) return;
         try {
             const result = await importSettingsFolder(fileList);
-            let msg = `Imported "${result.name}": ${result.screenshots} screenshots, ${result.images} images.`;
+            let msg = `Imported "${result.name}": ${result.screenshots} screenshots, ${result.images} images` +
+                ` (${result.languages.join(', ')}).`;
+            if (result.fromSettings && result.addedFromFolder) {
+                msg += `\n${result.addedFromFolder} screenshot(s) not in the settings file were added with default styling.`;
+            } else if (!result.fromSettings) {
+                msg += '\nNo settings file found: built from the folder structure with default styling.';
+            }
             if (result.missing.length) {
                 const shown = result.missing.slice(0, 10).join('\n  ');
                 const more = result.missing.length > 10 ? `\n  … and ${result.missing.length - 10} more` : '';
                 msg += `\n\nNot found (left blank):\n  ${shown}${more}`;
+            }
+            if (result.skipped.length) {
+                const shown = result.skipped.slice(0, 10).join('\n  ');
+                const more = result.skipped.length > 10 ? `\n  … and ${result.skipped.length - 10} more` : '';
+                msg += `\n\nSkipped (expected <Device>/<language>/<file>):\n  ${shown}${more}`;
             }
             alert(msg);
         } catch (err) {
