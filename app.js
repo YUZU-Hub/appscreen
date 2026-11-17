@@ -3608,7 +3608,11 @@ function setupEventListeners() {
     });
 
     // File upload
-    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files); // copies the FileList synchronously
+        // Reset so picking the same file again (e.g. after deleting it) fires 'change'
+        e.target.value = '';
+    });
 
     // Add screenshots button
     document.getElementById('add-screenshots-btn').addEventListener('click', () => fileInput.click());
