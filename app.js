@@ -6216,6 +6216,50 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
 
 let draggedScreenshotIndex = null;
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+}
+
+// Swap the name label for an inline input; Enter/blur saves, Escape cancels
+function startScreenshotRename(item, index) {
+    const nameEl = item.querySelector('.screenshot-name');
+    const screenshot = state.screenshots[index];
+    if (!nameEl || !screenshot) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'screenshot-name-input';
+    input.value = screenshot.name || '';
+    item.draggable = false; // otherwise selecting text starts a drag
+    nameEl.replaceWith(input);
+    input.focus();
+    // Preselect the name without extension, like Finder does
+    const dot = input.value.lastIndexOf('.');
+    input.setSelectionRange(0, dot > 0 ? dot : input.value.length);
+
+    let finished = false;
+    const finish = (save) => {
+        if (finished) return;
+        finished = true;
+        const newName = input.value.trim();
+        if (save && newName && newName !== screenshot.name) {
+            screenshot.name = newName;
+            saveState();
+        }
+        updateScreenshotList();
+    };
+    input.addEventListener('keydown', (e) => {
+        e.stopPropagation(); // keep global shortcuts out of the text field
+        if (e.key === 'Enter') finish(true);
+        else if (e.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+    ['click', 'mousedown', 'dblclick'].forEach(type =>
+        input.addEventListener(type, (e) => e.stopPropagation()));
+}
+
 function updateScreenshotList() {
     screenshotList.innerHTML = '';
     const isEmpty = state.screenshots.length === 0;
@@ -6295,6 +6339,12 @@ function updateScreenshotList() {
                         </svg>
                         Apply style to all...
                     </button>
+                    <button class="screenshot-menu-item screenshot-rename" data-index="${index}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                        </svg>
+                        Rename...
+                    </button>
                     <button class="screenshot-menu-item screenshot-duplicate" data-index="${index}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="9" y="9" width="13" height="13" rx="2"/>
@@ -6333,7 +6383,7 @@ function updateScreenshotList() {
                     <rect x="3" y="3" width="18" height="18" rx="2"/>
                 </svg>
               </div>`
-            : `<img class="screenshot-thumb" src="${thumbSrc}" alt="${screenshot.name}">`;
+            : `<img class="screenshot-thumb" src="${thumbSrc}" alt="${escapeHtml(screenshot.name)}">`;
 
         item.innerHTML = `
             <div class="drag-handle">
@@ -6345,7 +6395,7 @@ function updateScreenshotList() {
             </div>
             ${thumbHtml}
             <div class="screenshot-info">
-                <div class="screenshot-name">${screenshot.name}</div>
+                <div class="screenshot-name" title="Double-click to rename">${escapeHtml(screenshot.name)}</div>
                 <div class="screenshot-device">${isTransferTarget ? 'Click source to copy style' : screenshot.deviceType}${langFlagsHtml}</div>
             </div>
             ${buttonsHtml}
@@ -6448,6 +6498,13 @@ function updateScreenshotList() {
                 return;
             }
 
+            // Double-click on the name renames. A native 'dblclick' never fires here
+            // because the first click re-renders the list, so use the click count.
+            if (e.detail === 2 && state.transferTarget === null && e.target.closest('.screenshot-name')) {
+                startScreenshotRename(item, index);
+                return;
+            }
+
             // Handle transfer mode click
             if (state.transferTarget !== null) {
                 if (index !== state.transferTarget) {
@@ -6523,6 +6580,15 @@ function updateScreenshotList() {
                 e.stopPropagation();
                 menu?.classList.remove('open');
                 showApplyStyleModal(index);
+            });
+        }
+
+        const renameBtn = item.querySelector('.screenshot-rename');
+        if (renameBtn) {
+            renameBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu?.classList.remove('open');
+                startScreenshotRename(item, index);
             });
         }
 
