@@ -582,7 +582,7 @@ function setTextSetting(key, value) {
 function setCurrentScreenshotAsDefault() {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        state.defaults.background = JSON.parse(JSON.stringify(screenshot.background));
+        state.defaults.background = cloneBackground(screenshot.background);
         state.defaults.screenshot = JSON.parse(JSON.stringify(screenshot.screenshot));
         state.defaults.text = JSON.parse(JSON.stringify(screenshot.text));
     }
@@ -1510,7 +1510,7 @@ function saveState() {
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
-            background: s.background,
+            background: serializeBackground(s.background),
             screenshot: s.screenshot,
             text: s.text,
             elements: (s.elements || []).map(el => ({
@@ -1532,7 +1532,7 @@ function saveState() {
         customHeight: state.customHeight,
         currentLanguage: state.currentLanguage,
         projectLanguages: state.projectLanguages,
-        defaults: state.defaults
+        defaults: { ...state.defaults, background: serializeBackground(state.defaults.background) }
     };
 
     // Update screenshot count in project metadata
@@ -1568,6 +1568,36 @@ function migrate3DPosition(screenshotSettings) {
 
     screenshotSettings.x = Math.max(0, Math.min(100, 50 + (oldX - 50) * xFactor));
     screenshotSettings.y = Math.max(0, Math.min(100, 50 + (oldY - 50) * yFactor));
+}
+
+// Background images are held as HTMLImageElement in memory, which IndexedDB
+// cannot store (DataCloneError aborts the whole save). Persist the data URL instead.
+function serializeBackground(bg) {
+    if (!bg) return bg;
+    const { image, ...rest } = bg;
+    const imageSrc = (image instanceof HTMLImageElement && image.src) || bg.imageSrc || null;
+    return { ...rest, image: null, imageSrc };
+}
+
+// Rebuild the in-memory background (with Image object) from persisted data
+function restoreBackground(bg) {
+    if (!bg) return bg;
+    const restored = { ...bg, image: null };
+    if (bg.imageSrc) {
+        const img = new Image();
+        img.onload = () => updateCanvas();
+        img.src = bg.imageSrc;
+        restored.image = img;
+    }
+    return restored;
+}
+
+// Deep-copy a background, sharing the (immutable) Image object instead of
+// letting JSON round-tripping turn it into an unusable {}
+function cloneBackground(bg) {
+    if (!bg) return bg;
+    const copy = JSON.parse(JSON.stringify(serializeBackground(bg)));
+    return bg.image instanceof HTMLImageElement ? { ...copy, image: bg.image } : restoreBackground(copy);
 }
 
 // Reconstruct Image objects for graphic/icon elements from saved data
@@ -1663,7 +1693,7 @@ function loadState() {
                                     name: s.name || 'Blank Screen',
                                     deviceType: s.deviceType,
                                     localizedImages: {},
-                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                    background: s.background ? restoreBackground(s.background) : JSON.parse(JSON.stringify(migratedBackground)),
                                     screenshot: screenshotSettings,
                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                     elements: reconstructElementImages(s.elements),
@@ -1702,7 +1732,7 @@ function loadState() {
                                                     name: s.name,
                                                     deviceType: s.deviceType,
                                                     localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                                    background: s.background ? restoreBackground(s.background) : JSON.parse(JSON.stringify(migratedBackground)),
                                                     screenshot: screenshotSettings,
                                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                                     elements: reconstructElementImages(s.elements),
@@ -1747,7 +1777,7 @@ function loadState() {
                                         name: s.name,
                                         deviceType: s.deviceType,
                                         localizedImages: localizedImages,
-                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        background: s.background ? restoreBackground(s.background) : JSON.parse(JSON.stringify(migratedBackground)),
                                         screenshot: screenshotSettings,
                                         text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                         elements: reconstructElementImages(s.elements),
@@ -1793,6 +1823,7 @@ function loadState() {
                     // Load defaults (new format) or use migrated settings
                     if (parsed.defaults) {
                         state.defaults = parsed.defaults;
+                        state.defaults.background = restoreBackground(state.defaults.background);
                         // Ensure elements array exists (may be missing from older saves)
                         if (!state.defaults.elements) state.defaults.elements = [];
                     } else {
@@ -2047,6 +2078,7 @@ function duplicateScreenshot(index) {
         text: original.text,
         overrides: original.overrides
     }));
+    clone.background = cloneBackground(original.background);
 
     const nameParts = clone.name.split('.');
     if (nameParts.length > 1) {
@@ -2175,6 +2207,14 @@ function syncUIWithState() {
     document.getElementById('solid-color-hex').value = bg.solid;
 
     // Image background
+    const bgPreview = document.getElementById('bg-image-preview');
+    if (bg.image?.src) {
+        bgPreview.src = bg.image.src;
+        bgPreview.style.display = 'block';
+    } else {
+        bgPreview.removeAttribute('src');
+        bgPreview.style.display = 'none';
+    }
     document.getElementById('bg-image-fit').value = bg.imageFit;
     document.getElementById('bg-blur').value = bg.imageBlur;
     document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
@@ -6197,7 +6237,7 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         name: name || 'Blank Screen',
         deviceType: deviceType,
         localizedImages: localizedImages,
-        background: JSON.parse(JSON.stringify(state.defaults.background)),
+        background: cloneBackground(state.defaults.background),
         screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
         text: JSON.parse(JSON.stringify(textDefaults)),
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),
@@ -6581,11 +6621,7 @@ function transferStyle(sourceIndex, targetIndex) {
     }
 
     // Deep copy background settings
-    target.background = JSON.parse(JSON.stringify(source.background));
-    // Handle background image separately (not JSON serializable)
-    if (source.background.image) {
-        target.background.image = source.background.image;
-    }
+    target.background = cloneBackground(source.background);
 
     // Deep copy screenshot settings
     target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
@@ -6644,11 +6680,7 @@ function applyStyleToAll() {
         if (index === applyStyleSourceIndex) return; // Skip source
 
         // Deep copy background settings
-        target.background = JSON.parse(JSON.stringify(source.background));
-        // Handle background image separately (not JSON serializable)
-        if (source.background.image) {
-            target.background.image = source.background.image;
-        }
+        target.background = cloneBackground(source.background);
 
         // Deep copy screenshot settings
         target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
