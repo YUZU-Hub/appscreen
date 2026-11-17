@@ -6059,7 +6059,7 @@ async function processDesktopImageFile(fileData) {
             }
 
             // Detect language from filename
-            const detectedLang = detectLanguageFromFilename(fileData.name);
+            const detectedLang = detectLanguageFromFilename(fileData.name, state.currentLanguage);
 
             // Check if this is a localized version of an existing screenshot
             const existingIndex = findScreenshotByBaseFilename(fileData.name);
@@ -6124,7 +6124,7 @@ async function processImageFile(file) {
                 }
 
                 // Detect language from filename
-                const detectedLang = detectLanguageFromFilename(file.name);
+                const detectedLang = detectLanguageFromFilename(file.name, state.currentLanguage);
 
                 // Check if this is a localized version of an existing screenshot
                 const existingIndex = findScreenshotByBaseFilename(file.name);
