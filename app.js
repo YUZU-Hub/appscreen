@@ -582,7 +582,7 @@ function setTextSetting(key, value) {
 function setCurrentScreenshotAsDefault() {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
-        state.defaults.background = JSON.parse(JSON.stringify(screenshot.background));
+        state.defaults.background = cloneBackground(screenshot.background);
         state.defaults.screenshot = JSON.parse(JSON.stringify(screenshot.screenshot));
         state.defaults.text = JSON.parse(JSON.stringify(screenshot.text));
     }
@@ -1510,7 +1510,7 @@ function saveState() {
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
-            background: s.background,
+            background: serializeBackground(s.background),
             screenshot: s.screenshot,
             text: s.text,
             elements: (s.elements || []).map(el => ({
@@ -1532,7 +1532,7 @@ function saveState() {
         customHeight: state.customHeight,
         currentLanguage: state.currentLanguage,
         projectLanguages: state.projectLanguages,
-        defaults: state.defaults
+        defaults: { ...state.defaults, background: serializeBackground(state.defaults.background) }
     };
 
     // Update screenshot count in project metadata
@@ -1568,6 +1568,36 @@ function migrate3DPosition(screenshotSettings) {
 
     screenshotSettings.x = Math.max(0, Math.min(100, 50 + (oldX - 50) * xFactor));
     screenshotSettings.y = Math.max(0, Math.min(100, 50 + (oldY - 50) * yFactor));
+}
+
+// Background images are held as HTMLImageElement in memory, which IndexedDB
+// cannot store (DataCloneError aborts the whole save). Persist the data URL instead.
+function serializeBackground(bg) {
+    if (!bg) return bg;
+    const { image, ...rest } = bg;
+    const imageSrc = (image instanceof HTMLImageElement && image.src) || bg.imageSrc || null;
+    return { ...rest, image: null, imageSrc };
+}
+
+// Rebuild the in-memory background (with Image object) from persisted data
+function restoreBackground(bg) {
+    if (!bg) return bg;
+    const restored = { ...bg, image: null };
+    if (bg.imageSrc) {
+        const img = new Image();
+        img.onload = () => updateCanvas();
+        img.src = bg.imageSrc;
+        restored.image = img;
+    }
+    return restored;
+}
+
+// Deep-copy a background, sharing the (immutable) Image object instead of
+// letting JSON round-tripping turn it into an unusable {}
+function cloneBackground(bg) {
+    if (!bg) return bg;
+    const copy = JSON.parse(JSON.stringify(serializeBackground(bg)));
+    return bg.image instanceof HTMLImageElement ? { ...copy, image: bg.image } : restoreBackground(copy);
 }
 
 // Reconstruct Image objects for graphic/icon elements from saved data
@@ -1663,7 +1693,7 @@ function loadState() {
                                     name: s.name || 'Blank Screen',
                                     deviceType: s.deviceType,
                                     localizedImages: {},
-                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                    background: s.background ? restoreBackground(s.background) : JSON.parse(JSON.stringify(migratedBackground)),
                                     screenshot: screenshotSettings,
                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                     elements: reconstructElementImages(s.elements),
@@ -1702,7 +1732,7 @@ function loadState() {
                                                     name: s.name,
                                                     deviceType: s.deviceType,
                                                     localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                                    background: s.background ? restoreBackground(s.background) : JSON.parse(JSON.stringify(migratedBackground)),
                                                     screenshot: screenshotSettings,
                                                     text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                                     elements: reconstructElementImages(s.elements),
@@ -1747,7 +1777,7 @@ function loadState() {
                                         name: s.name,
                                         deviceType: s.deviceType,
                                         localizedImages: localizedImages,
-                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        background: s.background ? restoreBackground(s.background) : JSON.parse(JSON.stringify(migratedBackground)),
                                         screenshot: screenshotSettings,
                                         text: s.text || JSON.parse(JSON.stringify(migratedText)),
                                         elements: reconstructElementImages(s.elements),
@@ -1793,6 +1823,7 @@ function loadState() {
                     // Load defaults (new format) or use migrated settings
                     if (parsed.defaults) {
                         state.defaults = parsed.defaults;
+                        state.defaults.background = restoreBackground(state.defaults.background);
                         // Ensure elements array exists (may be missing from older saves)
                         if (!state.defaults.elements) state.defaults.elements = [];
                     } else {
@@ -1849,7 +1880,12 @@ function resetStateToDefaults() {
     state.customHeight = 2868;
     state.currentLanguage = 'en';
     state.projectLanguages = ['en'];
-    state.defaults = {
+    state.defaults = createDefaultSettings();
+}
+
+// Fresh default settings for a new project (also used by folder import)
+function createDefaultSettings() {
+    return {
         background: {
             type: 'gradient',
             gradient: {
@@ -1960,6 +1996,371 @@ async function createProject(name) {
     updateProjectSelector();
 }
 
+// ===== Settings export/import =====
+// A settings file holds every project/screenshot setting but no screenshot
+// pixels. Screenshots are referenced by relative path using the layout
+//   <Project>/<Project>.appscreen.json
+//   <Project>/<Device>/<language>/<file>     e.g. iPhone/de/01_home.png
+const SETTINGS_FORMAT = 'appscreen-settings';
+const SETTINGS_VERSION = 1;
+const IMAGE_FILE_PATTERN = /\.(png|jpe?g|webp|gif|heic)$/i;
+
+function sanitizePathSegment(name, fallback = 'untitled') {
+    const cleaned = String(name ?? '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim();
+    return cleaned || fallback;
+}
+
+// Imported strings end up in innerHTML (screenshot list, project menu)
+function sanitizeDisplayName(name, fallback) {
+    const cleaned = String(name ?? '').replace(/[<>"'&]/g, '_').trim();
+    return cleaned || fallback;
+}
+
+function getScreenshotImagePath(screenshot, lang) {
+    const data = screenshot.localizedImages?.[lang];
+    if (!data?.src) return null;
+    const device = sanitizePathSegment(screenshot.deviceType, 'iPhone');
+    const file = sanitizePathSegment(data.name || screenshot.name, 'screenshot.png');
+    return `${device}/${lang}/${file}`;
+}
+
+function buildSettingsExport() {
+    const project = projects.find(p => p.id === currentProjectId);
+    return {
+        format: SETTINGS_FORMAT,
+        version: SETTINGS_VERSION,
+        exportedAt: new Date().toISOString(),
+        layout: 'Screenshot paths are relative to this file: <Device>/<language>/<file>',
+        project: {
+            name: project?.name || 'Project',
+            outputDevice: state.outputDevice,
+            customWidth: state.customWidth,
+            customHeight: state.customHeight,
+            currentLanguage: state.currentLanguage,
+            projectLanguages: state.projectLanguages,
+            selectedIndex: state.selectedIndex
+        },
+        defaults: serializeDefaults(state.defaults),
+        screenshots: state.screenshots.map(s => {
+            const images = {};
+            Object.keys(s.localizedImages || {}).forEach(lang => {
+                const path = getScreenshotImagePath(s, lang);
+                if (path) images[lang] = path;
+            });
+            return {
+                name: s.name,
+                deviceType: s.deviceType,
+                images,
+                background: serializeBackground(s.background),
+                screenshot: s.screenshot,
+                text: s.text,
+                elements: (s.elements || []).map(el => ({ ...el, image: undefined })),
+                popouts: s.popouts || [],
+                overrides: s.overrides || {}
+            };
+        })
+    };
+}
+
+function exportSettings() {
+    const data = buildSettingsExport();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = sanitizePathSegment(data.project.name, 'project') + '.appscreen.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+// Resolves to the data URL only if the browser can actually decode it,
+// so a broken file can't stall loadState() (which waits for every onload)
+async function readImageFile(file) {
+    const src = await readFileAsDataURL(file);
+    await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('Cannot decode ' + file.name));
+        img.src = src;
+    });
+    return src;
+}
+
+// Map a language folder name to a project language code.
+// Accepts app codes (de, pt-br) and store/fastlane style locales (de-DE, en-US, zh-Hans).
+function normalizeLanguageFolder(folder) {
+    const lower = String(folder || '').toLowerCase().replace('_', '-');
+    if (languageFlags[lower]) return lower;
+    const aliases = { 'zh-hans': 'zh', 'zh-cn': 'zh', 'zh-hant': 'zh-tw', 'zh-hk': 'zh-tw', 'nb': 'no', 'nn': 'no' };
+    if (aliases[lower]) return aliases[lower];
+    const primary = lower.split('-')[0];
+    if (aliases[primary]) return aliases[primary];
+    return languageFlags[primary] ? primary : null;
+}
+
+// Canonical device label from a folder name (iphone -> iPhone)
+function normalizeDeviceFolder(folder) {
+    const lower = String(folder || '').toLowerCase();
+    if (lower === 'iphone') return 'iPhone';
+    if (lower === 'ipad') return 'iPad';
+    return /^[\w .-]{1,40}$/.test(folder || '') ? folder : null;
+}
+
+// Make sure a text settings object has (empty) entries for every language
+function ensureTextLanguages(text, langs) {
+    if (!text) return text;
+    for (const kind of ['headline', 'subheadline']) {
+        const listKey = kind + 'Languages';
+        const textsKey = kind + 's';
+        if (!Array.isArray(text[listKey])) text[listKey] = ['en'];
+        if (!text[textsKey]) text[textsKey] = {};
+        langs.forEach(lang => {
+            if (!text[listKey].includes(lang)) text[listKey].push(lang);
+            if (text[textsKey][lang] === undefined) text[textsKey][lang] = '';
+        });
+    }
+    return text;
+}
+
+// Import a project folder chosen via <input webkitdirectory>:
+//   <Project>/[<Project>.appscreen.json]
+//   <Project>/<Device>/<language>/<file>
+// The settings file is optional. Without it, screenshots are built from the
+// folder structure with default styling; with it, its settings are applied
+// and screenshots on disk that it doesn't mention are added with its defaults.
+// Always creates a new project; never overwrites existing ones.
+async function importSettingsFolder(fileList) {
+    const files = Array.from(fileList);
+    const relPath = f => f.webkitRelativePath || f.name;
+
+    // Optional settings file: the shallowest *.json that is ours
+    const jsonFiles = files
+        .filter(f => f.name.toLowerCase().endsWith('.json'))
+        .sort((a, b) => relPath(a).split('/').length - relPath(b).split('/').length);
+    let settings = null;
+    let settingsFile = null;
+    for (const f of jsonFiles) {
+        try {
+            const parsed = JSON.parse(await f.text());
+            if (parsed?.format === SETTINGS_FORMAT) {
+                settings = parsed;
+                settingsFile = f;
+                break;
+            }
+        } catch (e) { /* not ours, keep looking */ }
+    }
+    if (settings) {
+        if (settings.version > SETTINGS_VERSION) {
+            throw new Error('This settings file was made by a newer version of the app.');
+        }
+        if (!Array.isArray(settings.screenshots)) {
+            throw new Error('Settings file has no screenshots list.');
+        }
+    }
+
+    // Project root: folder of the settings file, else the chosen folder itself
+    const firstPath = relPath(settingsFile || files[0] || { name: '' });
+    const baseParts = settingsFile ? firstPath.split('/').slice(0, -1) : firstPath.split('/').slice(0, 1);
+
+    // Index image files by their path relative to the project root
+    const images = []; // { rel, relLower, device, deviceType, lang, base, file, claimed }
+    for (const f of files) {
+        if (!IMAGE_FILE_PATTERN.test(f.name)) continue;
+        const parts = relPath(f).split('/');
+        if (!baseParts.every((p, i) => parts[i] === p)) continue;
+        const relParts = parts.slice(baseParts.length);
+        const isLayout = relParts.length === 3;
+        images.push({
+            rel: relParts.join('/'),
+            relLower: relParts.join('/').toLowerCase(),
+            device: isLayout ? relParts[0].toLowerCase() : null,
+            deviceType: isLayout ? normalizeDeviceFolder(relParts[0]) : null,
+            lang: isLayout ? normalizeLanguageFolder(relParts[1]) : null,
+            base: getBaseFilename(f.name).toLowerCase(),
+            file: f,
+            claimed: false
+        });
+    }
+
+    const projectLanguages = new Set(
+        Array.isArray(settings?.project?.projectLanguages) ? settings.project.projectLanguages : []
+    );
+    const missing = [];
+    let loadedImages = 0;
+
+    const loadInto = async (localizedImages, lang, match) => {
+        match.claimed = true;
+        try {
+            localizedImages[lang] = { src: await readImageFile(match.file), name: match.file.name };
+            projectLanguages.add(lang);
+            loadedImages++;
+        } catch (e) {
+            missing.push(match.rel);
+        }
+    };
+
+    // 1) Screenshots described by the settings file
+    const screenshots = [];
+    for (const s of (settings?.screenshots || [])) {
+        if (!s || typeof s !== 'object') continue;
+        const deviceType = /^[\w .-]{1,40}$/.test(s.deviceType || '') ? s.deviceType : 'iPhone';
+        const deviceLower = sanitizePathSegment(deviceType).toLowerCase();
+        const refs = (s.images && typeof s.images === 'object') ? s.images : {};
+        const refNames = [...Object.values(refs), s.name].filter(Boolean).map(p => String(p).split('/').pop());
+        const bases = new Set(refNames.map(n => getBaseFilename(n).toLowerCase()));
+
+        // Languages: those referenced in the file plus any <Device>/<lang>/ folder
+        // that holds a file with the same base name (lets you drop in new languages)
+        const langs = new Set(Object.keys(refs));
+        images.forEach(img => {
+            if (img.device === deviceLower && img.lang && bases.has(img.base)) langs.add(img.lang);
+        });
+
+        const localizedImages = {};
+        for (const lang of langs) {
+            const ref = refs[lang] ? String(refs[lang]).toLowerCase() : null;
+            const match = (ref && images.find(img => img.relLower === ref)) ||
+                images.find(img => img.device === deviceLower && img.lang === lang && bases.has(img.base));
+            if (!match) {
+                missing.push(refs[lang] || `${deviceType}/${lang}/${refNames[0] || '?'}`);
+                continue;
+            }
+            await loadInto(localizedImages, lang, match);
+        }
+
+        screenshots.push({
+            src: '',
+            name: sanitizeDisplayName(s.name, 'Screenshot'),
+            deviceType,
+            localizedImages,
+            background: s.background,
+            screenshot: s.screenshot,
+            text: s.text,
+            elements: Array.isArray(s.elements) ? s.elements : [],
+            popouts: Array.isArray(s.popouts) ? s.popouts : [],
+            overrides: s.overrides || {}
+        });
+    }
+
+    // 2) Remaining files in <Device>/<lang>/ become new screenshots with default
+    //    styling, one per device + base filename, sorted naturally (01, 02, … 10)
+    const defaults = (settings?.defaults && typeof settings.defaults === 'object')
+        ? settings.defaults
+        : serializeDefaults(createDefaultSettings());
+    const groups = new Map();
+    images.forEach(img => {
+        if (img.claimed || !img.deviceType || !img.lang) return;
+        const key = img.device + '/' + img.base;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(img);
+    });
+    const deviceRank = d => (d === 'iphone' ? 0 : d === 'ipad' ? 1 : 2);
+    const sortedGroups = [...groups.values()].sort((a, b) =>
+        deviceRank(a[0].device) - deviceRank(b[0].device) ||
+        a[0].device.localeCompare(b[0].device) ||
+        a[0].base.localeCompare(b[0].base, undefined, { numeric: true }));
+
+    let addedFromFolder = 0;
+    for (const group of sortedGroups) {
+        const localizedImages = {};
+        for (const img of group) {
+            if (localizedImages[img.lang]) continue; // e.g. home.png and home_de.png in de/
+            await loadInto(localizedImages, img.lang, img);
+        }
+        if (!Object.keys(localizedImages).length) continue;
+        const nameSource = group.find(img => img.lang === 'en') || group[0];
+        screenshots.push({
+            src: '',
+            name: sanitizeDisplayName(nameSource.file.name, 'Screenshot'),
+            deviceType: group[0].deviceType,
+            localizedImages,
+            background: JSON.parse(JSON.stringify(defaults.background)),
+            screenshot: JSON.parse(JSON.stringify(defaults.screenshot)),
+            text: JSON.parse(JSON.stringify(defaults.text)),
+            elements: JSON.parse(JSON.stringify(defaults.elements || [])),
+            popouts: [],
+            overrides: {}
+        });
+        addedFromFolder++;
+    }
+
+    // Images we couldn't place (wrong depth, unknown language folder)
+    const skipped = images.filter(img => !img.claimed).map(img => img.rel);
+
+    if (!screenshots.length) {
+        throw new Error('No screenshots found. Expected <Device>/<language>/<file>, e.g. iPhone/en/01_home.png');
+    }
+
+    // Every screenshot gets text slots for every project language
+    if (!projectLanguages.size) projectLanguages.add('en');
+    const langList = [...projectLanguages];
+    screenshots.forEach(s => ensureTextLanguages(s.text, langList));
+    ensureTextLanguages(defaults.text, langList);
+
+    // Unique project name (settings file name, else the chosen folder's name)
+    let name = sanitizeDisplayName(settings?.project?.name || baseParts[baseParts.length - 1], 'Imported Project');
+    if (projects.some(p => p.name === name)) {
+        let n = 2;
+        while (projects.some(p => p.name === `${name} (${n})`)) n++;
+        name = `${name} (${n})`;
+    }
+
+    // Without settings, pick an iPad output size if the folder only has iPad shots
+    const p = settings?.project || {};
+    let outputDevice = (p.outputDevice === 'custom' || deviceDimensions[p.outputDevice]) ? p.outputDevice : undefined;
+    if (!settings && screenshots.every(s => s.deviceType === 'iPad')) outputDevice = 'ipad-12.9';
+    const currentLanguage = langList.includes(p.currentLanguage) ? p.currentLanguage
+        : (langList.includes('en') ? 'en' : langList[0]);
+
+    const id = 'project_' + Date.now();
+    const record = {
+        id,
+        formatVersion: 2,
+        screenshots,
+        selectedIndex: Math.min(Math.max(0, p.selectedIndex | 0), screenshots.length - 1),
+        outputDevice,
+        customWidth: p.customWidth > 0 ? p.customWidth : undefined,
+        customHeight: p.customHeight > 0 ? p.customHeight : undefined,
+        currentLanguage,
+        projectLanguages: langList,
+        defaults
+    };
+
+    await new Promise((resolve, reject) => {
+        const tx = db.transaction([PROJECTS_STORE], 'readwrite');
+        tx.objectStore(PROJECTS_STORE).put(record);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+    });
+    projects.push({ id, name, screenshotCount: screenshots.length });
+    saveProjectsMeta();
+    await switchProject(id);
+
+    return {
+        name,
+        fromSettings: !!settings,
+        screenshots: screenshots.length,
+        addedFromFolder,
+        languages: langList,
+        images: loadedImages,
+        missing,
+        skipped
+    };
+}
+
+// Defaults in their persisted form (background image as data URL)
+function serializeDefaults(defaults) {
+    return { ...defaults, background: serializeBackground(defaults.background) };
+}
+
 // Rename current project
 function renameProject(newName) {
     const project = projects.find(p => p.id === currentProjectId);
@@ -2047,6 +2448,7 @@ function duplicateScreenshot(index) {
         text: original.text,
         overrides: original.overrides
     }));
+    clone.background = cloneBackground(original.background);
 
     const nameParts = clone.name.split('.');
     if (nameParts.length > 1) {
@@ -2175,6 +2577,14 @@ function syncUIWithState() {
     document.getElementById('solid-color-hex').value = bg.solid;
 
     // Image background
+    const bgPreview = document.getElementById('bg-image-preview');
+    if (bg.image?.src) {
+        bgPreview.src = bg.image.src;
+        bgPreview.style.display = 'block';
+    } else {
+        bgPreview.removeAttribute('src');
+        bgPreview.style.display = 'none';
+    }
     document.getElementById('bg-image-fit').value = bg.imageFit;
     document.getElementById('bg-blur').value = bg.imageBlur;
     document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
@@ -3840,6 +4250,51 @@ function setupEventListeners() {
             alert('Import failed: ' + e.message);
         }
         importInput.value = '';
+    });
+
+    // Export settings (no images, screenshots linked by <Device>/<lang>/<file>)
+    document.getElementById('export-settings-btn').addEventListener('click', () => {
+        try {
+            exportSettings();
+        } catch (e) {
+            console.error('Settings export failed:', e);
+            alert('Settings export failed: ' + e.message);
+        }
+    });
+
+    // Import a project folder (settings JSON + screenshot folders) as a new project
+    const importSettingsInput = document.getElementById('import-settings-input');
+    document.getElementById('import-settings-btn').addEventListener('click', () => {
+        importSettingsInput.click();
+    });
+    importSettingsInput.addEventListener('change', async (e) => {
+        const fileList = e.target.files;
+        if (!fileList?.length || !db) return;
+        try {
+            const result = await importSettingsFolder(fileList);
+            let msg = `Imported "${result.name}": ${result.screenshots} screenshots, ${result.images} images` +
+                ` (${result.languages.join(', ')}).`;
+            if (result.fromSettings && result.addedFromFolder) {
+                msg += `\n${result.addedFromFolder} screenshot(s) not in the settings file were added with default styling.`;
+            } else if (!result.fromSettings) {
+                msg += '\nNo settings file found: built from the folder structure with default styling.';
+            }
+            if (result.missing.length) {
+                const shown = result.missing.slice(0, 10).join('\n  ');
+                const more = result.missing.length > 10 ? `\n  … and ${result.missing.length - 10} more` : '';
+                msg += `\n\nNot found (left blank):\n  ${shown}${more}`;
+            }
+            if (result.skipped.length) {
+                const shown = result.skipped.slice(0, 10).join('\n  ');
+                const more = result.skipped.length > 10 ? `\n  … and ${result.skipped.length - 10} more` : '';
+                msg += `\n\nSkipped (expected <Device>/<language>/<file>):\n  ${shown}${more}`;
+            }
+            alert(msg);
+        } catch (err) {
+            console.error('Settings import failed:', err);
+            alert('Import failed: ' + err.message);
+        }
+        importSettingsInput.value = '';
     });
 
     // Apply style to all modal buttons
@@ -6197,7 +6652,7 @@ function createNewScreenshot(img, src, name, lang, deviceType) {
         name: name || 'Blank Screen',
         deviceType: deviceType,
         localizedImages: localizedImages,
-        background: JSON.parse(JSON.stringify(state.defaults.background)),
+        background: cloneBackground(state.defaults.background),
         screenshot: JSON.parse(JSON.stringify(state.defaults.screenshot)),
         text: JSON.parse(JSON.stringify(textDefaults)),
         elements: JSON.parse(JSON.stringify(state.defaults.elements || [])),
@@ -6581,11 +7036,7 @@ function transferStyle(sourceIndex, targetIndex) {
     }
 
     // Deep copy background settings
-    target.background = JSON.parse(JSON.stringify(source.background));
-    // Handle background image separately (not JSON serializable)
-    if (source.background.image) {
-        target.background.image = source.background.image;
-    }
+    target.background = cloneBackground(source.background);
 
     // Deep copy screenshot settings
     target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
@@ -6644,11 +7095,7 @@ function applyStyleToAll() {
         if (index === applyStyleSourceIndex) return; // Skip source
 
         // Deep copy background settings
-        target.background = JSON.parse(JSON.stringify(source.background));
-        // Handle background image separately (not JSON serializable)
-        if (source.background.image) {
-            target.background.image = source.background.image;
-        }
+        target.background = cloneBackground(source.background);
 
         // Deep copy screenshot settings
         target.screenshot = JSON.parse(JSON.stringify(source.screenshot));
