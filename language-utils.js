@@ -60,9 +60,10 @@ function findScreenshotByBaseFilename(filename) {
  * Detect language code from filename
  * Supports patterns like: screenshot_de.png, screenshot-fr.png, screenshot_pt-br.png
  * @param {string} filename - The filename to parse
- * @returns {string} - Language code (e.g., 'de', 'fr', 'pt-br') or 'en' as fallback
+ * @param {string} [fallback='en'] - Returned when the filename has no language suffix
+ * @returns {string} - Language code (e.g., 'de', 'fr', 'pt-br') or the fallback
  */
-function detectLanguageFromFilename(filename) {
+function detectLanguageFromFilename(filename, fallback = 'en') {
     // All supported language codes from languageFlags (defined in app.js)
     const supportedLangs = Object.keys(languageFlags);
 
@@ -82,7 +83,7 @@ function detectLanguageFromFilename(filename) {
         }
     }
 
-    return 'en'; // fallback to English
+    return fallback; // no language suffix found
 }
 
 /**
