@@ -151,22 +151,41 @@
                                 <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                             </svg>
                         </button>
-                        <button class="project-btn" id="export-project-btn" title="Export Project Backup">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                                <polyline points="7 10 12 15 17 10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                        </button>
-                        <button class="project-btn" id="import-project-btn" title="Import Project Backup">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                                <polyline points="17 8 12 3 7 8"/>
-                                <line x1="12" y1="3" x2="12" y2="15"/>
-                            </svg>
-                        </button>
-                        <input type="file" id="import-project-input" accept=".json" hidden>
                     </div>
+                </div>
+                <div class="project-data-buttons">
+                    <button class="project-data-btn" id="export-settings-btn" title="Download all settings as JSON (no screenshot images). Screenshots are linked as &lt;Device&gt;/&lt;language&gt;/&lt;file&gt; relative to the JSON file.">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export Settings
+                    </button>
+                    <button class="project-data-btn" id="import-settings-btn" title="Open a project folder containing a *.appscreen.json and &lt;Device&gt;/&lt;language&gt;/ screenshot folders. Creates a new project.">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                        </svg>
+                        Import Folder
+                    </button>
+                    <button class="project-data-btn" id="export-project-btn" title="Export Project Backup (all projects including images)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Backup All
+                    </button>
+                    <button class="project-data-btn" id="import-project-btn" title="Import Project Backup">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        Restore Backup
+                    </button>
+                    <input type="file" id="import-project-input" accept=".json" hidden>
+                    <input type="file" id="import-settings-input" webkitdirectory multiple hidden>
                 </div>
 
                 <div class="divider"></div>

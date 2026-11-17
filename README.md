@@ -52,6 +52,20 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 - **Multiple Projects**: Create, rename, and delete projects
 - **Auto-Save**: All changes saved automatically to browser storage
 - **Screenshot Count**: See screenshot counts in project selector
+- **Backup & Restore**: Export/import all projects (including images) as one JSON file
+- **Settings Export / Folder Import**: Save a project's settings as a small, versionable `*.appscreen.json` (no image data) that links screenshots by path, and re-import the whole folder as a new project:
+
+  ```
+  MyApp/
+  ├── MyApp.appscreen.json
+  ├── iPhone/
+  │   ├── en/01_home.png
+  │   └── de/01_home.png
+  └── iPad/
+      └── en/01_home.png
+  ```
+
+  Paths in the JSON are relative to the JSON file (`<Device>/<language>/<file>`). On import, screenshots are matched by exact path first, then by base filename inside `<Device>/<language>/`, so files may be named `01_home.png` or `01_home_de.png`. Language folders that exist on disk but are not in the JSON yet (e.g. a new `fr/`) are picked up automatically. Missing files are reported and left blank.
 
 ### User Interface
 - **Dark Theme**: Easy on the eyes for extended editing sessions
